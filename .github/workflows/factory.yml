@@ -8,9 +8,11 @@ on:
         required: false
         default: ''
       minutes:
-        description: 'Target length in minutes'
+        description: 'Target length'
         required: false
         default: '12'
+        type: choice
+        options: ['4', '6', '8', '10', '12', '14', '16']
       voice:
         description: 'Edge-TTS voice'
         required: false
@@ -26,39 +28,57 @@ on:
   repository_dispatch:
     types: [start-render]
 
-# a second run would fight the first for the runner
+# a second run would fight the first for the runner; queue it instead
 concurrency:
   group: mmm-factory
   cancel-in-progress: false
 
+# this job only reads the repo - no reason to hand it write access
+permissions:
+  contents: read
+
 jobs:
   build-video:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # a hung run bills against the monthly Actions quota for as long as it
+    # hangs, so keep the ceiling near the real worst case
+    timeout-minutes: 45
+
+    env:
+      # without this Python block-buffers stdout and the log stays empty
+      # until the step finishes, which looks exactly like a hang
+      PYTHONUNBUFFERED: '1'
 
     steps:
-      - name: 📥 Fetch repo
+      - name: Fetch repo
         uses: actions/checkout@v4
 
-      - name: ⚙️ Install FFmpeg + fonts
+      - name: Ensure FFmpeg + fonts
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+          NEED=""
+          command -v ffmpeg >/dev/null || NEED="$NEED ffmpeg"
+          fc-list 2>/dev/null | grep -qi dejavu || NEED="$NEED fonts-dejavu-core"
+          if [ -n "$NEED" ]; then
+            echo "installing:$NEED"
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq $NEED
+          else
+            echo "ffmpeg and fonts already present on the runner"
+          fi
           ffmpeg -version | head -n1
-          fc-list | grep -ci dejavu || true
 
-      - name: 🐍 Setup Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: 📦 Install libraries
+      - name: Install libraries
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 🧠 Run Brain (scriptwriter)
+      - name: Run Brain (scriptwriter)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL:   ${{ vars.GEMINI_MODEL || 'gemini-3.6-flash' }}
@@ -66,7 +86,7 @@ jobs:
           TARGET_MINUTES: ${{ github.event.inputs.minutes || github.event.client_payload.minutes || '12' }}
         run: python brain.py
 
-      - name: 📄 Upload script for QA
+      - name: Upload script for QA
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -75,17 +95,26 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-      - name: 🎬 Run Engine (video assembler)
+      - name: Run Engine (video assembler)
         env:
           VOICE: ${{ github.event.inputs.voice || github.event.client_payload.voice || 'en-US-GuyNeural' }}
         run: python engine.py
 
-      - name: 📤 Deliver 720p video
+      - name: Disk report
+        if: always()
+        run: df -h / | tail -1
+
+      - name: Deliver 720p video
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: finished-720p-video
           path: |
             final_video.mp4
             subtitles.srt
-            script.json
-          retention-days: 30
+          if-no-files-found: warn
+          # GitHub Free includes 500 MB of artifact storage in total. A 12-min
+          # 720p file is ~100-150 MB, so 30-day retention fills the quota after
+          # three or four videos and uploads then start failing. Download it,
+          # then let it expire.
+          retention-days: 3
