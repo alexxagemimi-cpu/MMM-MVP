@@ -21,16 +21,17 @@ Design notes:
     20-minute run.
 """
 
+import io
 import os
 import sys
 import json
 import math
 import time
-import shutil
 import asyncio
 import subprocess
 import urllib.parse
 import urllib.request
+import urllib.error
 
 from PIL import Image
 import edge_tts
@@ -40,12 +41,12 @@ import edge_tts
 # ----------------------------------------------------------------------------
 VOICE       = os.environ.get("VOICE", "en-US-GuyNeural")
 W, H, FPS   = 1280, 720, 25
-SS          = 2                       # supersample factor for Ken Burns
-KB_W, KB_H  = W * SS, H * SS          # 2560x1440
+SS          = 1.5                     # supersample factor for Ken Burns
+KB_W, KB_H  = int(W * SS), int(H * SS)   # 1920x1080
 FETCH_W     = 1920                    # what we ask Pollinations for
 FETCH_H     = 1080
 
-CRF_SCENE, PRESET_SCENE = "18", "veryfast"
+CRF_SCENE, PRESET_SCENE = "18", "superfast"
 CRF_FINAL, PRESET_FINAL = "20", "medium"
 
 MUSIC_FILE  = "assets/music.mp3"      # optional; a bed is synthesised if absent
@@ -215,32 +216,42 @@ def write_srt(cues, path):
 # 3. IMAGES
 # ----------------------------------------------------------------------------
 def fetch_image(keyword, seed, out_png):
-    """Pollinations -> sanitised KB_W x KB_H RGB PNG. Never raises."""
+    """
+    Pollinations -> sanitised KB_W x KB_H RGB PNG. Never raises.
+
+    Decodes from memory rather than a scratch file. An earlier version used a
+    single shared temp path, which corrupted images the moment fetches started
+    running concurrently.
+    """
     prompt = urllib.parse.quote(f"{keyword}. {VISUAL_STYLE}", safe="")
     url = (f"https://image.pollinations.ai/prompt/{prompt}"
            f"?width={FETCH_W}&height={FETCH_H}&seed={seed}"
            f"&model=flux&nologo=true&enhance=false")
-    tmp = os.path.join(WORK, "_dl.bin")
 
-    for attempt in range(1, 5):
+    for attempt in range(1, 4):
         try:
-            req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-            with urllib.request.urlopen(req, timeout=200) as r:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": "Mozilla/5.0"})
+            with urllib.request.urlopen(req, timeout=90) as r:
                 data = r.read()
             if len(data) < 4096:
-                raise RuntimeError(f"suspiciously small payload ({len(data)}B)")
-            with open(tmp, "wb") as f:
-                f.write(data)
-            with Image.open(tmp) as im:
-                im = im.convert("RGB").resize((KB_W, KB_H), Image.Resampling.LANCZOS)
+                raise RuntimeError(f"payload too small ({len(data)}B)")
+            with Image.open(io.BytesIO(data)) as im:
+                im = im.convert("RGB").resize(
+                    (KB_W, KB_H), Image.Resampling.LANCZOS)
                 im.save(out_png, "PNG")
-            os.remove(tmp)
             return True
+        except urllib.error.HTTPError as e:
+            # 429 = rate limited. Back off hard rather than hammering.
+            wait = 30 if e.code == 429 else 5 * attempt
+            print(f"      img retry {attempt}/3 - HTTP {e.code}, "
+                  f"waiting {wait}s", flush=True)
+            time.sleep(wait)
         except Exception as e:
-            print(f"      retry {attempt}/4 — {e}")
-            time.sleep(6 * attempt)
+            print(f"      img retry {attempt}/3 - {e}", flush=True)
+            time.sleep(5 * attempt)
 
-    print("      ⚠️  image unavailable — using fallback slate")
+    print("      !! image unavailable - using fallback slate", flush=True)
     Image.new("RGB", (KB_W, KB_H), (11, 12, 16)).save(out_png, "PNG")
     return False
 
@@ -257,11 +268,16 @@ def ken_burns(idx, frames):
     n = max(frames - 1, 1)
     mode = idx % 4
     zmax = 1.22
+    # Rate is derived from the scene length. A fixed 0.0004/frame hit zmax at
+    # ~22s, so on a 35s scene the motion froze for the last 13 seconds.
+    rate = (zmax - 1.0) / n
 
     if mode == 0:      # push in
-        z, x, y = f"min(1+0.00040*on,{zmax})", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
+        z, x, y = (f"min(1+{rate:.9f}*on,{zmax})",
+                   "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)")
     elif mode == 1:    # pull out
-        z, x, y = f"max({zmax}-0.00040*on,1.0)", "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
+        z, x, y = (f"max({zmax}-{rate:.9f}*on,1.0)",
+                   "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)")
     elif mode == 2:    # pan left -> right
         z, x, y = "1.16", f"(iw-iw/zoom)*on/{n}", "ih/2-(ih/zoom/2)"
     else:              # pan right -> left
@@ -397,58 +413,79 @@ async def build():
     with open("script.json", encoding="utf-8") as f:
         data = json.load(f)
 
-    scenes = data["scenes"] if isinstance(data, dict) else data
+    scenes = [s for s in (data["scenes"] if isinstance(data, dict) else data)
+              if (s.get("narration") or "").strip()]
     total = len(scenes)
-    print("=" * 62)
-    print(f"  MMM ENGINE | {total} scenes | {W}x{H} @ {FPS}fps | voice={VOICE}")
-    print("=" * 62)
+    print("=" * 62, flush=True)
+    print(f"  MMM ENGINE | {total} scenes | {W}x{H} @ {FPS}fps | voice={VOICE}",
+          flush=True)
+    print("=" * 62, flush=True)
 
-    cues, parts, timeline, failed_images = [], [], 0.0, 0
+    # ---------------- phase 1: voice (concurrent, small batches) -------------
+    # Serial TTS was costing ~10s of dead network wait per scene. Batching
+    # keeps us well under any sane rate limit while cutting wall time hard.
+    print(f"\n[1/3] voice x{total} ...", flush=True)
+    mp3s = [os.path.join(WORK, f"s{i:03d}.mp3") for i in range(total)]
+    word_lists = [None] * total
+
+    async def do_voice(i):
+        word_lists[i] = await synth(scenes[i]["narration"].strip(), mp3s[i])
+        print(f"      voice {i+1}/{total} ok", flush=True)
+
+    for b in range(0, total, 3):
+        await asyncio.gather(*(do_voice(i) for i in range(b, min(b + 3, total))))
+
+    durs = [probe(m) for m in mp3s]
+    real = sum(1 for w in word_lists if w)
+    print(f"      audio {sum(durs)/60:.1f} min | boundaries from service: "
+          f"{real}/{total}", flush=True)
+
+    # ---------------- phase 2: images (concurrent) ---------------------------
+    # Pollinations is the slowest link by far and it is pure network wait,
+    # so it parallelises almost for free.
+    print(f"\n[2/3] images x{total} ...", flush=True)
+    pngs = [os.path.join(WORK, f"s{i:03d}.png") for i in range(total)]
+    kws = [(s.get("image_keyword") or "abstract dark texture").strip()
+           for s in scenes]
+
+    async def do_img(i):
+        ok = await asyncio.to_thread(fetch_image, kws[i], 1000 + i * 137, pngs[i])
+        print(f"      image {i+1}/{total} {'ok' if ok else 'SLATE'}"
+              f" | {kws[i][:44]}", flush=True)
+        return ok
+
+    results = []
+    for b in range(0, total, 2):
+        results += await asyncio.gather(
+            *(do_img(i) for i in range(b, min(b + 2, total))))
+    failed_images = results.count(False)
+
+    # ---------------- phase 3: render ----------------------------------------
+    print(f"\n[3/3] render x{total} ...", flush=True)
+    cues, parts, timeline = [], [], 0.0
 
     for i, sc in enumerate(scenes):
-        narration = (sc.get("narration") or "").strip()
-        keyword = (sc.get("image_keyword") or "abstract dark texture").strip()
-        if not narration:
-            print(f"--- scene {i+1}/{total}: empty narration, skipping")
-            continue
-
-        print(f"\n--- scene {i+1}/{total} [{sc.get('beat','?')}] "
-              f"{len(narration.split())} words")
-
-        mp3 = os.path.join(WORK, f"s{i:03d}.mp3")
-        png = os.path.join(WORK, f"s{i:03d}.png")
         mp4 = os.path.join(WORK, f"s{i:03d}.mp4")
+        render_scene(i, pngs[i], mp3s[i], mp4, first=(i == 0),
+                     last=(i == total - 1), audio_dur=durs[i])
 
-        print("   ▸ voice...")
-        words = await synth(narration, mp3)
-        dur = probe(mp3)
-        if words:
-            print(f"     {dur:.1f}s, {len(words)} word timings (from service)")
-        else:
-            words = estimate_word_times(narration, dur)
-            print(f"     {dur:.1f}s, {len(words)} word timings (estimated)")
-
-        print(f"   ▸ image: {keyword[:52]}")
-        if not fetch_image(keyword, 1000 + i * 137, png):
-            failed_images += 1
-
-        print("   ▸ render...")
-        render_scene(i, png, mp3, mp4, first=(i == 0), last=(i == total - 1),
-                     audio_dur=dur)
-
+        words = word_lists[i] or estimate_word_times(
+            scenes[i]["narration"].strip(), durs[i])
         actual = probe(mp4)
         cues += group_cues(words, timeline)
         timeline += actual
         parts.append(mp4)
+        print(f"      scene {i+1}/{total} [{sc.get('beat','?')}] "
+              f"{actual:.1f}s  (+{time.time()-t0:.0f}s elapsed)", flush=True)
 
-        # free disk on the runner as we go
-        os.remove(png)
-        os.remove(mp3)
+        os.remove(pngs[i])
+        os.remove(mp3s[i])
 
     if not parts:
         raise RuntimeError("no scenes rendered")
 
-    print(f"\n▸ assembling {len(parts)} scenes ({timeline/60:.1f} min)...")
+    print(f"\n> assembling {len(parts)} scenes ({timeline/60:.1f} min)...",
+          flush=True)
     listfile = os.path.join(WORK, "concat.txt")
     with open(listfile, "w") as f:
         for p in parts:
@@ -463,14 +500,14 @@ async def build():
     write_srt(cues, srt)
 
     if os.path.exists(MUSIC_FILE):
-        print(f"▸ music: {MUSIC_FILE}")
+        print(f"> music: {MUSIC_FILE}", flush=True)
         music = MUSIC_FILE
     else:
-        print("▸ music: synthesising ambient bed (no assets/music.mp3 found)")
+        print("> music: synthesising ambient bed", flush=True)
         music = os.path.join(WORK, "bed.mp3")
         music_bed(timeline, music)
 
-    print("▸ final composite (subtitles + ducked music)...")
+    print("> final composite...", flush=True)
     finish(body, srt, music, "final_video.mp4")
 
     for p in parts:
@@ -480,16 +517,16 @@ async def build():
 
     size = os.path.getsize("final_video.mp4") / 1_048_576
     final_dur = probe("final_video.mp4")
-    print("\n" + "=" * 62)
-    print(f"✅ final_video.mp4")
-    print(f"   duration : {final_dur/60:.1f} min ({final_dur:.0f}s)")
-    print(f"   size     : {size:.1f} MB")
-    print(f"   subtitles: {len(cues)} cues")
+    print("\n" + "=" * 62, flush=True)
+    print(f"DONE  final_video.mp4", flush=True)
+    print(f"   duration : {final_dur/60:.1f} min", flush=True)
+    print(f"   size     : {size:.1f} MB", flush=True)
+    print(f"   subtitles: {len(cues)} cues", flush=True)
     if failed_images:
-        print(f"   ⚠️  {failed_images} scene(s) fell back to a slate — "
-              f"check before publishing")
-    print(f"   build    : {(time.time()-t0)/60:.1f} min")
-    print("=" * 62)
+        print(f"   !! {failed_images} scene(s) used a fallback slate",
+              flush=True)
+    print(f"   build    : {(time.time()-t0)/60:.1f} min", flush=True)
+    print("=" * 62, flush=True)
 
 
 if __name__ == "__main__":
