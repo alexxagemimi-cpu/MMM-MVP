@@ -272,7 +272,7 @@ def music_bed(duration, out_mp3):
     filt = (
         "[0:a]volume=0.55[a0];"
         "[1:a]volume=0.30,tremolo=f=0.11:d=0.55[a1];"
-        "[2:a]volume=0.16,tremolo=f=0.07:d=0.40[a2];"
+        "[2:a]volume=0.16,tremolo=f=0.10:d=0.40[a2];"
         "[a0][a1][a2]amix=inputs=3:normalize=0,"
         "lowpass=f=420,"
         "aecho=0.8:0.88:70|190|420:0.30|0.18|0.09,"
@@ -426,4 +426,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ FATAL: {e}", file=sys.stderr)
         sys.exit(1)
-  
+
