@@ -94,26 +94,69 @@ def probe(path):
 # ----------------------------------------------------------------------------
 # 1. VOICE  (audio + real word timings, no SubMaker version roulette)
 # ----------------------------------------------------------------------------
-async def synth(text, mp3_path):
+async def synth(text, mp3_path, attempts=3):
     """
-    Stream Edge-TTS. Returns [(start_s, end_s, word), ...].
+    Stream Edge-TTS. Returns [(start_s, end_s, word), ...], or [] when the
+    service sends no boundary metadata (which it sometimes does not).
 
-    WordBoundary offset/duration are in 100-nanosecond ticks. Reading the raw
-    chunks instead of SubMaker avoids the API break between edge-tts v6 and v7.
+    Boundary offset/duration are in 100-nanosecond ticks. We match on the
+    presence of offset+text rather than an exact type string, because that
+    label has changed between edge-tts releases.
     """
-    comm = edge_tts.Communicate(text, VOICE)
-    words = []
-    with open(mp3_path, "wb") as f:
-        async for chunk in comm.stream():
-            if chunk["type"] == "audio":
-                f.write(chunk["data"])
-            elif chunk["type"] == "WordBoundary":
-                start = chunk["offset"] / 10_000_000
-                dur = chunk["duration"] / 10_000_000
-                words.append((start, start + dur, chunk["text"]))
-    if os.path.getsize(mp3_path) == 0:
-        raise RuntimeError("Edge-TTS produced an empty audio file")
-    return words
+    last = None
+    for n in range(1, attempts + 1):
+        words = []
+        try:
+            comm = edge_tts.Communicate(text, VOICE)
+            with open(mp3_path, "wb") as f:
+                async for chunk in comm.stream():
+                    if chunk.get("type") == "audio":
+                        f.write(chunk["data"])
+                    elif "offset" in chunk and "text" in chunk:
+                        if chunk["text"].strip():
+                            start = chunk["offset"] / 10_000_000
+                            dur = chunk.get("duration", 0) / 10_000_000
+                            words.append((start, start + dur, chunk["text"]))
+            if os.path.getsize(mp3_path) == 0:
+                raise RuntimeError("empty audio file")
+            return words
+        except Exception as e:
+            last = e
+            print(f"      TTS retry {n}/{attempts} - {e}")
+            await asyncio.sleep(5 * n)
+    raise RuntimeError(f"Edge-TTS failed after {attempts} attempts: {last}")
+
+
+def estimate_word_times(text, duration):
+    """
+    Fallback timing used when the TTS service returns no word boundaries.
+
+    Spreads the measured audio duration across the words by character count
+    plus punctuation pauses. Not frame-perfect, but comfortably inside the
+    tolerance of a six-word caption cue.
+    """
+    words = text.split()
+    if not words or duration <= 0:
+        return []
+
+    strip_chars = ".,;:!?-\u2014\"'()[]"
+    weights = []
+    for w in words:
+        core = w.strip(strip_chars)
+        wt = max(len(core), 1) + 1.6
+        if w.endswith((",", ";", ":")):
+            wt += 2.0
+        if w.endswith((".", "!", "?", "\u2014")):
+            wt += 3.5
+        weights.append(wt)
+
+    total = sum(weights)
+    out, t = [], 0.0
+    for w, wt in zip(words, weights):
+        span = duration * wt / total
+        out.append((t, t + span, w))
+        t += span
+    return out
 
 
 # ----------------------------------------------------------------------------
@@ -294,31 +337,56 @@ def music_bed(duration, out_mp3):
 # 6. FINAL PASS — burn subtitles + duck music under narration
 # ----------------------------------------------------------------------------
 def finish(body, srt, music, out_mp4):
-    srt_arg = srt.replace("\\", "/").replace(":", r"\:")
+    """
+    Burn subtitles and mix in the ducked music bed.
 
-    filt = (
-        f"[0:v]subtitles=filename='{srt_arg}':force_style='{SUB_STYLE}'[v];"
+    If there are no subtitle cues the burn-in is skipped entirely and the
+    video stream is stream-copied. libass refuses an empty .srt and takes the
+    whole render down with it, which is not an acceptable way to lose a
+    twenty-minute job over a caption file.
+    """
+    has_subs = os.path.exists(srt) and os.path.getsize(srt) > 16
+
+    afilt = (
         f"[1:a]volume={MUSIC_GAIN},aresample=48000,"
         f"aformat=channel_layouts=stereo[m];"
-        # main = music, sidechain = narration -> music dips when the voice talks
+        # main = music, sidechain = narration -> music dips under the voice
         f"[m][0:a]sidechaincompress="
         f"threshold=0.030:ratio=9:attack=12:release=380:makeup=1[duck];"
         f"[0:a][duck]amix=inputs=2:duration=first:normalize=0,"
         f"alimiter=limit=0.95[a]"
     )
 
-    run([
+    cmd = [
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
         "-i", body,
         "-stream_loop", "-1", "-i", music,
-        "-filter_complex", filt,
-        "-map", "[v]", "-map", "[a]",
-        "-c:v", "libx264", "-preset", PRESET_FINAL, "-crf", CRF_FINAL,
-        "-pix_fmt", "yuv420p", "-r", str(FPS),
+    ]
+
+    if has_subs:
+        srt_arg = srt.replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
+        vfilt = (f"[0:v]subtitles=filename='{srt_arg}':"
+                 f"force_style='{SUB_STYLE}'[v];")
+        cmd += [
+            "-filter_complex", vfilt + afilt,
+            "-map", "[v]", "-map", "[a]",
+            "-c:v", "libx264", "-preset", PRESET_FINAL, "-crf", CRF_FINAL,
+            "-pix_fmt", "yuv420p", "-r", str(FPS),
+        ]
+    else:
+        print("   !! no subtitle cues - skipping burn-in, copying video stream")
+        cmd += [
+            "-filter_complex", afilt,
+            "-map", "0:v", "-map", "[a]",
+            "-c:v", "copy",
+        ]
+
+    cmd += [
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
         "-movflags", "+faststart",
         out_mp4,
-    ], "final composite")
+    ]
+    run(cmd, "final composite")
 
 
 # ----------------------------------------------------------------------------
@@ -354,7 +422,11 @@ async def build():
         print("   ▸ voice...")
         words = await synth(narration, mp3)
         dur = probe(mp3)
-        print(f"     {dur:.1f}s, {len(words)} word timings")
+        if words:
+            print(f"     {dur:.1f}s, {len(words)} word timings (from service)")
+        else:
+            words = estimate_word_times(narration, dur)
+            print(f"     {dur:.1f}s, {len(words)} word timings (estimated)")
 
         print(f"   ▸ image: {keyword[:52]}")
         if not fetch_image(keyword, 1000 + i * 137, png):
@@ -426,4 +498,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n❌ FATAL: {e}", file=sys.stderr)
         sys.exit(1)
-
+  
