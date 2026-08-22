@@ -108,6 +108,21 @@ NARRATIVE ARC — assign each scene one beat, in this order:
 """
 
 
+def strip_fences(text):
+    """Models occasionally wrap JSON in ```json fences despite JSON mode."""
+    t = text.strip()
+    if t.startswith("```"):
+        t = t.split("\n", 1)[-1] if "\n" in t else t
+        if t.endswith("```"):
+            t = t[:-3]
+        t = t.strip()
+    # tolerate leading/trailing prose around the object
+    a, b = t.find("{"), t.rfind("}")
+    if a != -1 and b > a:
+        t = t[a:b + 1]
+    return t
+
+
 def call(prompt, schema=None, grounded=False, retries=3):
     """One Gemini call with retry + optional schema + optional search grounding."""
     cfg_kwargs = {}
@@ -129,11 +144,19 @@ def call(prompt, schema=None, grounded=False, retries=3):
             if not text:
                 raise RuntimeError("empty response")
             if schema:
-                return json.loads(text)
+                return json.loads(strip_fences(text))
             return text
         except Exception as e:
             last = e
-            print(f"   ! attempt {attempt + 1}/{retries} failed: {e}")
+            msg = str(e)
+            print(f"   ! attempt {attempt + 1}/{retries} failed: {msg[:200]}")
+            # If the SDK rejects the schema dict outright, retrying with the
+            # same config just burns quota. Drop to plain JSON mode instead
+            # and lean on validate()/repair() to catch shape problems.
+            if schema and "response_schema" in cfg_kwargs and (
+                    "schema" in msg.lower() or "invalid" in msg.lower()):
+                print("     -> dropping response_schema, retrying in JSON mode")
+                cfg_kwargs.pop("response_schema", None)
             time.sleep(4 * (attempt + 1))
     raise RuntimeError(f"Gemini call failed after {retries} attempts: {last}")
 
