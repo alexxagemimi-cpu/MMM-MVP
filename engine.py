@@ -70,10 +70,27 @@ SHOTS_MAX     = 4                     # cap shots per scene regardless of keywor
 MIN_SHOT_SEC  = 2.5                   # never slice a shot shorter than this
 
 # No ffmpeg/ffprobe call may outlive these. See run() for why this matters.
-CMD_TIMEOUT   = 240                   # per shot/scene encode
+#
+# These are sized against the JOB cap, not picked for comfort. A flat 240s
+# per shot looks safe until you multiply: 12 shots x 240s = 48 minutes, past
+# the 45-minute workflow limit, so a pathological run would still die by
+# timeout - just with extra steps. A shot's budget therefore scales with the
+# length it has to produce (see shot_timeout) and stays well under that.
+CMD_TIMEOUT   = 120                   # generic ffmpeg call ceiling
 PROBE_TIMEOUT = 30
 FINAL_TIMEOUT = 1800                  # whole-video composite, legitimately long
 MAX_LOOPS     = 40                    # cap on finite -stream_loop repeats
+
+
+def shot_timeout(seconds):
+    """
+    Encode budget for one shot of `seconds` output.
+
+    superfast/CRF18 720p runs far faster than real time even on a 2-vCPU
+    runner, so 6x the output length plus a fixed startup allowance is
+    generous while still bounding a full render to a few minutes.
+    """
+    return int(min(max(20 + seconds * 6, 45), 150))
 
 WORK = "build"
 
@@ -503,7 +520,13 @@ def render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames, fade_in, fa
     grade = "eq=contrast=1.06:saturation=0.90:gamma=0.98,vignette=PI/5,format=yuv420p"
 
     if asset_kind == "video":
-        vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,"
+        # fps= FIRST, before anything else. Stock clips arrive at whatever
+        # frame rate and timebase they were shot at - a slow-motion clip can
+        # be 120/240fps or variable - and those timestamps otherwise survive
+        # into the copied stream and break duration handling downstream.
+        # Normalising here means every shot leaves this function looking
+        # identical, which is also what makes the stream-copy concat legal.
+        vf = (f"fps={FPS},scale={W}:{H}:force_original_aspect_ratio=increase,"
               f"crop={W}:{H},{grade}")
     else:
         vf = ken_burns(motion_idx, frames)
@@ -548,7 +571,7 @@ def render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames, fade_in, fa
         "-movflags", "+faststart",
         out_mp4,
     ]
-    run(cmd, f"render shot {out_mp4}")
+    run(cmd, f"render shot {out_mp4}", timeout=shot_timeout(dur))
 
 
 def render_shot_safe(motion_idx, asset_kind, asset_path, out_mp4, frames,
@@ -592,11 +615,23 @@ def mux_audio(video_mp4, mp3, out_mp4):
     """
     Attach the scene's narration audio to an already-rendered silent clip.
 
+    The output length is set EXPLICITLY with -t, not inferred with -shortest.
+    -shortest has to work out when to stop from stream timestamps, and with
+    `-c:v copy` those timestamps come straight from the source clip. Given a
+    slow-motion source (high frame rate, unusual timebase) that inference
+    never resolved: ffmpeg sat forever on one scene until it was killed. We
+    already know exactly how long the video is, so we say so. `apad` then
+    keeps the audio from ending early, since the video is deliberately a
+    few frames longer than the narration.
+
     I=-14 is YouTube's own normalization target. At the old -16 the platform
     left it alone and it simply played quieter than every video next to it.
     """
+    vdur = probe_safe(video_mp4)
+    if vdur <= 0:
+        raise RuntimeError(f"unreadable silent scene video: {video_mp4}")
     af = ("loudnorm=I=-14:TP=-1.5:LRA=11,"
-          "aresample=48000:resampler=soxr,aformat=channel_layouts=stereo")
+          "aresample=48000:resampler=soxr,aformat=channel_layouts=stereo,apad")
     run([
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
         "-i", video_mp4,
@@ -605,9 +640,10 @@ def mux_audio(video_mp4, mp3, out_mp4):
         "-map", "0:v", "-map", "[a]",
         "-c:v", "copy",
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
-        "-shortest", "-movflags", "+faststart",
+        "-t", f"{vdur:.3f}",
+        "-movflags", "+faststart",
         out_mp4,
-    ], "mux audio")
+    ], "mux audio", timeout=shot_timeout(vdur))
 
 
 def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
@@ -705,10 +741,20 @@ def finish(body, ass, has_subs, music, out_mp4):
         f"alimiter=limit=0.95[a]"
     )
 
+    # Loop the music a finite number of times, computed from both real
+    # durations. `-stream_loop -1` is nominally bounded here by
+    # amix=duration=first, but that is the same infinite-input pattern that
+    # hung a render for 44 minutes elsewhere in this file, and there is no
+    # reason to keep an unbounded input when the arithmetic is this easy.
+    body_dur = probe_safe(body)
+    music_dur = probe_safe(music)
+    loops = (min(math.ceil(body_dur / music_dur) + 1, MAX_LOOPS)
+             if body_dur > 0 and music_dur > 0 else 1)
+
     cmd = [
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
         "-i", body,
-        "-stream_loop", "-1", "-i", music,
+        "-stream_loop", str(loops), "-i", music,
     ]
 
     if has_subs:

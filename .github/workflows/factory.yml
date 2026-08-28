@@ -106,6 +106,12 @@ jobs:
           # Both are free-tier with no card. Unset -> simply skipped.
           CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
           GROQ_API_KEY:     ${{ secrets.GROQ_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Which free model each provider uses. Set these as repo VARIABLES
+          # to chase whatever is currently free without touching code.
+          CEREBRAS_MODEL:   ${{ vars.CEREBRAS_MODEL }}
+          GROQ_MODEL:       ${{ vars.GROQ_MODEL }}
+          OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
         run: python brain.py
 
       - name: Write test script.json (skip_brain_test_fixture)

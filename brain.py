@@ -48,11 +48,34 @@ STRICT         = os.environ.get("STRICT_FACTS", "1") == "1"
 MAX_PASSES     = int(os.environ.get("MAX_PASSES", "4"))
 WPM            = 150
 
-# Optional fallback LLMs. Both are free-tier, no card. Unset -> just skipped.
-CEREBRAS_KEY   = os.environ.get("CEREBRAS_API_KEY", "").strip()
-CEREBRAS_MODEL = os.environ.get("CEREBRAS_MODEL", "llama-3.3-70b")
-GROQ_KEY       = os.environ.get("GROQ_API_KEY", "").strip()
-GROQ_MODEL     = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+# Optional fallback LLMs, tried in this order after Gemini. All free-tier,
+# no card; each is simply skipped when its key is unset.
+#
+# Every model id is an env var on purpose. Which models are free ROTATES -
+# DeepSeek R1 was free on OpenRouter and went paid-only in July 2026 - so
+# chasing that with code edits is a losing game. Set the *_MODEL variable to
+# whatever is currently free and good; no redeploy of logic required.
+def _env(name, default):
+    """
+    Env value or default, treating "" as unset.
+
+    GitHub Actions expands an undefined `vars.X` to an empty string rather
+    than omitting the variable, so os.environ.get(name, default) would hand
+    back "" and silently request a model named nothing.
+    """
+    return (os.environ.get(name) or "").strip() or default
+
+
+CEREBRAS_KEY   = _env("CEREBRAS_API_KEY", "")
+CEREBRAS_MODEL = _env("CEREBRAS_MODEL", "llama-3.3-70b")
+GROQ_KEY       = _env("GROQ_API_KEY", "")
+GROQ_MODEL     = _env("GROQ_MODEL", "llama-3.3-70b-versatile")
+# OpenRouter is last: its free tier is only ~50 requests/day, which one long
+# script with several revision passes can exhaust on its own. Useful as a
+# safety net and for reaching a model the others do not carry.
+OPENROUTER_KEY   = _env("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL = _env("OPENROUTER_MODEL",
+                        "meta-llama/llama-3.3-70b-instruct:free")
 
 TOTAL_WORDS         = int(TARGET_MINUTES * WPM)
 SCENE_COUNT         = max(8, min(16, round(TOTAL_WORDS / 165)))
@@ -258,6 +281,9 @@ def _providers():
     if GROQ_KEY:
         out.append(("groq", ("https://api.groq.com/openai/v1/chat/completions",
                              GROQ_KEY, GROQ_MODEL)))
+    if OPENROUTER_KEY:
+        out.append(("openrouter", ("https://openrouter.ai/api/v1/chat/completions",
+                                   OPENROUTER_KEY, OPENROUTER_MODEL)))
     return out
 
 
