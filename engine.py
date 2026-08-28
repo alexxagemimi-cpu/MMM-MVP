@@ -5,22 +5,31 @@ engine.py — MMM Factory video assembler.
 Reads script.json, produces final_video.mp4 (720p / 25fps).
 
 Pipeline:
-  per scene : Edge-TTS voice (+ word timings) -> up to SHOTS_MAX images,
-              each Ken Burns rendered silent, concatenated, then muxed with
-              the scene's narration audio
+  per scene : Edge-TTS voice (+ word timings) -> up to SHOTS_MAX visuals,
+              each a real Pixabay stock clip/photo when one matches the
+              keyword, else an AI Ken Burns image, rendered silent,
+              concatenated, then muxed with the scene's narration audio
   assemble  : stream-copy concat (fast, lossless)
   finish    : burn word-synced subtitles + side-chain-ducked music bed
 
+Visual source order, per shot (all free, no budget):
+  Pixabay video -> Pixabay photo -> Pollinations AI image -> flat slate.
+  PIXABAY_API_KEY is optional; if unset, every shot goes straight to the
+  AI image / slate fallback, same as before this feature existed.
+
 Design notes:
   - Ken Burns runs on a 2x supersampled frame. This is what kills the
-    sub-pixel jitter that makes naive zoompan look cheap.
+    sub-pixel jitter that makes naive zoompan look cheap. Real Pixabay
+    footage already has motion, so it skips Ken Burns and is instead
+    scaled/cropped to fill the frame and trimmed (looped if too short) to
+    the shot's exact duration.
   - The PNG is fed WITHOUT -loop 1. zoompan expands one input frame into d
     output frames. With -loop 1 you get d frames PER looped frame, which is
     the classic reason these renders come out minutes too long.
-  - Every scene is encoded with identical codec parameters so the final
-    concat can stream-copy instead of re-encoding.
-  - Any single failed image degrades to a slate instead of killing a
-    20-minute run.
+  - Every shot is encoded with identical codec parameters so scenes (and
+    the final video) can stream-copy concat instead of re-encoding.
+  - Any single failed visual degrades down the fallback chain to a slate
+    instead of killing a 20-minute run.
 """
 
 import io
@@ -42,6 +51,7 @@ import edge_tts
 # CONFIG
 # ----------------------------------------------------------------------------
 VOICE       = os.environ.get("VOICE", "en-US-GuyNeural")
+PIXABAY_API_KEY = os.environ.get("PIXABAY_API_KEY", "").strip()
 W, H, FPS   = 1280, 720, 25
 SS          = 1.5                     # supersample factor for Ken Burns
 KB_W, KB_H  = int(W * SS), int(H * SS)   # 1920x1080
@@ -261,6 +271,97 @@ def fetch_image(keyword, seed, out_png):
     return False
 
 
+def _pixabay_get(endpoint, keyword, extra):
+    q = urllib.parse.quote(keyword.strip())
+    url = (f"https://pixabay.com/api/{endpoint}?key={PIXABAY_API_KEY}"
+           f"&q={q}&safesearch=true&per_page=6{extra}")
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+    with urllib.request.urlopen(req, timeout=20) as r:
+        return json.loads(r.read()).get("hits", [])
+
+
+def fetch_pixabay_video(keyword, out_mp4, seen_ids):
+    """
+    Real stock footage for this keyword, if Pixabay has one. Picks the first
+    hit not already used elsewhere in this build, to cut down on the same
+    clip repeating across similar-keyword shots. Never raises.
+    """
+    if not PIXABAY_API_KEY:
+        return False
+    try:
+        hits = [h for h in _pixabay_get("videos/", keyword, "&orientation=horizontal")
+                if h.get("id") not in seen_ids]
+        if not hits:
+            return False
+        hit = hits[0]
+        seen_ids.add(hit["id"])
+        vids = hit.get("videos", {})
+        url = (vids.get("medium") or vids.get("small")
+               or vids.get("large") or vids.get("tiny") or {}).get("url")
+        if not url:
+            return False
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=90) as r:
+            data = r.read()
+        if len(data) < 8192:
+            return False
+        with open(out_mp4, "wb") as f:
+            f.write(data)
+        return True
+    except Exception as e:
+        print(f"      pixabay video error - {e}", flush=True)
+        return False
+
+
+def fetch_pixabay_photo(keyword, out_png, seen_ids):
+    """Real stock photo for this keyword, resized like an AI image. Never raises."""
+    if not PIXABAY_API_KEY:
+        return False
+    try:
+        hits = [h for h in _pixabay_get("", keyword, "&image_type=photo&orientation=horizontal")
+                if h.get("id") not in seen_ids]
+        if not hits:
+            return False
+        hit = hits[0]
+        seen_ids.add(hit["id"])
+        url = hit.get("largeImageURL") or hit.get("webformatURL")
+        if not url:
+            return False
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = r.read()
+        if len(data) < 4096:
+            return False
+        with Image.open(io.BytesIO(data)) as im:
+            im = im.convert("RGB").resize((KB_W, KB_H), Image.Resampling.LANCZOS)
+            im.save(out_png, "PNG")
+        return True
+    except Exception as e:
+        print(f"      pixabay photo error - {e}", flush=True)
+        return False
+
+
+def fetch_shot_asset(keyword, seed, out_stub, seen_video_ids):
+    """
+    Visual source chain for one shot: Pixabay video -> Pixabay photo ->
+    Pollinations AI image -> flat slate. Returns ("video"|"image", path, ok)
+    where ok=False only for the final flat-slate fallback. fetch_image()
+    (the tail of the chain) never raises, so this never does either - worst
+    case is a slate image, never a crashed build.
+    """
+    if PIXABAY_API_KEY:
+        video_path = out_stub + ".mp4"
+        if fetch_pixabay_video(keyword, video_path, seen_video_ids):
+            return "video", video_path, True
+        photo_path = out_stub + ".png"
+        if fetch_pixabay_photo(keyword, photo_path, seen_video_ids):
+            return "image", photo_path, True
+
+    png_path = out_stub + ".png"
+    ok = fetch_image(keyword, seed, png_path)
+    return "image", png_path, ok
+
+
 def plan_shots(keywords, audio_dur):
     """
     Pick up to SHOTS_MAX distinct image keywords for one scene, in the order
@@ -308,10 +409,23 @@ def ken_burns(idx, frames):
     )
 
 
-def render_shot(motion_idx, png, out_mp4, frames, fade_in, fade_out):
-    """One still image -> one silent Ken Burns clip, `frames` frames long."""
-    vf = ken_burns(motion_idx, frames)
+def render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames, fade_in, fade_out):
+    """
+    One visual -> one silent clip, `frames` frames long.
+
+    Real footage ("video") already has motion, so it's scaled/cropped to
+    fill the frame and trimmed (looped if too short) rather than
+    Ken-Burns'd. An AI still ("image") gets the usual Ken Burns move. Both
+    share the same colour grade so cuts between the two never look jarring.
+    """
     dur = frames / FPS
+    grade = "eq=contrast=1.06:saturation=0.90:gamma=0.98,vignette=PI/5,format=yuv420p"
+
+    if asset_kind == "video":
+        vf = (f"scale={W}:{H}:force_original_aspect_ratio=increase,"
+              f"crop={W}:{H},{grade}")
+    else:
+        vf = ken_burns(motion_idx, frames)
 
     # gentle fade at the very top and tail of the film only
     if fade_in:
@@ -319,16 +433,24 @@ def render_shot(motion_idx, png, out_mp4, frames, fade_in, fade_out):
     if fade_out:
         vf += f",fade=t=out:st={max(dur - 1.2, 0):.3f}:d=1.2"
 
-    run([
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-i", png,
+    cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
+    if asset_kind == "video":
+        # -stream_loop -1 covers a clip shorter than the shot; -t trims a
+        # longer one. Real footage isn't fed through zoompan's frame-count
+        # driven d=, so duration here is time-based instead.
+        cmd += ["-stream_loop", "-1", "-i", asset_path, "-t", f"{dur:.3f}"]
+    else:
+        cmd += ["-i", asset_path]
+
+    cmd += [
         "-vf", vf,
         "-an",
         "-c:v", "libx264", "-preset", PRESET_SCENE, "-crf", CRF_SCENE,
         "-pix_fmt", "yuv420p", "-r", str(FPS), "-g", str(FPS * 2),
         "-movflags", "+faststart",
         out_mp4,
-    ], f"render shot {out_mp4}")
+    ]
+    run(cmd, f"render shot {out_mp4}")
 
 
 def concat_shots(shot_mp4s, listfile, out_mp4):
@@ -358,22 +480,23 @@ def mux_audio(video_mp4, mp3, out_mp4):
     ], "mux audio")
 
 
-def render_scene(scene_idx, pngs, mp3, out_mp4, work_dir, motion_start,
+def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
                   first_scene, last_scene, frames_total):
     """
-    Render one scene: N still images -> N silent Ken Burns shots -> concat
-    -> mux with the scene's narration audio. The scene's frame budget is
-    split evenly across its shots, remainder folded into the last one.
+    Render one scene: N visuals (each ("video"|"image", path)) -> N silent
+    shots -> concat -> mux with the scene's narration audio. The scene's
+    frame budget is split evenly across its shots, remainder folded into
+    the last one.
     """
-    n = len(pngs)
+    n = len(assets)
     base = frames_total // n
     frame_counts = [base] * n
     frame_counts[-1] += frames_total - base * n
 
     shots = []
-    for j, (png, frames) in enumerate(zip(pngs, frame_counts)):
+    for j, ((kind, path), frames) in enumerate(zip(assets, frame_counts)):
         shot_mp4 = os.path.join(work_dir, f"s{scene_idx:03d}_{j:02d}.mp4")
-        render_shot(motion_start + j, png, shot_mp4, frames,
+        render_shot(motion_start + j, kind, path, shot_mp4, frames,
                     fade_in=(first_scene and j == 0),
                     fade_out=(last_scene and j == n - 1))
         shots.append(shot_mp4)
@@ -515,36 +638,47 @@ async def build():
     print(f"      audio {sum(durs)/60:.1f} min | boundaries from service: "
           f"{real}/{total}", flush=True)
 
-    # ---------------- phase 2: images (concurrent) ---------------------------
-    # Pollinations is the slowest link by far and it is pure network wait,
-    # so it parallelises almost for free.
+    # ---------------- phase 2: visuals (concurrent) ---------------------------
+    # Network wait dominates this phase (Pixabay lookup+download, or
+    # Pollinations), so it parallelises almost for free.
     shots_per_scene = [plan_shots(s.get("image_keywords"), durs[i])
                         for i, s in enumerate(scenes)]
     total_shots = sum(len(k) for k in shots_per_scene)
+    source = "Pixabay (real footage) + AI fallback" if PIXABAY_API_KEY else "AI images only"
 
-    print(f"\n[2/3] images x{total_shots} ({total} scenes) ...", flush=True)
-    png_paths, work_items, gi = [], [], 0
+    print(f"\n[2/3] visuals x{total_shots} ({total} scenes) | source: {source} ...",
+          flush=True)
+    asset_paths, work_items, gi = [], [], 0
     for i, kws in enumerate(shots_per_scene):
-        paths = []
+        stubs = []
         for j, kw in enumerate(kws):
-            out_png = os.path.join(WORK, f"s{i:03d}_{j:02d}.png")
-            work_items.append((i, j, kw, 1000 + gi * 137, out_png))
-            paths.append(out_png)
+            # "_src" keeps the fetched asset's filename distinct from the
+            # rendered shot output (s{i}_{j}.mp4) render_scene() writes to -
+            # without it, a Pixabay video download and its own Ken-Burns-less
+            # render collide on the same .mp4 path (read+write same file).
+            out_stub = os.path.join(WORK, f"s{i:03d}_{j:02d}_src")
+            work_items.append((i, j, kw, 1000 + gi * 137, out_stub))
+            stubs.append(None)
             gi += 1
-        png_paths.append(paths)
+        asset_paths.append(stubs)
 
-    async def do_img(item):
-        i, j, kw, seed, out_png = item
-        ok = await asyncio.to_thread(fetch_image, kw, seed, out_png)
-        print(f"      image scene {i+1} shot {j+1} {'ok' if ok else 'SLATE'}"
-              f" | {kw[:44]}", flush=True)
-        return ok
+    seen_pixabay_ids = set()
+
+    async def do_asset(item):
+        i, j, kw, seed, out_stub = item
+        kind, path, ok = await asyncio.to_thread(
+            fetch_shot_asset, kw, seed, out_stub, seen_pixabay_ids)
+        asset_paths[i][j] = (kind, path)
+        tag = "video" if kind == "video" else ("image" if ok else "SLATE")
+        print(f"      shot scene {i+1} #{j+1} [{tag}] | {kw[:44]}", flush=True)
+        return kind == "video", ok
 
     results = []
     for b in range(0, len(work_items), 5):
         results += await asyncio.gather(
-            *(do_img(item) for item in work_items[b:b + 5]))
-    failed_images = results.count(False)
+            *(do_asset(item) for item in work_items[b:b + 5]))
+    real_footage = sum(1 for is_video, _ in results if is_video)
+    failed_images = sum(1 for _, ok in results if not ok)
 
     # ---------------- phase 3: render ----------------------------------------
     print(f"\n[3/3] render x{total} scenes ({total_shots} shots) ...", flush=True)
@@ -553,10 +687,10 @@ async def build():
     for i, sc in enumerate(scenes):
         mp4 = os.path.join(WORK, f"s{i:03d}.mp4")
         frames_total = math.ceil(durs[i] * FPS) + 3
-        render_scene(i, png_paths[i], mp3s[i], mp4, WORK, motion_cursor,
+        render_scene(i, asset_paths[i], mp3s[i], mp4, WORK, motion_cursor,
                      first_scene=(i == 0), last_scene=(i == total - 1),
                      frames_total=frames_total)
-        motion_cursor += len(png_paths[i])
+        motion_cursor += len(asset_paths[i])
 
         words = word_lists[i] or estimate_word_times(
             scenes[i]["narration"].strip(), durs[i])
@@ -565,10 +699,10 @@ async def build():
         timeline += actual
         parts.append(mp4)
         print(f"      scene {i+1}/{total} [{sc.get('beat','?')}] "
-              f"{len(png_paths[i])} shot(s)  {actual:.1f}s  "
+              f"{len(asset_paths[i])} shot(s)  {actual:.1f}s  "
               f"(+{time.time()-t0:.0f}s elapsed)", flush=True)
 
-        for p in png_paths[i]:
+        for _, p in asset_paths[i]:
             os.remove(p)
         os.remove(mp3s[i])
 
@@ -613,6 +747,9 @@ async def build():
     print(f"   duration : {final_dur/60:.1f} min", flush=True)
     print(f"   size     : {size:.1f} MB", flush=True)
     print(f"   subtitles: {len(cues)} cues", flush=True)
+    if PIXABAY_API_KEY:
+        print(f"   visuals  : {real_footage}/{total_shots} real Pixabay footage",
+              flush=True)
     if failed_images:
         print(f"   !! {failed_images} shot(s) used a fallback slate",
               flush=True)
