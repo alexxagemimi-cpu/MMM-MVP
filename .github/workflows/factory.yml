@@ -25,6 +25,12 @@ on:
           - en-US-RogerNeural
           - en-GB-RyanNeural
           - en-US-AndrewNeural
+      skip_brain_test_fixture:
+        description: 'TEST MODE: skip Brain, use a hand-written script.json (for testing Engine alone, e.g. when the Gemini quota is exhausted)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
   repository_dispatch:
     types: [start-render]
 
@@ -79,12 +85,50 @@ jobs:
           pip install -r requirements.txt
 
       - name: Run Brain (scriptwriter)
+        if: ${{ github.event.inputs.skip_brain_test_fixture != 'true' }}
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GEMINI_MODEL:   ${{ vars.GEMINI_MODEL || 'gemini-3.6-flash' }}
           TOPIC:          ${{ github.event.inputs.topic || github.event.client_payload.topic || '' }}
           TARGET_MINUTES: ${{ github.event.inputs.minutes || github.event.client_payload.minutes || '12' }}
         run: python brain.py
+
+      - name: Write test script.json (skip_brain_test_fixture)
+        if: ${{ github.event.inputs.skip_brain_test_fixture == 'true' }}
+        run: |
+          cat > script.json <<'JSON'
+          {
+            "title": "How Coffee Is Made (engine test)",
+            "description": "Isolation test fixture - not real content.",
+            "scenes": [
+              {
+                "scene": 1,
+                "beat": "HOOK",
+                "narration": "Every cup of coffee begins the same way: a handful of raw green beans, tumbling inside a roaster, slowly turning from pale green to deep brown as heat unlocks the oils trapped inside them.",
+                "image_keywords": ["coffee beans roasting", "hands holding coffee beans", "coffee roaster machine", "close up coffee beans"]
+              },
+              {
+                "scene": 2,
+                "beat": "CONTEXT",
+                "narration": "Once roasted and ground, the coffee meets hot water under pressure, forced through in under thirty seconds, pulling out the sugars, the acids, and the crema that floats on top of every good shot.",
+                "image_keywords": ["barista pouring latte art", "espresso machine brewing coffee", "hands making coffee"]
+              },
+              {
+                "scene": 3,
+                "beat": "ESCALATION",
+                "narration": "A single bean can hold over a thousand distinct aromatic compounds, more than red wine, more than almost anything else humans regularly eat or drink.",
+                "image_keywords": ["coffee beans falling slow motion", "coffee cup steam rising"]
+              },
+              {
+                "scene": 4,
+                "beat": "RESONANCE",
+                "narration": "And then it just becomes a moment: two people, a table, and a shared cup, repeated billions of times a day, in every country on earth.",
+                "image_keywords": ["people drinking coffee outdoor cafe", "friends talking at cafe table", "city street morning coffee"]
+              }
+            ]
+          }
+          JSON
+          python -c "import json; json.load(open('script.json'))" && echo "script.json is valid JSON"
 
       - name: Upload script for QA
         if: always()
