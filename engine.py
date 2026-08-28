@@ -5,7 +5,9 @@ engine.py — MMM Factory video assembler.
 Reads script.json, produces final_video.mp4 (720p / 25fps).
 
 Pipeline:
-  per scene : Edge-TTS voice (+ word timings) -> image -> Ken Burns render
+  per scene : Edge-TTS voice (+ word timings) -> up to SHOTS_MAX images,
+              each Ken Burns rendered silent, concatenated, then muxed with
+              the scene's narration audio
   assemble  : stream-copy concat (fast, lossless)
   finish    : burn word-synced subtitles + side-chain-ducked music bed
 
@@ -53,6 +55,9 @@ MUSIC_FILE  = "assets/music.mp3"      # optional; a bed is synthesised if absent
 MUSIC_GAIN  = 0.20
 WORDS_PER_CUE = 6
 MAX_CUE_GAP   = 0.65
+
+SHOTS_MAX     = 4                     # cap shots per scene regardless of keyword count
+MIN_SHOT_SEC  = 2.5                   # never slice a shot shorter than this
 
 WORK = "build"
 
@@ -256,6 +261,17 @@ def fetch_image(keyword, seed, out_png):
     return False
 
 
+def plan_shots(keywords, audio_dur):
+    """
+    Pick up to SHOTS_MAX distinct image keywords for one scene, in the order
+    the script gave them, never slicing a shot shorter than MIN_SHOT_SEC.
+    """
+    kws = [k.strip() for k in (keywords or []) if k and k.strip()] \
+        or ["abstract dark texture"]
+    n = max(1, min(len(kws), SHOTS_MAX, int(audio_dur // MIN_SHOT_SEC) or 1))
+    return kws[:n]
+
+
 # ----------------------------------------------------------------------------
 # 4. KEN BURNS
 # ----------------------------------------------------------------------------
@@ -292,31 +308,90 @@ def ken_burns(idx, frames):
     )
 
 
-def render_scene(idx, png, mp3, out_mp4, first, last, audio_dur):
-    frames = math.ceil(audio_dur * FPS) + 3
-    vf = ken_burns(idx, frames)
+def render_shot(motion_idx, png, out_mp4, frames, fade_in, fade_out):
+    """One still image -> one silent Ken Burns clip, `frames` frames long."""
+    vf = ken_burns(motion_idx, frames)
+    dur = frames / FPS
 
     # gentle fade at the very top and tail of the film only
-    if first:
+    if fade_in:
         vf += ",fade=t=in:st=0:d=1.0"
-    if last:
-        vf += f",fade=t=out:st={max(audio_dur - 1.2, 0):.3f}:d=1.2"
-
-    af = ("loudnorm=I=-16:TP=-1.5:LRA=11,"
-          "aresample=48000:resampler=soxr,aformat=channel_layouts=stereo")
+    if fade_out:
+        vf += f",fade=t=out:st={max(dur - 1.2, 0):.3f}:d=1.2"
 
     run([
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
         "-i", png,
-        "-i", mp3,
-        "-filter_complex", f"[0:v]{vf}[v];[1:a]{af}[a]",
-        "-map", "[v]", "-map", "[a]",
+        "-vf", vf,
+        "-an",
         "-c:v", "libx264", "-preset", PRESET_SCENE, "-crf", CRF_SCENE,
         "-pix_fmt", "yuv420p", "-r", str(FPS), "-g", str(FPS * 2),
+        "-movflags", "+faststart",
+        out_mp4,
+    ], f"render shot {out_mp4}")
+
+
+def concat_shots(shot_mp4s, listfile, out_mp4):
+    """Stream-copy concat of a scene's silent shots (identical codec params)."""
+    with open(listfile, "w") as f:
+        for p in shot_mp4s:
+            f.write(f"file '{os.path.abspath(p)}'\n")
+    run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+         "-f", "concat", "-safe", "0", "-i", listfile,
+         "-c", "copy", "-movflags", "+faststart", out_mp4], "concat shots")
+
+
+def mux_audio(video_mp4, mp3, out_mp4):
+    """Attach the scene's narration audio to an already-rendered silent clip."""
+    af = ("loudnorm=I=-16:TP=-1.5:LRA=11,"
+          "aresample=48000:resampler=soxr,aformat=channel_layouts=stereo")
+    run([
+        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+        "-i", video_mp4,
+        "-i", mp3,
+        "-filter_complex", f"[1:a]{af}[a]",
+        "-map", "0:v", "-map", "[a]",
+        "-c:v", "copy",
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
         "-shortest", "-movflags", "+faststart",
         out_mp4,
-    ], f"render scene {idx + 1}")
+    ], "mux audio")
+
+
+def render_scene(scene_idx, pngs, mp3, out_mp4, work_dir, motion_start,
+                  first_scene, last_scene, frames_total):
+    """
+    Render one scene: N still images -> N silent Ken Burns shots -> concat
+    -> mux with the scene's narration audio. The scene's frame budget is
+    split evenly across its shots, remainder folded into the last one.
+    """
+    n = len(pngs)
+    base = frames_total // n
+    frame_counts = [base] * n
+    frame_counts[-1] += frames_total - base * n
+
+    shots = []
+    for j, (png, frames) in enumerate(zip(pngs, frame_counts)):
+        shot_mp4 = os.path.join(work_dir, f"s{scene_idx:03d}_{j:02d}.mp4")
+        render_shot(motion_start + j, png, shot_mp4, frames,
+                    fade_in=(first_scene and j == 0),
+                    fade_out=(last_scene and j == n - 1))
+        shots.append(shot_mp4)
+
+    if n == 1:
+        mux_audio(shots[0], mp3, out_mp4)
+        os.remove(shots[0])
+        return
+
+    listfile = os.path.join(work_dir, f"s{scene_idx:03d}_list.txt")
+    silent = os.path.join(work_dir, f"s{scene_idx:03d}_silent.mp4")
+    concat_shots(shots, listfile, silent)
+    mux_audio(silent, mp3, out_mp4)
+
+    for p in shots:
+        os.remove(p)
+    os.remove(silent)
+    os.remove(listfile)
 
 
 # ----------------------------------------------------------------------------
@@ -443,31 +518,45 @@ async def build():
     # ---------------- phase 2: images (concurrent) ---------------------------
     # Pollinations is the slowest link by far and it is pure network wait,
     # so it parallelises almost for free.
-    print(f"\n[2/3] images x{total} ...", flush=True)
-    pngs = [os.path.join(WORK, f"s{i:03d}.png") for i in range(total)]
-    kws = [(s.get("image_keyword") or "abstract dark texture").strip()
-           for s in scenes]
+    shots_per_scene = [plan_shots(s.get("image_keywords"), durs[i])
+                        for i, s in enumerate(scenes)]
+    total_shots = sum(len(k) for k in shots_per_scene)
 
-    async def do_img(i):
-        ok = await asyncio.to_thread(fetch_image, kws[i], 1000 + i * 137, pngs[i])
-        print(f"      image {i+1}/{total} {'ok' if ok else 'SLATE'}"
-              f" | {kws[i][:44]}", flush=True)
+    print(f"\n[2/3] images x{total_shots} ({total} scenes) ...", flush=True)
+    png_paths, work_items, gi = [], [], 0
+    for i, kws in enumerate(shots_per_scene):
+        paths = []
+        for j, kw in enumerate(kws):
+            out_png = os.path.join(WORK, f"s{i:03d}_{j:02d}.png")
+            work_items.append((i, j, kw, 1000 + gi * 137, out_png))
+            paths.append(out_png)
+            gi += 1
+        png_paths.append(paths)
+
+    async def do_img(item):
+        i, j, kw, seed, out_png = item
+        ok = await asyncio.to_thread(fetch_image, kw, seed, out_png)
+        print(f"      image scene {i+1} shot {j+1} {'ok' if ok else 'SLATE'}"
+              f" | {kw[:44]}", flush=True)
         return ok
 
     results = []
-    for b in range(0, total, 2):
+    for b in range(0, len(work_items), 5):
         results += await asyncio.gather(
-            *(do_img(i) for i in range(b, min(b + 2, total))))
+            *(do_img(item) for item in work_items[b:b + 5]))
     failed_images = results.count(False)
 
     # ---------------- phase 3: render ----------------------------------------
-    print(f"\n[3/3] render x{total} ...", flush=True)
-    cues, parts, timeline = [], [], 0.0
+    print(f"\n[3/3] render x{total} scenes ({total_shots} shots) ...", flush=True)
+    cues, parts, timeline, motion_cursor = [], [], 0.0, 0
 
     for i, sc in enumerate(scenes):
         mp4 = os.path.join(WORK, f"s{i:03d}.mp4")
-        render_scene(i, pngs[i], mp3s[i], mp4, first=(i == 0),
-                     last=(i == total - 1), audio_dur=durs[i])
+        frames_total = math.ceil(durs[i] * FPS) + 3
+        render_scene(i, png_paths[i], mp3s[i], mp4, WORK, motion_cursor,
+                     first_scene=(i == 0), last_scene=(i == total - 1),
+                     frames_total=frames_total)
+        motion_cursor += len(png_paths[i])
 
         words = word_lists[i] or estimate_word_times(
             scenes[i]["narration"].strip(), durs[i])
@@ -476,9 +565,11 @@ async def build():
         timeline += actual
         parts.append(mp4)
         print(f"      scene {i+1}/{total} [{sc.get('beat','?')}] "
-              f"{actual:.1f}s  (+{time.time()-t0:.0f}s elapsed)", flush=True)
+              f"{len(png_paths[i])} shot(s)  {actual:.1f}s  "
+              f"(+{time.time()-t0:.0f}s elapsed)", flush=True)
 
-        os.remove(pngs[i])
+        for p in png_paths[i]:
+            os.remove(p)
         os.remove(mp3s[i])
 
     if not parts:
@@ -523,7 +614,7 @@ async def build():
     print(f"   size     : {size:.1f} MB", flush=True)
     print(f"   subtitles: {len(cues)} cues", flush=True)
     if failed_images:
-        print(f"   !! {failed_images} scene(s) used a fallback slate",
+        print(f"   !! {failed_images} shot(s) used a fallback slate",
               flush=True)
     print(f"   build    : {(time.time()-t0)/60:.1f} min", flush=True)
     print("=" * 62, flush=True)

@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+build/
+script.json
+subtitles.srt
+final_video.mp4
