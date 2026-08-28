@@ -159,6 +159,7 @@ jobs:
           path: |
             final_video.mp4
             subtitles.srt
+            captions.ass
           if-no-files-found: warn
           # GitHub Free includes 500 MB of artifact storage in total. A 12-min
           # 720p file is ~100-150 MB, so 30-day retention fills the quota after

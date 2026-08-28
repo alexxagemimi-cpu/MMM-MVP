@@ -79,13 +79,6 @@ VISUAL_STYLE = (
     "no text, no watermark, no logo, no caption"
 )
 
-SUB_STYLE = (
-    "Fontname=DejaVu Sans,Fontsize=17,Bold=1,"
-    "PrimaryColour=&H00FFFFFF,OutlineColour=&HD0000000,BackColour=&H00000000,"
-    "BorderStyle=1,Outline=2.4,Shadow=0.8,Alignment=2,MarginV=46,Spacing=0.3"
-)
-
-
 # ----------------------------------------------------------------------------
 # SHELL HELPERS
 # ----------------------------------------------------------------------------
@@ -178,8 +171,14 @@ def estimate_word_times(text, duration):
 # ----------------------------------------------------------------------------
 # 2. SUBTITLES
 # ----------------------------------------------------------------------------
-def group_cues(words, offset):
-    """Word timings -> readable caption cues, shifted onto the global timeline."""
+def group_words(words, offset):
+    """
+    Word timings -> caption groups, shifted onto the global timeline. Each
+    group is (start, end, word_list) where word_list keeps every individual
+    (start, end, text) - the shared basis for plain SRT captions and for
+    ASS karaoke-highlight captions, which need each word's own timing, not
+    just the group's.
+    """
     if not words:
         return []
 
@@ -196,19 +195,20 @@ def group_cues(words, offset):
     if buf:
         chunks.append(buf)
 
-    cues = []
+    groups = []
     for c in chunks:
-        start = c[0][0] + offset
-        end = max(c[-1][1] + offset, start + 0.45)
-        text = " ".join(x[2] for x in c).strip()
-        if text:
-            cues.append([start, end, text])
+        shifted = [(s + offset, e + offset, t) for s, e, t in c if t.strip()]
+        if not shifted:
+            continue
+        start = shifted[0][0]
+        end = max(shifted[-1][1], start + 0.45)
+        groups.append([start, end, shifted])
 
-    # stop cues overlapping after the min-duration clamp
-    for i in range(len(cues) - 1):
-        if cues[i][1] > cues[i + 1][0]:
-            cues[i][1] = max(cues[i][0] + 0.2, cues[i + 1][0] - 0.02)
-    return cues
+    # stop groups overlapping after the min-duration clamp
+    for i in range(len(groups) - 1):
+        if groups[i][1] > groups[i + 1][0]:
+            groups[i][1] = max(groups[i][0] + 0.2, groups[i + 1][0] - 0.02)
+    return groups
 
 
 def ts(t):
@@ -220,11 +220,63 @@ def ts(t):
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
-def write_srt(cues, path):
+def write_srt(groups, path):
+    """Plain captions (also useful as a standalone upload-as-CC file)."""
     with open(path, "w", encoding="utf-8") as f:
-        for i, (a, b, txt) in enumerate(cues, 1):
-            f.write(f"{i}\n{ts(a)} --> {ts(b)}\n{txt}\n\n")
-    print(f"   ✓ {len(cues)} subtitle cues -> {path}")
+        for i, (a, b, words) in enumerate(groups, 1):
+            text = " ".join(w[2] for w in words).strip()
+            f.write(f"{i}\n{ts(a)} --> {ts(b)}\n{text}\n\n")
+    print(f"   ✓ {len(groups)} subtitle cues -> {path}")
+
+
+def ass_ts(t):
+    t = max(0.0, t)
+    cs = int(round(t * 100))
+    h, cs = divmod(cs, 360000)
+    m, cs = divmod(cs, 6000)
+    s, cs = divmod(cs, 100)
+    return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
+
+
+ASS_HEADER = """[Script Info]
+ScriptType: v4.00+
+PlayResX: {w}
+PlayResY: {h}
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Caption,DejaVu Sans,20,&H0000D7FF,&H00FFFFFF,&HD0000000,&H00000000,-1,0,0,0,100,100,0.3,0,1,2.4,0.8,2,20,20,46,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+
+
+def write_ass(groups, path):
+    """
+    Word-synced karaoke captions: each word is white (SecondaryColour)
+    until spoken, then sweeps to gold (PrimaryColour) via \\kf - matched to
+    the real per-word TTS timing, not estimated. \\k durations run from each
+    word's own start to the NEXT word's start (last word to the group's
+    end), so gaps between words are absorbed into the sweep instead of
+    leaving a dead pause where nothing is highlighted - durations always
+    sum exactly to the line length, so the sweep can't drift out of sync.
+    A brief pop-in scale on each line's entry keeps it from feeling static.
+    """
+    lines = [ASS_HEADER.format(w=W, h=H)]
+    for start, end, words in groups:
+        parts = []
+        for i, (ws, _we, wt) in enumerate(words):
+            nxt = words[i + 1][0] if i + 1 < len(words) else end
+            dur_cs = max(round((nxt - ws) * 100), 1)
+            parts.append(f"{{\\kf{dur_cs}}}{wt} ")
+        text = ("{\\fad(60,60)\\fscx118\\fscy118\\t(0,150,\\fscx100\\fscy100)}"
+                 + "".join(parts).strip())
+        lines.append(f"Dialogue: 0,{ass_ts(start)},{ass_ts(end)},Caption,,0,0,0,,{text}\n")
+    with open(path, "w", encoding="utf-8") as f:
+        f.writelines(lines)
+    print(f"   ✓ {len(groups)} karaoke caption cues -> {path}")
 
 
 # ----------------------------------------------------------------------------
@@ -550,17 +602,19 @@ def music_bed(duration, out_mp3):
 # ----------------------------------------------------------------------------
 # 6. FINAL PASS — burn subtitles + duck music under narration
 # ----------------------------------------------------------------------------
-def finish(body, srt, music, out_mp4):
+def finish(body, ass, has_subs, music, out_mp4):
     """
-    Burn subtitles and mix in the ducked music bed.
+    Burn word-synced karaoke captions and mix in the ducked music bed.
 
-    If there are no subtitle cues the burn-in is skipped entirely and the
-    video stream is stream-copied. libass refuses an empty .srt and takes the
-    whole render down with it, which is not an acceptable way to lose a
+    has_subs comes from the caller (len(cue groups) > 0) rather than being
+    sniffed from the file on disk - the ASS header alone is a few hundred
+    bytes even with zero caption lines, so a size check can't tell "no
+    captions" from "captions with a lot of style boilerplate". If there are
+    no cues the burn-in is skipped entirely and the video stream is
+    stream-copied: libass refuses a .ass with no Dialogue lines and takes
+    the whole render down with it, which is not an acceptable way to lose a
     twenty-minute job over a caption file.
     """
-    has_subs = os.path.exists(srt) and os.path.getsize(srt) > 16
-
     afilt = (
         f"[1:a]volume={MUSIC_GAIN},aresample=48000,"
         f"aformat=channel_layouts=stereo[m];"
@@ -578,9 +632,8 @@ def finish(body, srt, music, out_mp4):
     ]
 
     if has_subs:
-        srt_arg = srt.replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
-        vfilt = (f"[0:v]subtitles=filename='{srt_arg}':"
-                 f"force_style='{SUB_STYLE}'[v];")
+        ass_arg = ass.replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
+        vfilt = f"[0:v]ass=filename='{ass_arg}'[v];"
         cmd += [
             "-filter_complex", vfilt + afilt,
             "-map", "[v]", "-map", "[a]",
@@ -695,7 +748,7 @@ async def build():
         words = word_lists[i] or estimate_word_times(
             scenes[i]["narration"].strip(), durs[i])
         actual = probe(mp4)
-        cues += group_cues(words, timeline)
+        cues += group_words(words, timeline)
         timeline += actual
         parts.append(mp4)
         print(f"      scene {i+1}/{total} [{sc.get('beat','?')}] "
@@ -721,8 +774,9 @@ async def build():
          "-f", "concat", "-safe", "0", "-i", listfile,
          "-c", "copy", "-movflags", "+faststart", body], "concat")
 
-    srt = "subtitles.srt"
-    write_srt(cues, srt)
+    write_srt(cues, "subtitles.srt")
+    ass = "captions.ass"
+    write_ass(cues, ass)
 
     if os.path.exists(MUSIC_FILE):
         print(f"> music: {MUSIC_FILE}", flush=True)
@@ -733,7 +787,7 @@ async def build():
         music_bed(timeline, music)
 
     print("> final composite...", flush=True)
-    finish(body, srt, music, "final_video.mp4")
+    finish(body, ass, len(cues) > 0, music, "final_video.mp4")
 
     for p in parts:
         os.remove(p)
