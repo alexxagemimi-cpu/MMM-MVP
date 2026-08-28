@@ -25,6 +25,12 @@ on:
           - en-US-RogerNeural
           - en-GB-RyanNeural
           - en-US-AndrewNeural
+      passes:
+        description: 'Quality/fact-check revision passes (more = slower, better)'
+        required: false
+        default: '4'
+        type: choice
+        options: ['1', '2', '3', '4', '6', '8']
       skip_brain_test_fixture:
         description: 'TEST MODE: skip Brain, use a hand-written script.json (for testing Engine alone, e.g. when the Gemini quota is exhausted)'
         required: false
@@ -91,6 +97,15 @@ jobs:
           GEMINI_MODEL:   ${{ vars.GEMINI_MODEL || 'gemini-3.6-flash' }}
           TOPIC:          ${{ github.event.inputs.topic || github.event.client_payload.topic || '' }}
           TARGET_MINUTES: ${{ github.event.inputs.minutes || github.event.client_payload.minutes || '12' }}
+          STRICT_FACTS:   ${{ vars.STRICT_FACTS || '1' }}
+          MAX_PASSES:     ${{ github.event.inputs.passes || vars.MAX_PASSES || '4' }}
+          # Web research. All OPTIONAL - with none of these set, research falls
+          # back to keyless DuckDuckGo, which needs no signup and has no quota.
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          # Fallback writer models, used only if Gemini is rate-limited.
+          # Both are free-tier with no card. Unset -> simply skipped.
+          CEREBRAS_API_KEY: ${{ secrets.CEREBRAS_API_KEY }}
+          GROQ_API_KEY:     ${{ secrets.GROQ_API_KEY }}
         run: python brain.py
 
       - name: Write test script.json (skip_brain_test_fixture)

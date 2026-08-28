@@ -3,19 +3,30 @@
 brain.py - MMM Factory scriptwriter.
 
 Five stages:
-  1. RESEARCH   grounded in Google Search, with a HARD check that real
-                sources came back
+  1. RESEARCH   real web search (research.py) - we run the queries and read
+                the pages ourselves, then hand the model actual source text.
+                HARD check that real sources came back.
   2. ANGLE      decide the exact question the film answers, and enforce that
                 the answer matches what was actually asked for
   3. DRAFT      write it, schema-enforced
-  4. FACT-CHECK a SECOND grounded search pass that re-verifies the claims the
-                draft makes. This is the stage the old build was missing: a
-                model critiquing its own text without new information cannot
-                catch its own hallucination, because the hallucination is the
-                only thing it has to check against.
+  4. FACT-CHECK a SECOND search pass that re-verifies the claims the draft
+                makes against FRESH sources. This is the stage the old build
+                was missing: a model critiquing its own text without new
+                information cannot catch its own hallucination, because the
+                hallucination is the only thing it has to check against.
   5. REPAIR     strip or correct everything the fact-check flagged
 
 Writes script.json (title, description, tags, sources, scenes[]).
+
+PROVIDERS
+---------
+Research does not use any model's built-in search tool. That used to weld
+this whole pipeline to Gemini's search-grounding quota - a bucket metered
+separately from normal model calls, and when it emptied every run died at
+stage 1 with a 429 while the plain model quota sat untouched. Search is now
+research.py's job (Tavily if keyed, else keyless DuckDuckGo), and the writer
+model is interchangeable: Gemini -> Cerebras -> Groq, whichever has a key
+and isn't rate-limited. One provider's wall no longer ends a run.
 """
 
 import os
@@ -23,9 +34,12 @@ import re
 import sys
 import json
 import time
+import urllib.request
 
 from google import genai
 from google.genai import types
+
+import research as web
 
 MODEL          = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 TOPIC          = os.environ.get("TOPIC", "").strip()
@@ -34,12 +48,21 @@ STRICT         = os.environ.get("STRICT_FACTS", "1") == "1"
 MAX_PASSES     = int(os.environ.get("MAX_PASSES", "4"))
 WPM            = 150
 
+# Optional fallback LLMs. Both are free-tier, no card. Unset -> just skipped.
+CEREBRAS_KEY   = os.environ.get("CEREBRAS_API_KEY", "").strip()
+CEREBRAS_MODEL = os.environ.get("CEREBRAS_MODEL", "llama-3.3-70b")
+GROQ_KEY       = os.environ.get("GROQ_API_KEY", "").strip()
+GROQ_MODEL     = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+
 TOTAL_WORDS         = int(TARGET_MINUTES * WPM)
 SCENE_COUNT         = max(8, min(16, round(TOTAL_WORDS / 165)))
 WORDS_PER_SCENE     = round(TOTAL_WORDS / SCENE_COUNT)
 MIN_WORDS_PER_SCENE = int(WORDS_PER_SCENE * 0.70)
 
-client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+# Optional: the fallback providers can carry a whole run on their own, so a
+# missing Gemini key is no longer fatal at import time.
+client = (genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+          if os.environ.get("GEMINI_API_KEY") else None)
 
 
 # ===================== QUALITY METRICS (deterministic) =====================
@@ -187,105 +210,206 @@ def strip_fences(text):
     return t
 
 
-def call(prompt, schema=None, grounded=False, retries=3):
-    """
-    One Gemini call. When grounded=True this also returns the list of source
-    URLs the search tool actually used, so the caller can tell the difference
-    between 'searched the web' and 'made it up'.
-    """
+def _gemini(prompt, schema, drop_schema):
+    """Gemini via google-genai. No search tool - grounding is research.py's job."""
     cfg = {}
-    if schema:
+    if schema and not drop_schema:
         cfg["response_mime_type"] = "application/json"
         cfg["response_schema"] = schema
-    if grounded:
-        cfg["tools"] = [types.Tool(google_search=types.GoogleSearch())]
+    elif schema:
+        cfg["response_mime_type"] = "application/json"
+    resp = client.models.generate_content(
+        model=MODEL, contents=prompt,
+        config=types.GenerateContentConfig(**cfg))
+    return (resp.text or "").strip()
+
+
+def _openai_compatible(prompt, schema, base_url, key, model, label):
+    """
+    Cerebras / Groq / anything speaking the OpenAI chat-completions shape.
+
+    These exist so one provider's quota cannot kill a run. Both have real
+    free tiers with no card (Cerebras ~1M tokens/day, Groq ~30 req/min),
+    which is the whole point: the Gemini 429 that blocked every run so far
+    should degrade to "slower and on another model", not "dead".
+    """
+    body = {"model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.8}
+    if schema:
+        body["response_format"] = {"type": "json_object"}
+    req = urllib.request.Request(
+        base_url, data=json.dumps(body).encode(),
+        headers={"Authorization": f"Bearer {key}",
+                 "Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=120) as r:
+        data = json.loads(r.read())
+    return (data["choices"][0]["message"]["content"] or "").strip()
+
+
+def _providers():
+    """Available LLM backends, best first. Only ones with a key configured."""
+    out = []
+    if os.environ.get("GEMINI_API_KEY"):
+        out.append(("gemini", None))
+    if CEREBRAS_KEY:
+        out.append(("cerebras", ("https://api.cerebras.ai/v1/chat/completions",
+                                 CEREBRAS_KEY, CEREBRAS_MODEL)))
+    if GROQ_KEY:
+        out.append(("groq", ("https://api.groq.com/openai/v1/chat/completions",
+                             GROQ_KEY, GROQ_MODEL)))
+    return out
+
+
+def call(prompt, schema=None, retries=2):
+    """
+    One LLM call, tried across every configured provider before giving up.
+
+    Returns the parsed dict when `schema` is set, else the raw text. There is
+    no `grounded` flag any more: web research is done by research.py and fed
+    in as context, so this never depends on a provider's search-grounding
+    quota - the exact coupling that made every previous run die at stage 1.
+    """
+    provs = _providers()
+    if not provs:
+        raise RuntimeError("No LLM provider configured (need GEMINI_API_KEY, "
+                           "CEREBRAS_API_KEY or GROQ_API_KEY)")
 
     last = None
-    for attempt in range(retries):
-        try:
-            resp = client.models.generate_content(
-                model=MODEL, contents=prompt,
-                config=types.GenerateContentConfig(**cfg))
-            text = (resp.text or "").strip()
-            if not text:
-                raise RuntimeError("empty response")
+    for name, conf in provs:
+        drop_schema = False
+        for attempt in range(retries):
+            try:
+                if name == "gemini":
+                    text = _gemini(prompt, schema, drop_schema)
+                else:
+                    base_url, key, model = conf
+                    text = _openai_compatible(prompt, schema, base_url, key,
+                                              model, name)
+                if not text:
+                    raise RuntimeError("empty response")
+                return json.loads(strip_fences(text)) if schema else text
 
-            sources = []
-            if grounded:
-                try:
-                    gm = resp.candidates[0].grounding_metadata
-                    for c in (getattr(gm, "grounding_chunks", None) or []):
-                        w = getattr(c, "web", None)
-                        if w and getattr(w, "uri", None):
-                            sources.append({"title": getattr(w, "title", "") or "",
-                                            "uri": w.uri})
-                except Exception:
-                    sources = []
+            except Exception as e:
+                last = e
+                msg = str(e)
+                print(f"   ! {name} attempt {attempt+1}/{retries}: {msg[:160]}")
+                if schema and not drop_schema and (
+                        "schema" in msg.lower() or "invalid" in msg.lower()):
+                    print("     -> dropping response_schema, retrying plain JSON")
+                    drop_schema = True
+                    continue
+                # a quota wall will not clear in 8 seconds; move to the next
+                # provider immediately instead of burning the retry budget
+                if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+                    print(f"     -> {name} is rate/quota limited, switching provider")
+                    break
+                time.sleep(4 * (attempt + 1))
+        print(f"   .. {name} exhausted, trying next provider")
+    raise RuntimeError(f"All LLM providers failed. Last error: {last}")
 
-            if schema:
-                return json.loads(strip_fences(text)), sources
-            return text, sources
 
-        except Exception as e:
-            last = e
-            msg = str(e)
-            print(f"   ! attempt {attempt+1}/{retries}: {msg[:180]}")
-            if schema and "response_schema" in cfg and (
-                    "schema" in msg.lower() or "invalid" in msg.lower()):
-                print("     -> dropping response_schema, retrying plain JSON")
-                cfg.pop("response_schema", None)
-            time.sleep(4 * (attempt + 1))
-    raise RuntimeError(f"Gemini failed after {retries} attempts: {last}")
+# ---------------------------------------------------------------- stage 1 ---
+def pick_subject():
+    """No TOPIC given -> have the model name one concrete subject to search."""
+    out = call("""Name ONE specific subject for an explainer documentary where the
+obvious explanation turns out to be wrong. Avoid the most over-covered subjects
+(Titanic, Chernobyl, Nokia, Blockbuster, Kodak, Theranos).
+
+Reply with the subject as a single short phrase and NOTHING else. No preamble,
+no quotes, no explanation.""").strip().strip('"').split("\n")[0][:120]
+    print(f"      subject chosen: {out}")
+    return out
+
+
+def plan_queries(subject):
+    """Turn the subject into real search-engine queries."""
+    raw = call(f"""Write 5 web search queries that would research this subject for a
+documentary: "{subject}"
+
+Rules:
+- Answer what was actually asked. If the subject names CATEGORIES or TYPES of
+  something, query the categories themselves - what they are, how they differ,
+  how to tell them apart. Do NOT substitute the history of the subject for the
+  subject itself. History is background, not the answer.
+- Write queries a search engine handles well: keywords and names, not
+  full sentences, no quotes around the whole query.
+- Cover different angles, not 5 rewordings of one.
+
+One query per line, 5 lines, nothing else.""")
+    qs = [re.sub(r'^\s*[-*\d.)\]]+\s*', '', ln).strip().strip('"')
+          for ln in raw.splitlines()]
+    qs = [q for q in qs if len(q) > 3][:5]
+    return qs or [subject]
 
 
 # ---------------------------------------------------------------- stage 1 ---
 def research():
-    if TOPIC:
-        ask = (f'Research this subject thoroughly for a documentary: "{TOPIC}".\n'
-               f'Answer what was actually asked. If the request names CATEGORIES '
-               f'or TYPES of something, research the categories themselves - '
-               f'what they are, how they differ, how to tell them apart. Do NOT '
-               f'substitute the history of the subject for the subject itself. '
-               f'History is background, not the answer.')
-    else:
-        ask = ("Choose ONE subject for an explainer documentary with a genuine "
-               "reversal in it, where the obvious explanation turns out to be "
-               "wrong. Avoid the most over-covered subjects. Then research it.")
+    """
+    Real web research: we run the searches and read the pages ourselves, then
+    hand the model actual source text to write from.
 
-    prompt = f"""{ask}
+    This used to lean on Gemini's built-in google_search tool, which metered
+    against a search-grounding quota separate from the normal model quota.
+    When that bucket emptied every run died here with a 429 while the plain
+    model quota sat untouched. Owning the search removes that single point of
+    failure - and the sources are now objects we hold, so the STRICT check
+    below tests something real instead of trusting returned metadata.
+    """
+    print("[1/5] web research")
+    subject = TOPIC or pick_subject()
+    queries = plan_queries(subject)
+    for q in queries:
+        print(f"        ? {q[:76]}")
 
-Search the web. Base everything on what you find, not on recall.
+    context, sources = web.gather(queries, per_query=5, read_pages=True)
+    print(f"      {len(sources)} sources, {len(context):,} chars of source text")
 
-Produce a research brief containing:
-- SUBJECT: one sentence
-- QUESTION: the single question this film answers, stated plainly
-- FACTS: 12-16 concrete verifiable facts - names, dates, numbers, places.
-  Mark any you could not confirm from a source with [UNVERIFIED].
-- REVERSAL: what most people believe vs what the sources actually show
-- SURPRISES: 3 details that are rarely mentioned
-
-Accuracy outranks interest. [UNVERIFIED] is always better than a confident
-guess. Plain text."""
-
-    print("[1/5] grounded research")
-    brief, sources = call(prompt, grounded=True)
-
-    print(f"      {len(brief.split())} words, {len(sources)} web sources")
-    if STRICT and len(sources) == 0:
+    if STRICT and not sources:
         # The old build silently fell back to an ungrounded call here. That is
         # precisely how a script full of confident invented history gets made:
         # every later stage trusts the brief completely, and the brief was
         # never checked against anything.
         raise RuntimeError(
-            "Search grounding returned ZERO sources, so this 'research' would "
-            "be the model's memory, not the web. Refusing to build a script on "
-            "it. Set repository variable STRICT_FACTS=0 to override, but expect "
+            "Web search returned ZERO sources, so this 'research' would be the "
+            "model's memory, not the web. Refusing to build a script on it. "
+            "Set repository variable STRICT_FACTS=0 to override, but expect "
             "invented facts if you do.")
     if not sources:
         print("      !! WARNING: no sources - facts in this script are unverified")
 
     for s in sources[:6]:
-        print(f"        - {s['title'][:60] or s['uri'][:60]}")
+        print(f"        - {(s['title'] or s['uri'])[:70]}")
+
+    prompt = f"""You are researching a documentary about: "{subject}"
+
+Below is text pulled from real web pages, just now. Everything you write must
+come from THIS text. You are reading sources, not recalling facts.
+
+=== SOURCE MATERIAL ===
+{context}
+=== END SOURCE MATERIAL ===
+
+Answer what was actually asked. If the subject names CATEGORIES or TYPES of
+something, the brief must identify and explain those categories. Do NOT
+substitute the history of the subject for the subject itself.
+
+Produce a research brief containing:
+- SUBJECT: one sentence
+- QUESTION: the single question this film answers, stated plainly
+- FACTS: 12-16 concrete verifiable facts - names, dates, numbers, places.
+  After each fact cite the source number it came from, like [SOURCE 3].
+  If a fact is not supported by the source material above, mark it
+  [UNVERIFIED] - or better, leave it out.
+- REVERSAL: what most people believe vs what the sources actually show.
+  If the sources do not show a genuine reversal, write "NONE" - an invented
+  reversal is far worse than no reversal.
+- SURPRISES: 3 details from the sources that are rarely mentioned
+
+Accuracy outranks interest. Plain text."""
+
+    brief = call(prompt)
+    print(f"      brief: {len(brief.split())} words")
     return brief, sources
 
 
@@ -341,7 +465,7 @@ FIELDS:
 - "tags": 8-12 lowercase tags."""
 
     print(f"[2/5] drafting {SCENE_COUNT} scenes (~{WORDS_PER_SCENE} words each)")
-    data, _ = call(prompt, schema=SCRIPT_SCHEMA)
+    data = call(prompt, schema=SCRIPT_SCHEMA)
     print(f"      {wordcount(data)} words / {len(data['scenes'])} scenes")
     print(f"      answering: {data.get('question','(none)')[:80]}")
     return data
@@ -372,10 +496,17 @@ def parse_verdicts(report):
 
 def fact_check(data, chunk=4):
     """
-    Independent grounded verification, in chunks.
+    Independent verification against FRESH web sources, in chunks.
 
-    One call over 16 scenes had to hold ~50 claims at once and verified them
-    shallowly. Four scenes per call keeps each search focused.
+    Two things make this a real check rather than a model re-reading itself:
+      1. the search happens now, against the claims as written, so the
+         verifier sees text the drafting stage never saw
+      2. it is chunked - one call over 16 scenes had to hold ~50 claims at
+         once and verified them shallowly
+
+    Each chunk is a search-then-verify pair: the model names what it would
+    look up, we actually look it up, then it rules on the claims against
+    what came back.
     """
     scenes = data["scenes"]
     all_bad, all_report, total_src = [], [], 0
@@ -383,33 +514,55 @@ def fact_check(data, chunk=4):
     for i in range(0, len(scenes), chunk):
         group = scenes[i:i + chunk]
         body = "\n\n".join(f'SCENE {s["scene"]}: {s["narration"]}' for s in group)
-        prompt = f"""Fact-check this documentary excerpt by SEARCHING THE WEB. Never
-rely on memory.
+
+        try:
+            raw = call(f"""Read this documentary excerpt and list the checkable factual
+claims in it - names, dates, numbers, percentages, attributions, "X was the
+first" style causal claims.
 
 EXCERPT:
 ---
 {body}
 ---
 
+For each claim write ONE web search query that would verify it. Keywords and
+names, not sentences. Max 6 queries, one per line, nothing else.""")
+            queries = [re.sub(r'^\s*[-*\d.)\]]+\s*', '', ln).strip().strip('"')
+                       for ln in raw.splitlines()]
+            queries = [q for q in queries if len(q) > 3][:6]
+
+            context, srcs = web.gather(queries, per_query=4, read_pages=True,
+                                       max_sources=10) if queries else ("", [])
+            total_src += len(srcs)
+
+            report = call(f"""Fact-check this documentary excerpt against the source
+material below. Judge ONLY against this material - not memory.
+
+EXCERPT:
+---
+{body}
+---
+
+=== SOURCE MATERIAL (fetched from the web just now) ===
+{context if context else "(no sources came back)"}
+=== END SOURCE MATERIAL ===
+
 Extract every specific factual claim: names, dates, numbers, percentages,
 attributions, and causal statements ("X caused Y", "X was the first").
 
 Return ONE LINE PER CLAIM, in exactly this format and nothing else:
-SCENE <n> | <claim, short> | VERIFIED | 
+SCENE <n> | <claim, short> | VERIFIED |
 SCENE <n> | <claim, short> | WRONG | <the correct fact>
 SCENE <n> | <claim, short> | UNSUPPORTED | <what you could not confirm>
 
-Be harsh. A confidently stated date or figure you cannot confirm from a source
-is UNSUPPORTED, not VERIFIED. No preamble, no summary line."""
-
-        try:
-            report, src = call(prompt, grounded=True)
+Be harsh. A confidently stated date or figure the source material does not
+support is UNSUPPORTED, not VERIFIED. No preamble, no summary line.""")
         except Exception as ex:
             raise RuntimeError(
                 f"Fact-check failed on scenes {i+1}-{i+len(group)}: {str(ex)[:150]}. "
                 f"Refusing to ship an unverified script. Set MAX_PASSES=1 and "
                 f"STRICT_FACTS=0 to override.")
-        total_src += len(src)
+
         all_report.append(report)
         all_bad += parse_verdicts(report)
 
@@ -492,7 +645,7 @@ SCRIPT:
 ---
 Return the corrected script in the required JSON format."""
 
-    out, _ = call(prompt, schema=SCRIPT_SCHEMA)
+    out = call(prompt, schema=SCRIPT_SCHEMA)
     return out
 
 
@@ -538,7 +691,7 @@ SCRIPT:
 ---
 Return the corrected script in the required JSON format."""
     print("[5/5] repairing structure")
-    out, _ = call(prompt, schema=SCRIPT_SCHEMA)
+    out = call(prompt, schema=SCRIPT_SCHEMA)
     return out
 
 

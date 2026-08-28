@@ -69,6 +69,12 @@ MAX_CUE_GAP   = 0.65
 SHOTS_MAX     = 4                     # cap shots per scene regardless of keyword count
 MIN_SHOT_SEC  = 2.5                   # never slice a shot shorter than this
 
+# No ffmpeg/ffprobe call may outlive these. See run() for why this matters.
+CMD_TIMEOUT   = 240                   # per shot/scene encode
+PROBE_TIMEOUT = 30
+FINAL_TIMEOUT = 1800                  # whole-video composite, legitimately long
+MAX_LOOPS     = 40                    # cap on finite -stream_loop repeats
+
 WORK = "build"
 
 # Applied to every image request. Keeps the whole video visually coherent.
@@ -82,9 +88,23 @@ VISUAL_STYLE = (
 # ----------------------------------------------------------------------------
 # SHELL HELPERS
 # ----------------------------------------------------------------------------
-def run(cmd, what="command"):
-    """Run argv list (no shell -> no quoting bugs). Raise with real stderr."""
-    p = subprocess.run(cmd, capture_output=True, text=True)
+def run(cmd, what="command", timeout=CMD_TIMEOUT):
+    """
+    Run argv list (no shell -> no quoting bugs). Raise with real stderr.
+
+    The timeout is not optional decoration. A single ffmpeg invocation that
+    never returns once ate a whole 45-minute CI budget in total silence -
+    two scenes rendered, then nothing, and the job was killed by the runner
+    with an orphan ffmpeg still resident. Any command that cannot finish in
+    `timeout` seconds is a failure we want to SEE and degrade around, not a
+    process to wait on forever.
+    """
+    try:
+        p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        print(f"\n⏱  {what} exceeded {timeout}s and was killed")
+        print("   cmd: " + " ".join(cmd)[:1500])
+        raise RuntimeError(f"{what} timed out after {timeout}s")
     if p.returncode != 0:
         print(f"\n❌ {what} failed")
         print("   cmd: " + " ".join(cmd)[:1500])
@@ -97,7 +117,16 @@ def probe(path):
     return float(run([
         "ffprobe", "-v", "error", "-show_entries", "format=duration",
         "-of", "default=noprint_wrappers=1:nokey=1", path
-    ], f"probe {path}"))
+    ], f"probe {path}", timeout=PROBE_TIMEOUT))
+
+
+def probe_safe(path):
+    """Duration, or 0.0 if the file is unreadable/corrupt/zero-length."""
+    try:
+        d = probe(path)
+        return d if d and d > 0 else 0.0
+    except Exception:
+        return 0.0
 
 
 # ----------------------------------------------------------------------------
@@ -487,10 +516,27 @@ def render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames, fade_in, fa
 
     cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error"]
     if asset_kind == "video":
-        # -stream_loop -1 covers a clip shorter than the shot; -t trims a
-        # longer one. Real footage isn't fed through zoompan's frame-count
-        # driven d=, so duration here is time-based instead.
-        cmd += ["-stream_loop", "-1", "-i", asset_path, "-t", f"{dur:.3f}"]
+        # Loop a FINITE number of times, computed from the clip's real
+        # duration - never -1.
+        #
+        # `-stream_loop -1` is how this hung: given a clip ffmpeg could not
+        # drain (0 decodable frames per pass), it re-looped forever, emitted
+        # nothing, and never reached the `-t` cutoff. Two scenes rendered,
+        # then 44 minutes of silence and a killed job. A finite loop count
+        # terminates on its own even in that case; the run() timeout is the
+        # second net under it.
+        src_dur = probe_safe(asset_path)
+        if src_dur <= 0:
+            # Undecodable clip. Looping it can only ever produce nothing, so
+            # fail fast and let render_shot_safe put a slate here instead of
+            # spending the timeout discovering it the slow way.
+            raise RuntimeError(f"unreadable clip (0s duration): {asset_path}")
+        if src_dur >= dur:
+            cmd += ["-i", asset_path, "-t", f"{dur:.3f}"]
+        else:
+            loops = min(math.ceil(dur / max(src_dur, 0.1)), MAX_LOOPS)
+            cmd += ["-stream_loop", str(loops), "-i", asset_path,
+                    "-t", f"{dur:.3f}"]
     else:
         cmd += ["-i", asset_path]
 
@@ -505,6 +551,33 @@ def render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames, fade_in, fa
     run(cmd, f"render shot {out_mp4}")
 
 
+def render_shot_safe(motion_idx, asset_kind, asset_path, out_mp4, frames,
+                      fade_in, fade_out):
+    """
+    render_shot, but one unusable clip costs that shot and nothing more.
+
+    Without this, a single bad source clip fails the whole build after every
+    other scene has already been paid for. Falls back to a slate rendered
+    through the still-image path, which has no external input to go wrong.
+    """
+    try:
+        render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames,
+                    fade_in, fade_out)
+        return True
+    except Exception as e:
+        print(f"      !! shot failed ({str(e)[:80]}) - substituting slate",
+              flush=True)
+        slate = out_mp4 + ".slate.png"
+        Image.new("RGB", (KB_W, KB_H), (11, 12, 16)).save(slate, "PNG")
+        try:
+            render_shot(motion_idx, "image", slate, out_mp4, frames,
+                        fade_in, fade_out)
+            return False
+        finally:
+            if os.path.exists(slate):
+                os.remove(slate)
+
+
 def concat_shots(shot_mp4s, listfile, out_mp4):
     """Stream-copy concat of a scene's silent shots (identical codec params)."""
     with open(listfile, "w") as f:
@@ -516,8 +589,13 @@ def concat_shots(shot_mp4s, listfile, out_mp4):
 
 
 def mux_audio(video_mp4, mp3, out_mp4):
-    """Attach the scene's narration audio to an already-rendered silent clip."""
-    af = ("loudnorm=I=-16:TP=-1.5:LRA=11,"
+    """
+    Attach the scene's narration audio to an already-rendered silent clip.
+
+    I=-14 is YouTube's own normalization target. At the old -16 the platform
+    left it alone and it simply played quieter than every video next to it.
+    """
+    af = ("loudnorm=I=-14:TP=-1.5:LRA=11,"
           "aresample=48000:resampler=soxr,aformat=channel_layouts=stereo")
     run([
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
@@ -545,18 +623,19 @@ def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
     frame_counts = [base] * n
     frame_counts[-1] += frames_total - base * n
 
-    shots = []
+    shots, failed = [], 0
     for j, ((kind, path), frames) in enumerate(zip(assets, frame_counts)):
         shot_mp4 = os.path.join(work_dir, f"s{scene_idx:03d}_{j:02d}.mp4")
-        render_shot(motion_start + j, kind, path, shot_mp4, frames,
-                    fade_in=(first_scene and j == 0),
-                    fade_out=(last_scene and j == n - 1))
+        if not render_shot_safe(motion_start + j, kind, path, shot_mp4, frames,
+                                fade_in=(first_scene and j == 0),
+                                fade_out=(last_scene and j == n - 1)):
+            failed += 1
         shots.append(shot_mp4)
 
     if n == 1:
         mux_audio(shots[0], mp3, out_mp4)
         os.remove(shots[0])
-        return
+        return failed
 
     listfile = os.path.join(work_dir, f"s{scene_idx:03d}_list.txt")
     silent = os.path.join(work_dir, f"s{scene_idx:03d}_silent.mp4")
@@ -567,6 +646,7 @@ def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
         os.remove(p)
     os.remove(silent)
     os.remove(listfile)
+    return failed
 
 
 # ----------------------------------------------------------------------------
@@ -596,7 +676,7 @@ def music_bed(duration, out_mp3):
         "-filter_complex", filt,
         "-map", "[out]", "-c:a", "libmp3lame", "-b:a", "192k",
         out_mp3,
-    ], "synthesise music bed")
+    ], "synthesise music bed", timeout=FINAL_TIMEOUT)
 
 
 # ----------------------------------------------------------------------------
@@ -653,7 +733,7 @@ def finish(body, ass, has_subs, music, out_mp4):
         "-movflags", "+faststart",
         out_mp4,
     ]
-    run(cmd, "final composite")
+    run(cmd, "final composite", timeout=FINAL_TIMEOUT)
 
 
 # ----------------------------------------------------------------------------
@@ -772,7 +852,8 @@ async def build():
     body = os.path.join(WORK, "body.mp4")
     run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
          "-f", "concat", "-safe", "0", "-i", listfile,
-         "-c", "copy", "-movflags", "+faststart", body], "concat")
+         "-c", "copy", "-movflags", "+faststart", body], "concat",
+         timeout=FINAL_TIMEOUT)
 
     write_srt(cues, "subtitles.srt")
     ass = "captions.ass"
