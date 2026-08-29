@@ -149,7 +149,27 @@ def from_script(script_path, out_png, work_dir="build/thumb"):
     images = fetch_tile_images(queries, work_dir)
     got = sum(1 for p in images if p)
     print(f"   thumbnail: {len(labels)} tiles, {got} with a picture")
-    return render(headline, accent, labels, out_png, images=images)
+    out = render(headline, accent, labels, out_png, images=images)
+
+    # Say this on the run page, not only in the log. The thumbnail is built
+    # near the START of a run and the engine then prints hundreds of lines,
+    # so this number is unreadable afterwards - the log can only be fetched
+    # from its end. Twice now the one fact worth knowing had scrolled out of
+    # reach, so it goes somewhere that keeps it.
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        try:
+            miss = [l for l, p in zip(labels, images) if not p]
+            with open(summary, "a", encoding="utf-8") as f:
+                f.write(f"\n## Thumbnail\n\n"
+                        f"**{headline}** — red on `{accent or '(none)'}`\n\n"
+                        f"{len(labels)} tiles, **{got} with a picture**, "
+                        f"{len(labels) - got} plain colour"
+                        + (f" ({', '.join(miss)})" if miss else "") + "\n\n"
+                        f"Tiles: {' · '.join(labels)}\n")
+        except Exception:
+            pass
+    return out
 
 
 def _font(path, size):
