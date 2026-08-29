@@ -139,7 +139,7 @@ def refill(niche, call, gather, probe=None, measure=None,
         print(f"[scout] {len(cands)} candidates in '{niche}' "
               f"({len(avoid)} blocked or already shortlisted)")
 
-    survived = []
+    survived, unchecked = [], []
     for c in cands:
         try:
             r = T.assess(c, call, gather, verbose=verbose)
@@ -149,13 +149,23 @@ def refill(niche, call, gather, probe=None, measure=None,
             continue
         if r["build"]:
             survived.append(r)
-        else:
+        elif r.get("checked"):
             state["rejected"].append({
                 "topic": c, "why": (r["reasons"] or ["rejected"])[0][:180],
                 "agreement": r.get("agreement"),
                 "at": time.strftime("%Y-%m-%d")})
+        else:
+            # The gate could not run - a model outage, a rate limit, a dead
+            # search. Blocking the topic here would bury a possibly good idea
+            # forever because of a transient failure, so it is simply skipped
+            # and remains available to a later run.
+            unchecked.append(c)
     if verbose:
-        print(f"[scout] {len(survived)}/{len(cands)} have a real answer")
+        print(f"[scout] {len(survived)}/{len(cands)} have a real answer"
+              + (f"  ({len(unchecked)} COULD NOT BE CHECKED and are left "
+                 f"unblocked)" if unchecked else ""))
+        for u in unchecked:
+            print(f"        ? {u}")
 
     for r in survived[:MAX_DEMAND_CHECKS]:
         if not (probe and measure):

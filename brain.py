@@ -476,26 +476,46 @@ def call(prompt, schema=None, retries=2):
                           f"This means the User-Agent is being refused.")
                     break
 
-                # A genuine 403/404 from the provider usually means THIS MODEL
-                # is not permitted on this account, not that the key is bad.
-                # Ask the provider what it will allow and take the best of
-                # those, rather than making the owner hunt through settings.
-                if (conf and not tried_discovery
-                        and ("HTTP 403" in msg or "HTTP 404" in msg
-                             or "model" in msg.lower())):
+                rate_limited = ("429" in msg or "RESOURCE_EXHAUSTED" in msg
+                                or "rate limit" in msg.lower()
+                                or "quota" in msg.lower())
+                too_large = "413" in msg or "too large" in msg.lower()
+
+                # A genuine 403/404 means THIS MODEL is not permitted on this
+                # account. A 429 does NOT - it means we are sending too fast.
+                #
+                # This used to also fire on any message containing the word
+                # "model", and Groq's rate-limit text reads "Rate limit reached
+                # for model `openai/gpt-oss-120b`", so a 429 triggered model
+                # discovery, which then picked the same model that had just
+                # failed and retried straight into the identical wall:
+                #     429 ... for model `openai/gpt-oss-120b`
+                #     -> refused that model; it offers 9. Retrying with
+                #        'openai/gpt-oss-120b'
+                # Discovery is now limited to real permission errors, and it
+                # must return a DIFFERENT model or it is pointless.
+                if (conf and not tried_discovery and not rate_limited
+                        and not too_large
+                        and ("HTTP 403" in msg or "HTTP 404" in msg)):
                     tried_discovery = True
-                    avail = _oai_available_models(conf[0], conf[1])
+                    avail = [m for m in _oai_available_models(conf[0], conf[1])
+                             if m != model]
                     if avail:
                         model = avail[0]
-                        print(f"     -> {name} refused that model; it offers "
-                              f"{len(avail)}. Retrying with {model!r}")
+                        print(f"     -> {name} refused that model; retrying "
+                              f"with a DIFFERENT one: {model!r}")
                         continue
-                    print(f"     -> {name} listed no usable models "
-                          f"(key invalid, or all models blocked for this account)")
+                    print(f"     -> {name} offers no alternative model "
+                          f"(key invalid, or everything blocked)")
 
-                # a quota wall will not clear in 8 seconds; move to the next
-                # provider immediately instead of burning the retry budget
-                if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
+                # A per-minute token limit DOES clear, unlike a daily quota, so
+                # it is worth one short wait before abandoning the provider.
+                if rate_limited and "per day" not in msg.lower() and attempt == 0:
+                    print(f"     -> {name} rate limited; waiting 20s "
+                          f"(a per-minute limit clears, a daily one does not)")
+                    time.sleep(20)
+                    continue
+                if rate_limited:
                     print(f"     -> {name} is rate/quota limited, switching provider")
                     break
                 time.sleep(4 * (attempt + 1))

@@ -208,7 +208,9 @@ def verdict(topic, agreement, consensus, contested, detail):
     reasons, ok = [], True
 
     if detail.get("sources", 0) < 3:
-        return False, ["too few usable sources to judge this topic at all"], {}
+        return False, ["fewer than 3 sources named any members - could not "
+                       "judge this topic (this is a failure to check, not a "
+                       "verdict on the topic)"], {}
 
     if agreement < MIN_AGREEMENT:
         ok = False
@@ -253,23 +255,38 @@ def assess(topic, call, gather, per_query=5, verbose=True):
     context, sources = gather(queries, per_query=per_query, read_pages=True,
                               max_sources=8)
     if not sources:
-        return {"topic": topic, "build": False,
-                "reasons": ["no sources came back"], "agreement": 0.0,
-                "members": [], "sources": 0}
+        return {"topic": topic, "build": False, "checked": False,
+                "reasons": ["no sources came back - could not check this "
+                            "topic, which is not the same as rejecting it"],
+                "agreement": 0.0, "members": [], "sources": 0}
 
-    labelled = context
+    # Sources are truncated HARD for this call. It only has to report which
+    # members each page names, which needs the first part of each page, not
+    # all of it. Sending everything produced "HTTP 413 Request too large" on
+    # Groq and burned a retry every time.
+    labelled = context[:11000]
     try:
         data = call(extract_prompt(topic, labelled), schema={"type": "object"})
         per_source = data.get("sources", []) if isinstance(data, dict) else []
     except Exception as e:
-        return {"topic": topic, "build": False,
-                "reasons": [f"member extraction failed: {str(e)[:90]}"],
+        # NOT a rejection. This is the single most dangerous confusion in the
+        # scout: a live run logged "too few usable sources to judge this topic
+        # at all" for a topic with eight sources present, immediately after
+        # both model providers hit their limits. The topic was fine - we could
+        # not check it - and recording that as a rejection blocks a
+        # potentially good topic forever.
+        return {"topic": topic, "build": False, "checked": False,
+                "reasons": [f"COULD NOT CHECK (not a rejection): the model "
+                            f"call failed - {str(e)[:110]}"],
                 "agreement": 0.0, "members": [], "sources": len(sources)}
 
     agreement, consensus, contested, detail = score(per_source, topic)
     build, reasons, extra = verdict(topic, agreement, consensus, contested,
                                     detail)
-    out = {"topic": topic, "build": build, "agreement": agreement,
+    # checked=True means the gate genuinely ran and reached a verdict, so a
+    # False build here is a real rejection rather than a failure to look.
+    out = {"topic": topic, "build": build, "checked": True,
+           "agreement": agreement,
            "members": extra.get("members", consensus[:MAX_MEMBERS]),
            "contested": contested[:8], "sources": len(sources),
            "reasons": reasons, "detail": detail}
