@@ -170,7 +170,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: script-json
-          path: script.json
+          # made.json is the scout's memory - what it chose, what it shortlisted
+          # and what it blocked. The runner is destroyed after every job, so
+          # right now this survives only as an artifact to be read; carrying it
+          # between runs still needs solving, and until it is, each run scouts
+          # from scratch and can re-propose a topic an earlier run rejected.
+          path: |
+            script.json
+            made.json
           if-no-files-found: warn
           retention-days: 30
 

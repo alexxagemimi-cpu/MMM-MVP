@@ -619,8 +619,24 @@ identify and explain those categories. Historical background may occupy at most
 one or two scenes; it is context, never the substance.
 """
 
+    members_rule = ""
+    if VERIFIED_MEMBERS:
+        members_rule = f"""
+THE ANSWER IS ALREADY ESTABLISHED - DO NOT INVENT A DIFFERENT ONE:
+
+{chr(10).join('  - ' + m for m in VERIFIED_MEMBERS)}
+
+Independent sources were checked against each other and agree on exactly
+these. Give each one its own scene, in a sensible order, and use it as that
+scene's key_term. Do NOT add a member that is not on this list, however
+plausible it sounds and however true the sentences about it would be - being
+true is not the same as belonging to the category. Do not silently drop one
+either.
+"""
+
     prompt = f"""You are an elite documentary scriptwriter. Write the narration for
 a high-retention explainer in the style of Lemmino, Vox, or Johnny Harris.
+{members_rule}
 
 RESEARCH BRIEF:
 ---
@@ -1025,11 +1041,157 @@ def write_run_summary(data, sources, metrics, fact_bad, history):
         print(f"   (run summary not written: {str(e)[:100]})")
 
 
+VERIFIED_MEMBERS = []
+
+
+def _set_length(minutes):
+    """
+    Re-derive every length constant when the scout sets the runtime from the
+    material. These are module-level because everything reads them, so they
+    have to be rebound together or the prompts and the validator disagree
+    about how long the film is.
+    """
+    global TARGET_MINUTES, TOTAL_WORDS, SCENE_COUNT, WORDS_PER_SCENE
+    global MIN_WORDS_PER_SCENE, MAX_WORDS_PER_SCENE, KEYWORDS_PER_SCENE
+    TARGET_MINUTES = float(minutes)
+    TOTAL_WORDS = int(TARGET_MINUTES * WPM)
+    SCENE_COUNT = max(5, min(18, round(TOTAL_WORDS /
+                                       (WPM * SCENE_SECONDS / 60))))
+    WORDS_PER_SCENE = round(TOTAL_WORDS / SCENE_COUNT)
+    MIN_WORDS_PER_SCENE = int(WORDS_PER_SCENE * 0.88)
+    MAX_WORDS_PER_SCENE = int(WORDS_PER_SCENE * 1.12)
+    secs = WORDS_PER_SCENE / WPM * 60
+    KEYWORDS_PER_SCENE = max(6, min(13, round(secs / 5) + 2))
+
+
+def choose_topic():
+    """
+    Stage 0. With no TOPIC given, the scout picks one that has survived a
+    truth gate and a demand gate.
+
+    This replaces the least trustworthy path in the whole project: a blank
+    topic used to make pick_subject() ask the model to name a subject FROM
+    MEMORY - no sources, no evidence, no check of any kind - and that was
+    what ran by default.
+    """
+    global TOPIC, MODE, VERIFIED_MEMBERS
+    if TOPIC:
+        print(f"[0/6] topic given: {TOPIC}")
+        return
+
+    import scout
+    probe = measure_yt = dv = ds = None
+    if os.environ.get("YOUTUBE_API_KEY", "").strip():
+        import youtube as yt
+        probe, measure_yt, dv, ds = yt.probe, yt.measure, yt.verdict, yt.score
+    else:
+        print("      !! no YOUTUBE_API_KEY - the scout can check whether a "
+              "topic is TRUE but not whether anyone wants it")
+
+    niche = _env("NICHE", "money, business and self-improvement")
+    print(f"[0/6] no topic given - scouting '{niche}'")
+    best, _ = scout.next_topic(niche, call, web.gather, probe=probe,
+                               measure=measure_yt, demand_verdict=dv,
+                               demand_score=ds)
+    if not best:
+        raise RuntimeError(
+            "The scout found nothing worth making: no candidate had both a "
+            "real, agreed answer AND an audience. That is a real result, not "
+            "a crash. Re-run to generate a different batch, or set TOPIC "
+            "explicitly to override.")
+    TOPIC = best["topic"]
+    VERIFIED_MEMBERS = best.get("members") or []
+    MODE = modes.detect_mode(TOPIC)
+    if best.get("minutes"):
+        _set_length(best["minutes"])
+    print(f"      topic    : {TOPIC}")
+    print(f"      members  : {', '.join(VERIFIED_MEMBERS)}")
+    print(f"      length   : {TARGET_MINUTES:.0f} min / {SCENE_COUNT} scenes "
+          f"(set by the material, not by a target)")
+
+
+def red_team(data, brief, sources_context):
+    """
+    Stage 6. Attack the finished script, and refuse to ship it while any HARD
+    finding stands.
+
+    Separate from fact-checking on purpose: fact-checking catches a wrong
+    date, and cannot catch an item that is not a member of the category,
+    because every sentence about it may be true. That is the runway failure,
+    and it is caught here by holding the script to the member list the scout
+    verified BEFORE the script existed.
+    """
+    import redteam
+    for attempt in range(1, 4):
+        findings = redteam.check(data, VERIFIED_MEMBERS or None)
+        findings += redteam.attack(data, call, sources_context,
+                                   VERIFIED_MEMBERS or None)
+        text, hard = redteam.report(findings)
+        print(f"\n[6/6] red team, attempt {attempt}/3")
+        print("      " + text.replace("\n", "\n      "))
+        if not hard:
+            print("      PASSED - no hard findings")
+            return data, findings
+        if attempt == 3:
+            print(f"      !! shipping with {hard} hard finding(s) unresolved")
+            return data, findings
+
+        fixes = "\n".join(
+            f"- [{f.get('kind')}] "
+            f"{('scene ' + str(f['scene']) + ': ') if f.get('scene') else ''}"
+            f"{(chr(34) + f['quote'] + chr(34) + ' -- ') if f.get('quote') else ''}"
+            f"{f.get('detail','')}"
+            for f in findings if f.get("severity") == "hard")
+        members_rule = ""
+        if VERIFIED_MEMBERS:
+            members_rule = (
+                "\n\nTHE ONLY VALID MEMBERS OF THIS CATEGORY ARE:\n"
+                + "\n".join(f"- {m}" for m in VERIFIED_MEMBERS)
+                + "\nIf a scene explains anything else as a member, REPLACE it "
+                  "with one of these that the script does not yet cover. Do "
+                  "not keep it because its sentences are true - being true is "
+                  "not the same as belonging.")
+        try:
+            cand = call(f"""Fix every problem listed. Change nothing else.
+
+PROBLEMS FOUND BY AN ADVERSARIAL REVIEW:
+{fixes}
+{members_rule}
+
+Write in plain language a 15-year-old reads without stopping. Short
+sentences. No filler, no hedging, no jargon where a common word exists.
+Keep exactly {SCENE_COUNT} scenes and the same beat order, and keep every
+narration between {MIN_WORDS_PER_SCENE} and {MAX_WORDS_PER_SCENE} words.
+Each scene's key_term must still appear word for word in its own narration.
+
+BRIEF:
+---
+{brief}
+---
+SCRIPT:
+---
+{json.dumps(data, indent=2)}
+---
+Return the corrected script in the required JSON format.""",
+                        schema=SCRIPT_SCHEMA)
+            if cand.get("scenes"):
+                data = cand
+        except Exception as ex:
+            print(f"      !! red-team repair failed ({str(ex)[:110]})")
+            return data, findings
+    return data, findings
+
+
 def main():
+    choose_topic()
     print("=" * 64)
     print(f"  MMM BRAIN | {MODEL} | {TARGET_MINUTES:.0f}min | {SCENE_COUNT} scenes")
-    print(f"  topic      : {TOPIC or '(AI chooses)'}")
-    print(f"  max passes : {MAX_PASSES}   strict_facts={STRICT}")
+    print(f"  topic      : {TOPIC}")
+    print(f"  mode       : {MODE}   max passes: {MAX_PASSES}   "
+          f"strict_facts={STRICT}")
+    if VERIFIED_MEMBERS:
+        print(f"  verified   : {len(VERIFIED_MEMBERS)} members from "
+              f"cross-source agreement")
     print("=" * 64)
 
     brief, sources = research()
@@ -1090,10 +1252,19 @@ def main():
         except Exception as ex:
             print(f"   !! shape repair failed ({str(ex)[:110]})")
 
+    # Red team LAST, after every other repair has had its turn. It is the
+    # only stage that can see the verified member list, so it is the only one
+    # that can catch a scene explaining something that does not belong.
+    src_ctx = "\n".join(f"[{s.get('title','')}] {s.get('uri','')}"
+                        for s in sources[:14])
+    data, rt_findings = red_team(data, brief, src_ctx)
+
     for i, s in enumerate(data["scenes"], 1):
         s["scene"] = i
     final_m = measure(data["scenes"])
     data["sources"] = sources
+    data["verified_members"] = VERIFIED_MEMBERS
+    data["red_team"] = rt_findings
     data["fact_check"] = fact_bad
     data["quality"] = {"final": final_m, "failing": grade(final_m),
                        "passes": history}
