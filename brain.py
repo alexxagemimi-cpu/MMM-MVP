@@ -51,7 +51,24 @@ MODE           = (os.environ.get("MODE", "").strip().lower()
 TARGET_MINUTES = float(os.environ.get("TARGET_MINUTES", "12"))
 STRICT         = os.environ.get("STRICT_FACTS", "1") == "1"
 MAX_PASSES     = int(os.environ.get("MAX_PASSES", "4"))
-WPM            = 150
+
+# MEASURED, not assumed. The old 150 was a guess; the real voice was timed
+# from run #20's own log - 168 words of narration produced 61.65s of audio
+# by en-US-GuyNeural, which is 163.5 words per minute. Getting this wrong
+# scales every length calculation below it.
+WPM            = 163
+
+# How long one scene should run, in seconds. A scene is one idea, and this
+# is what decides both how many scenes a video gets and how many words each
+# one carries.
+#
+# Run #23 produced 60-second scenes, which is a long time to hold a single
+# idea while the picture cuts every five. 45s is a deliberate step toward
+# the reference channels without inventing structure: on a taxonomy the
+# number of real categories is fixed by the subject, so padding the scene
+# count to hit a runtime would mean inventing categories - the same failure
+# modes.py exists to prevent, wearing a different hat.
+SCENE_SECONDS  = float(os.environ.get("SCENE_SECONDS", "45"))
 
 # Optional fallback LLMs, tried in this order after Gemini. All free-tier,
 # no card; each is simply skipped when its key is unset.
@@ -107,10 +124,38 @@ OPENROUTER_MODEL = _env("OPENROUTER_MODEL",
 BROWSER_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
               "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
-TOTAL_WORDS         = int(TARGET_MINUTES * WPM)
-SCENE_COUNT         = max(8, min(16, round(TOTAL_WORDS / 165)))
-WORDS_PER_SCENE     = round(TOTAL_WORDS / SCENE_COUNT)
-MIN_WORDS_PER_SCENE = int(WORDS_PER_SCENE * 0.70)
+TOTAL_WORDS = int(TARGET_MINUTES * WPM)
+
+# Scene count comes from how long a scene should be, not from a magic
+# divisor with a floor of 8 bolted on. That floor was quietly distorting
+# every short video: a 6-minute request wanted ~6 scenes, got forced to 8,
+# and each one was handed a word budget it then overshot.
+SCENE_COUNT     = max(5, min(18, round(TOTAL_WORDS / (WPM * SCENE_SECONDS / 60))))
+WORDS_PER_SCENE = round(TOTAL_WORDS / SCENE_COUNT)
+
+# THE RANGE IS SYMMETRIC ON PURPOSE, AND THIS IS THE ACTUAL OVERSHOOT FIX.
+#
+# It used to be WORDS_PER_SCENE to WORDS_PER_SCENE+45. A model given a range
+# writes to the TOP of it, and on a 113-word target +45 is +40% - so run #23
+# asked for 6 minutes and delivered 8.3. The old MIN of 0.70x made it worse
+# by widening the band further.
+#
+# Centring the band means writing to the top overshoots by ~12% instead of
+# 40%, and the midpoint is now the number we actually want.
+MIN_WORDS_PER_SCENE = int(WORDS_PER_SCENE * 0.88)
+MAX_WORDS_PER_SCENE = int(WORDS_PER_SCENE * 1.12)
+
+# One distinct visual per ~5s of scene (engine.py's TARGET_SHOT_SEC), so a
+# long scene does not have to reuse a keyword. Run #23's 60s scenes got 12
+# shots from 8-9 keywords, so three or four shots per scene re-ran a search
+# already used in that same scene - visible as the same subject twice.
+#
+# Derived from the ACTUAL scene length rather than the SCENE_SECONDS target,
+# because the scene-count clamp can stretch scenes past it: at 16 minutes the
+# 18-scene cap makes each scene 53s, which needs 11 visuals, not the 10 a
+# 45s target implies. One repeat crept back in at exactly that setting.
+_scene_secs = WORDS_PER_SCENE / WPM * 60
+KEYWORDS_PER_SCENE = max(6, min(13, round(_scene_secs / 5) + 2))
 
 # Optional: the fallback providers can carry a whole run on their own, so a
 # missing Gemini key is no longer fatal at import time.
@@ -584,8 +629,10 @@ RESEARCH BRIEF:
 {topic_rule}
 HARD REQUIREMENTS:
 - EXACTLY {SCENE_COUNT} scenes.
-- Every scene's "narration" is {WORDS_PER_SCENE}-{WORDS_PER_SCENE+45} words.
-  Under {MIN_WORDS_PER_SCENE} words is a failure. Count them.
+- Every scene's "narration" is {MIN_WORDS_PER_SCENE}-{MAX_WORDS_PER_SCENE}
+  words, and should land near {WORDS_PER_SCENE}. Count them. This is a real
+  constraint, not a guide: the whole film is spoken aloud, so going over on
+  every scene makes the finished video minutes longer than asked for.
 - Use ONLY facts present in the brief. Anything marked [UNVERIFIED] must be
   cut or softened to a qualitative statement. Do not add facts from memory.
 
@@ -597,13 +644,17 @@ BEATS - assign each scene a beat, in order:
 FIELDS:
 - "narration": exact spoken words, plain prose, no stage directions. This
   string is fed straight to text-to-speech.
-- "image_keywords": 7-9 DISTINCT visuals in the order the narration reaches
-  them. These are searched against a real stock footage library, so name
-  things that genuinely exist on film: real people doing real actions, real
-  objects, real places. Vary macro / wide / person / object / environment.
-  4-9 words each, naming a concrete photographable SUBJECT. Explainer
-  editing cuts roughly every 5 seconds, so a scene needs several distinct
-  visuals; too few and the same clip has to be held far too long.
+- "image_keywords": EXACTLY {KEYWORDS_PER_SCENE} DISTINCT visuals, in the
+  order the narration reaches them. These are searched against a real stock
+  footage library, so name things that genuinely exist on film: real people
+  doing real actions, real objects, real places. Vary macro / wide / person
+  / object / environment. 4-9 words each, naming a concrete photographable
+  SUBJECT.
+  The count matters. Editing cuts roughly every 5 seconds, so a scene of
+  this length needs {KEYWORDS_PER_SCENE} of them; supply fewer and the
+  system re-runs an earlier search to fill the gap, and the same subject
+  visibly appears twice inside one scene. Every entry must be genuinely
+  different from the others - not a rewording of the same shot.
   Never write "cinematic", "4k", "moody", "dramatic lighting".
   Good: ["hands stitching a wool lapel", "crowded city street commuters",
          "rack of tailored suits in a shop", "close up of fabric weave",
@@ -800,9 +851,11 @@ How to move each number, concretely:
 
 === HARD CONSTRAINTS ===
 - Keep exactly {SCENE_COUNT} scenes and the same beat order.
-- Every narration stays {WORDS_PER_SCENE}-{WORDS_PER_SCENE+45} words.
+- Every narration stays {MIN_WORDS_PER_SCENE}-{MAX_WORDS_PER_SCENE} words,
+  landing near {WORDS_PER_SCENE}. Do not let a rewrite grow the script.
 - Add NO fact that is absent from the brief.
-- image_keywords: 7-9 real, photographable subjects per scene.
+- image_keywords: exactly {KEYWORDS_PER_SCENE} real, photographable subjects
+  per scene, all genuinely different from each other.
 - Each scene's "key_term" must still appear WORD FOR WORD in that same
   scene's narration. If you reword the sentence containing it, either keep
   the phrase intact or change key_term to match the new wording. It is
@@ -841,6 +894,13 @@ def validate(d):
         k = [x for x in (s.get("image_keywords") or []) if x and x.strip()]
         if w < MIN_WORDS_PER_SCENE:
             p.append(f"scene {i}: {w} words (need >= {MIN_WORDS_PER_SCENE})")
+        # Only "too short" was ever checked, which is why nothing caught the
+        # overshoot: run #23 wrote every scene ~40% over and passed validation
+        # cleanly, then delivered 8.3 minutes for a 6-minute request. A budget
+        # policed on one side is not a budget.
+        elif w > MAX_WORDS_PER_SCENE:
+            p.append(f"scene {i}: {w} words (max {MAX_WORDS_PER_SCENE}) - "
+                     f"trim it; every scene over budget lengthens the video")
         if len(k) < 3:
             p.append(f"scene {i}: {len(k)} image keywords (need >= 3)")
         # A term the narration never says cannot be timed to the voice, so
@@ -879,8 +939,13 @@ def validate(d):
                      f"{head!r} - it must be a literal phrase from it")
 
     t = wordcount(d)
-    if t < TOTAL_WORDS * 0.65:
-        p.append(f"total {t} words, target ~{TOTAL_WORDS}")
+    if t < TOTAL_WORDS * 0.75:
+        p.append(f"total {t} words, target ~{TOTAL_WORDS} "
+                 f"(~{t/WPM:.1f} min vs {TARGET_MINUTES:.0f} asked for)")
+    elif t > TOTAL_WORDS * 1.15:
+        p.append(f"total {t} words, target ~{TOTAL_WORDS} - that is "
+                 f"~{t/WPM:.1f} min of speech for a {TARGET_MINUTES:.0f} min "
+                 f"video. Cut, do not pad.")
     return p
 
 
