@@ -7,3 +7,10 @@ build/
 script.json
 subtitles.srt
 final_video.mp4
+captions.ass
+
+# rendered thumbnails are build output; the RENDERER is source, the font
+# under assets/fonts is a vendored dependency, and both are tracked
+thumbnail.png
+thumb_*.png
+localtest/
