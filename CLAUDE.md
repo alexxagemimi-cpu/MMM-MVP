@@ -215,3 +215,65 @@ visual change.
   budget.
 - Pixabay behaviour across a long video's worth of requests (~45 shots).
 - Nothing yet judged by the owner as publishable. That is the real bar.
+
+---
+
+## 10. What the reference explainers actually do (studied, not guessed)
+
+Frame-by-frame analysis of "Every Operating System Explained in 8 Minutes",
+alongside the owner's screen recording of our own run #23. Every point below
+is from looking at frames, not from reasoning about what ought to work.
+
+**10.1 It opens on the WHOLE LIST.** Frame one is a grid of all eight
+operating systems, logo and name. The viewer sees everything they will learn
+before a word is spoken. Ours opened on a soft-focus coffee cup.
+
+**10.2 A section header never leaves the screen.** Icon top-left, section
+name top-centre in large type — "WINDOWS", then "LINUX" — persisting across
+every shot of that section. This is the orientation device, and it works
+*because it does not move.* Ours had no orientation at all.
+
+**10.3 Nothing cuts.** Scene detection finds ZERO hard cuts in 43 seconds.
+Sampling one frame per second shows the MS-DOS logo holding on the left while
+screenshots appear beside it and are swapped. Elements **accumulate on a
+stable canvas.** We cut between unrelated full-frame stock clips every 5s.
+This is the single biggest structural difference and it is not a tuning
+problem.
+
+**10.4 White background, black text.** Reads as a document. Not cinematic,
+not dark. The dark card design tried before this was rejected by the owner
+on sight, correctly.
+
+**10.5 Real artifacts of the subject.** Actual MS-DOS boot output, the actual
+Windows 1.01 splash, the real Windows 10 desktop, real logos. Not one frame
+of stock footage. Where no real picture exists, a flat icon or stick-figure
+doodle stands in — never a photograph of an unrelated office.
+
+**10.6 The failure this exposes in our output.** A giant 3D "FRIDAY" clip
+appeared under narration about "total expenditures across reporting periods".
+Pixabay returned it; nothing ever asked whether it was relevant. In 47
+seconds our video passed through seven unrelated visual worlds.
+
+## 11. THE TAXONOMY IS NOT CHECKED — open, and the worst content bug
+
+The owner caught this and it is more serious than any visual problem:
+
+> "runway etc you're explaining is incorrect ... there wasn't proper research
+> done for what to explain"
+
+He is right. **Runway is not a type of business expense** — it is months of
+cash remaining at the current burn rate. It appeared as an item in a list of
+expense types in both the AI-written script AND the hand-written test fixture
+in factory.yml (which this project's own author wrote).
+
+Nothing anywhere validates that the listed items are genuinely members of the
+category the topic asked about. `validate()` checks word counts, that
+`key_term` is spoken aloud, that `thumb_accent` is inside `thumb_headline` —
+and never once asks whether the list is *true*.
+
+This defeats the entire point. A viewer who looks it up finds the video is
+wrong, which is worse than a video that looks cheap.
+
+The fix is a research stage that establishes the real membership of the
+category from sources FIRST, and a check that every `key_term` survives it.
+Not written yet. It should come before any further visual work.
