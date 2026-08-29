@@ -601,58 +601,69 @@ def render_shot_safe(motion_idx, asset_kind, asset_path, out_mp4, frames,
                 os.remove(slate)
 
 
-def concat_shots(shot_mp4s, listfile, out_mp4):
-    """Stream-copy concat of a scene's silent shots (identical codec params)."""
-    with open(listfile, "w") as f:
-        for p in shot_mp4s:
-            f.write(f"file '{os.path.abspath(p)}'\n")
-    run(["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-         "-f", "concat", "-safe", "0", "-i", listfile,
-         "-c", "copy", "-movflags", "+faststart", out_mp4], "concat shots")
-
-
-def mux_audio(video_mp4, mp3, out_mp4):
+def assemble_scene(shot_mp4s, mp3, out_mp4, listfile, target_dur):
     """
-    Attach the scene's narration audio to an already-rendered silent clip.
+    Shots + narration -> one finished scene, in a SINGLE ffmpeg call.
 
-    The output length is set EXPLICITLY with -t, not inferred with -shortest.
-    -shortest has to work out when to stop from stream timestamps, and with
-    `-c:v copy` those timestamps come straight from the source clip. Given a
-    slow-motion source (high frame rate, unusual timebase) that inference
-    never resolved: ffmpeg sat forever on one scene until it was killed. We
-    already know exactly how long the video is, so we say so. `apad` then
-    keeps the audio from ending early, since the video is deliberately a
-    few frames longer than the narration.
+    This replaced a two-step concat(-c copy) -> mux(-c:v copy) pipeline that
+    hung three separate CI runs, always on the same scene, whose source was a
+    slow-motion stock clip. Both `-shortest` and an explicit `-t` failed to
+    stop it, which rules out the flag and points at the thing they had in
+    common: `-c:v copy` inheriting that clip's timestamps through an
+    intermediate file.
+
+    So neither survives here. The shots are concatenated and the video is
+    RE-ENCODED in the same pass, which forces ffmpeg to decode and re-stamp
+    every frame - there is no timestamp left to inherit and no intermediate
+    file to inherit it from. `target_dur` comes from our own frame budget
+    (frames / FPS), not from probing a file, so the output length is a number
+    we computed rather than one ffmpeg has to infer.
+
+    The extra encode costs a few seconds per scene. Three dead runs cost 50
+    minutes, so this trade is not close.
 
     I=-14 is YouTube's own normalization target. At the old -16 the platform
     left it alone and it simply played quieter than every video next to it.
     """
-    vdur = probe_safe(video_mp4)
-    if vdur <= 0:
-        raise RuntimeError(f"unreadable silent scene video: {video_mp4}")
-    af = ("loudnorm=I=-14:TP=-1.5:LRA=11,"
-          "aresample=48000:resampler=soxr,aformat=channel_layouts=stereo,apad")
+    with open(listfile, "w") as f:
+        for p in shot_mp4s:
+            f.write(f"file '{os.path.abspath(p)}'\n")
+
+    # apad is bounded by whole_dur - a bare apad generates silence forever,
+    # which is exactly the kind of unbounded input this file has been bitten
+    # by twice already.
+    af = (f"loudnorm=I=-14:TP=-1.5:LRA=11,"
+          f"aresample=48000:resampler=soxr,aformat=channel_layouts=stereo,"
+          f"apad=whole_dur={target_dur:.3f}")
+
     run([
         "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-i", video_mp4,
+        "-f", "concat", "-safe", "0", "-i", listfile,
         "-i", mp3,
         "-filter_complex", f"[1:a]{af}[a]",
         "-map", "0:v", "-map", "[a]",
-        "-c:v", "copy",
+        "-c:v", "libx264", "-preset", PRESET_SCENE, "-crf", CRF_SCENE,
+        "-pix_fmt", "yuv420p", "-r", str(FPS), "-g", str(FPS * 2),
+        "-fps_mode", "cfr",
         "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
-        "-t", f"{vdur:.3f}",
+        "-t", f"{target_dur:.3f}",
         "-movflags", "+faststart",
         out_mp4,
-    ], "mux audio", timeout=shot_timeout(vdur))
+    ], "assemble scene", timeout=shot_timeout(target_dur))
 
 
 def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
                   first_scene, last_scene, frames_total):
     """
     Render one scene: N visuals (each ("video"|"image", path)) -> N silent
-    shots -> concat -> mux with the scene's narration audio. The scene's
-    frame budget is split evenly across its shots, remainder folded into
-    the last one.
+    shots -> one assemble pass that concatenates them and lays the narration
+    over the top. The scene's frame budget is split evenly across its shots,
+    remainder folded into the last one.
+
+    The target duration is computed from that frame budget rather than
+    probed back off disk: it is a number we already know exactly, and every
+    hang in this file so far has come from asking ffmpeg to work a duration
+    out for itself.
     """
     n = len(assets)
     base = frames_total // n
@@ -668,19 +679,11 @@ def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
             failed += 1
         shots.append(shot_mp4)
 
-    if n == 1:
-        mux_audio(shots[0], mp3, out_mp4)
-        os.remove(shots[0])
-        return failed
-
     listfile = os.path.join(work_dir, f"s{scene_idx:03d}_list.txt")
-    silent = os.path.join(work_dir, f"s{scene_idx:03d}_silent.mp4")
-    concat_shots(shots, listfile, silent)
-    mux_audio(silent, mp3, out_mp4)
+    assemble_scene(shots, mp3, out_mp4, listfile, frames_total / FPS)
 
     for p in shots:
         os.remove(p)
-    os.remove(silent)
     os.remove(listfile)
     return failed
 

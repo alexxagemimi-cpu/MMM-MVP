@@ -66,10 +66,20 @@ def _env(name, default):
     return (os.environ.get(name) or "").strip() or default
 
 
-CEREBRAS_KEY   = _env("CEREBRAS_API_KEY", "")
-CEREBRAS_MODEL = _env("CEREBRAS_MODEL", "llama-3.3-70b")
+# Groq before Cerebras deliberately. Cerebras' no-card 1M-tokens/day tier
+# ended in August 2026 - new accounts need a verified payment method - so it
+# no longer satisfies this project's hard zero-budget, no-card rule. Groq is
+# still genuinely card-free, so it is the first fallback; Cerebras stays
+# wired up for anyone who does have an account.
+#
+# gpt-oss-120b, not llama-3.3-70b: Groq deprecated qwen3-32b (June 2026) and
+# kimi-k2 (March 2026) and points both at gpt-oss-120b, a 120B reasoning
+# model - a better writer and a much better fact-checker than a 70B chat
+# model, at the same price of zero.
 GROQ_KEY       = _env("GROQ_API_KEY", "")
-GROQ_MODEL     = _env("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MODEL     = _env("GROQ_MODEL", "openai/gpt-oss-120b")
+CEREBRAS_KEY   = _env("CEREBRAS_API_KEY", "")
+CEREBRAS_MODEL = _env("CEREBRAS_MODEL", "gpt-oss-120b")
 # OpenRouter is last: its free tier is only ~50 requests/day, which one long
 # script with several revision passes can exhaust on its own. Useful as a
 # safety net and for reaching a model the others do not carry.
@@ -275,12 +285,12 @@ def _providers():
     out = []
     if os.environ.get("GEMINI_API_KEY"):
         out.append(("gemini", None))
-    if CEREBRAS_KEY:
-        out.append(("cerebras", ("https://api.cerebras.ai/v1/chat/completions",
-                                 CEREBRAS_KEY, CEREBRAS_MODEL)))
     if GROQ_KEY:
         out.append(("groq", ("https://api.groq.com/openai/v1/chat/completions",
                              GROQ_KEY, GROQ_MODEL)))
+    if CEREBRAS_KEY:
+        out.append(("cerebras", ("https://api.cerebras.ai/v1/chat/completions",
+                                 CEREBRAS_KEY, CEREBRAS_MODEL)))
     if OPENROUTER_KEY:
         out.append(("openrouter", ("https://openrouter.ai/api/v1/chat/completions",
                                    OPENROUTER_KEY, OPENROUTER_MODEL)))
