@@ -40,9 +40,13 @@ from google import genai
 from google.genai import types
 
 import research as web
+import modes
 
 MODEL          = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 TOPIC          = os.environ.get("TOPIC", "").strip()
+# story | explainer | guide. Auto-detected from the topic unless forced.
+MODE           = (os.environ.get("MODE", "").strip().lower()
+                  or modes.detect_mode(os.environ.get("TOPIC", "")))
 TARGET_MINUTES = float(os.environ.get("TARGET_MINUTES", "12"))
 STRICT         = os.environ.get("STRICT_FACTS", "1") == "1"
 MAX_PASSES     = int(os.environ.get("MAX_PASSES", "4"))
@@ -125,7 +129,7 @@ CAUSAL = ["but ", "however", "therefore", "because", "which meant",
 def sentences(text):
     return [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if s.strip()]
 
-def measure(scenes):
+def _legacy_measure_unused(scenes):
     text = " ".join(s.get("narration", "") for s in scenes)
     words = text.split()
     n = max(len(words), 1)
@@ -171,7 +175,7 @@ TARGETS = {
     "causal_rate":  (1.5,  None, "but/therefore connectives per 100 words"),
 }
 
-def grade(m):
+def _legacy_grade_unused(m):
     fails = []
     for k, (lo, hi, why) in TARGETS.items():
         v = m[k]
@@ -184,6 +188,17 @@ def grade(m):
     if m["questions"] == 0:
         fails.append("questions=0 - no open loop posed anywhere")
     return fails
+
+
+def measure(scenes):
+    """Per-MODE metrics. See modes.py - explainer has no fact_density
+    floor on purpose, because raising that number on a taxonomy means
+    inventing names and dates."""
+    return modes.measure(scenes, MODE)
+
+
+def grade(m):
+    return modes.grade(m, MODE)
 
 
 SCRIPT_SCHEMA = {
@@ -395,7 +410,7 @@ def research():
     failure - and the sources are now objects we hold, so the STRICT check
     below tests something real instead of trusting returned metadata.
     """
-    print("[1/5] web research")
+    print(f"[1/5] web research | mode={MODE}")
     subject = TOPIC or pick_subject()
     queries = plan_queries(subject)
     for q in queries:
@@ -440,9 +455,7 @@ Produce a research brief containing:
   After each fact cite the source number it came from, like [SOURCE 3].
   If a fact is not supported by the source material above, mark it
   [UNVERIFIED] - or better, leave it out.
-- REVERSAL: what most people believe vs what the sources actually show.
-  If the sources do not show a genuine reversal, write "NONE" - an invented
-  reversal is far worse than no reversal.
+- ANGLE: {modes.MODES[MODE]['research']}
 - SURPRISES: 3 details from the sources that are rarely mentioned
 
 Accuracy outranks interest. Plain text."""
@@ -481,10 +494,10 @@ HARD REQUIREMENTS:
 - Use ONLY facts present in the brief. Anything marked [UNVERIFIED] must be
   cut or softened to a qualitative statement. Do not add facts from memory.
 
-NARRATIVE ARC - assign each scene a beat, in order:
-  HOOK, CONTEXT, INCITING, ESCALATION (2-4), TURN (1-2), FALLOUT (1-2), RESONANCE
+BEATS - assign each scene a beat, in order:
+  {modes.MODES[MODE]['beats']}
 
-{CRAFT_RULES}
+{modes.craft_rules(MODE)}
 
 FIELDS:
 - "narration": exact spoken words, plain prose, no stage directions. This
