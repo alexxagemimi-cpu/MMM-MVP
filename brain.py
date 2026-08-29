@@ -906,6 +906,60 @@ Return the corrected script in the required JSON format."""
     return out
 
 
+def write_run_summary(data, sources, metrics, fact_bad, history):
+    """
+    Put the important facts on the run's own page, not only in the log.
+
+    Reason this exists: the log is only retrievable from its END, and the
+    writing stage runs FIRST. On a real 8-scene run the engine's per-shot
+    output pushed everything brain.py printed - the title, the mode, which
+    provider actually answered, how many sources came back - past the point
+    the log can be read back at all. The one thing hardest to judge was the
+    one thing that had become unreadable.
+
+    GitHub renders $GITHUB_STEP_SUMMARY on the run page and keeps it, so this
+    survives regardless of log size. Never fatal: a failure to write a
+    summary must not fail a run that produced a good script.
+    """
+    path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not path:
+        return
+    try:
+        scenes = data.get("scenes", [])
+        rows = "\n".join(
+            f"| {s.get('scene','?')} | {s.get('beat','?')} | "
+            f"{len(s.get('narration','').split())} | "
+            f"`{s.get('key_term','')}` | {s.get('key_fact','')} |"
+            for s in scenes)
+        srcs = "\n".join(f"- [{(s.get('title') or s.get('uri'))[:90]}]({s.get('uri')})"
+                         for s in sources[:14]) or "_none_"
+        words = wordcount(data)
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(f"""## Script: {data.get('title','(untitled)')}
+
+**{MODE} mode** · {len(scenes)} scenes · {words} words (~{words/WPM:.1f} min read)
+· {len(sources)} sources · {len(fact_bad)} unresolved fact issue(s)
+· {len(grade(metrics))} craft issue(s)
+
+> {data.get('question','')}
+
+**Thumbnail:** {data.get('thumb_headline','(none)')} — red on
+`{data.get('thumb_accent','(none)')}`
+
+| # | Beat | Words | Term card | Fact |
+|---|---|---|---|---|
+{rows}
+
+<details><summary>{len(sources)} sources used</summary>
+
+{srcs}
+
+</details>
+""")
+    except Exception as e:
+        print(f"   (run summary not written: {str(e)[:100]})")
+
+
 def main():
     print("=" * 64)
     print(f"  MMM BRAIN | {MODEL} | {TARGET_MINUTES:.0f}min | {SCENE_COUNT} scenes")
@@ -981,6 +1035,8 @@ def main():
 
     with open("script.json", "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
+    write_run_summary(data, sources, final_m, fact_bad, history)
 
     w = wordcount(data)
     print("\n" + "=" * 64)
