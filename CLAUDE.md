@@ -277,3 +277,9 @@ wrong, which is worse than a video that looks cheap.
 The fix is a research stage that establishes the real membership of the
 category from sources FIRST, and a check that every `key_term` survives it.
 Not written yet. It should come before any further visual work.
+
+---
+
+**Full project record — every measurement, bug, research finding and open
+problem — is in [PROJECT.md](PROJECT.md).** This file is the short
+operational memory; that one is the complete history.
