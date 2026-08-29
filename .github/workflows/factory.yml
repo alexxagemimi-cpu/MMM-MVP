@@ -119,32 +119,40 @@ jobs:
         run: |
           cat > script.json <<'JSON'
           {
-            "title": "How Coffee Is Made (engine test)",
-            "description": "Isolation test fixture - not real content.",
+            "title": "Types of Business Expenses (engine test)",
+            "description": "Engine test fixture in the money/business niche - not published content.",
             "scenes": [
               {
                 "scene": 1,
-                "beat": "HOOK",
-                "narration": "Every cup of coffee begins the same way: a handful of raw green beans, tumbling inside a roaster, slowly turning from pale green to deep brown as heat unlocks the oils trapped inside them.",
-                "image_keywords": ["coffee beans roasting", "hands holding coffee beans", "coffee roaster machine", "close up coffee beans"]
+                "beat": "ANSWER",
+                "key_term": "fixed costs",
+                "key_fact": "They do not move when your sales move",
+                "narration": "Business expenses fall into three groups, and the first is the one that quietly kills companies: fixed costs. Rent, salaries, insurance, software. They do not move when your sales move, which means a slow month costs exactly the same as a good one.",
+                "image_keywords": ["empty office desk morning", "person reviewing paperwork", "small business storefront", "calculator and invoices"]
               },
               {
                 "scene": 2,
-                "beat": "CONTEXT",
-                "narration": "Once roasted and ground, the coffee meets hot water under pressure, forced through in under thirty seconds, pulling out the sugars, the acids, and the crema that floats on top of every good shot.",
-                "image_keywords": ["barista pouring latte art", "espresso machine brewing coffee", "hands making coffee"]
+                "beat": "CATEGORY",
+                "key_term": "variable costs",
+                "key_fact": "They rise and fall with every sale",
+                "narration": "The second group is variable costs, and these behave in the opposite way. Materials, packaging, payment processing, delivery. They rise and fall with every sale you make, so a quiet month genuinely costs you less, and a busy one costs you more.",
+                "image_keywords": ["packing boxes warehouse", "delivery van loading", "hands counting stock"]
               },
               {
                 "scene": 3,
-                "beat": "ESCALATION",
-                "narration": "A single bean can hold over a thousand distinct aromatic compounds, more than red wine, more than almost anything else humans regularly eat or drink.",
-                "image_keywords": ["coffee beans falling slow motion", "coffee cup steam rising"]
+                "beat": "CATEGORY",
+                "key_term": "one-off costs",
+                "key_fact": "Rare, large, and easy to forget when planning",
+                "narration": "Then there are one-off costs, the ones almost nobody plans for. A replaced laptop, a legal fee, a deposit, a repair. They are rare, large, and easy to forget when planning, and they are usually what turns a profitable month into a loss.",
+                "image_keywords": ["broken laptop repair", "signing legal documents", "workshop tools bench"]
               },
               {
                 "scene": 4,
-                "beat": "RESONANCE",
-                "narration": "And then it just becomes a moment: two people, a table, and a shared cup, repeated billions of times a day, in every country on earth.",
-                "image_keywords": ["people drinking coffee outdoor cafe", "friends talking at cafe table", "city street morning coffee"]
+                "beat": "CLOSE",
+                "key_term": "runway",
+                "key_fact": "Months of cash left at your current burn",
+                "narration": "Add all three together against the cash in your account and you get runway: months of cash left at your current burn. Not revenue, not profit. Runway is the number that decides whether the business is still here next year.",
+                "image_keywords": ["person checking bank balance phone", "calendar planning desk", "city street small shops"]
               }
             ]
           }
