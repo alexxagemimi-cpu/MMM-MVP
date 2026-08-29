@@ -21,8 +21,13 @@ so a long headline shrinks rather than overflowing.
     python3 thumbnail.py            # renders a sample to thumbnail.png
 """
 
+import io
 import os
 import math
+import json
+import urllib.parse
+import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 
 from PIL import Image, ImageDraw, ImageFont, ImageFilter
 
@@ -53,6 +58,98 @@ MARGIN     = 44
 GAP_MIN    = 14
 LABEL_SIZE = 21
 LABEL_LINES = 2
+
+
+UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+      "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
+
+
+def fetch_tile_images(queries, out_dir, api_key=None, workers=6):
+    """
+    One picture per tile, from Pixabay. Returns a list of paths, None where
+    nothing came back - render() draws a plain coloured circle for those, so
+    a failed fetch costs one tile's picture and never the thumbnail.
+
+    ILLUSTRATIONS FIRST, PHOTOS SECOND. The reference thumbnails use drawn
+    icons, and a photograph cropped into a small circle reads as a stock
+    collage rather than a diagram. Pixabay's illustration/vector categories
+    are the closest free equivalent, so they are tried before photos.
+
+    The QUERY IS NOT THE LABEL. Labels are the scene's key_term, which is
+    often an abstraction that means something else to an image search -
+    "runway" returns aircraft, not a company's months of remaining cash. So
+    the caller passes the scene's first image_keyword instead, which the
+    script already writes as a concrete photographable subject.
+    """
+    api_key = (api_key if api_key is not None
+               else os.environ.get("PIXABAY_API_KEY", "")).strip()
+    if not api_key:
+        return [None] * len(queries)
+    os.makedirs(out_dir, exist_ok=True)
+
+    def one(item):
+        i, q = item
+        for img_type in ("illustration", "vector", "photo"):
+            try:
+                url = ("https://pixabay.com/api/"
+                       f"?key={api_key}&q={urllib.parse.quote(q.strip())}"
+                       f"&image_type={img_type}&safesearch=true&per_page=5")
+                req = urllib.request.Request(url, headers={"User-Agent": UA})
+                with urllib.request.urlopen(req, timeout=20) as r:
+                    hits = json.loads(r.read()).get("hits", [])
+                if not hits:
+                    continue
+                src = (hits[0].get("largeImageURL")
+                       or hits[0].get("webformatURL"))
+                if not src:
+                    continue
+                req = urllib.request.Request(src, headers={"User-Agent": UA})
+                with urllib.request.urlopen(req, timeout=30) as r:
+                    data = r.read()
+                if len(data) < 2048:
+                    continue
+                path = os.path.join(out_dir, f"tile{i:02d}.png")
+                with Image.open(io.BytesIO(data)) as im:
+                    im.convert("RGB").save(path, "PNG")
+                return i, path
+            except Exception:
+                continue
+        return i, None
+
+    out = [None] * len(queries)
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        for i, path in pool.map(one, list(enumerate(queries))):
+            out[i] = path
+    return out
+
+
+def from_script(script_path, out_png, work_dir="build/thumb"):
+    """
+    script.json -> thumbnail.png. The whole point of the layout: everything
+    it needs is already in the script.
+
+    Falls back to the title when no thumb_headline was written, so an older
+    script (or one from a model that skipped the field) still renders.
+    """
+    with open(script_path, encoding="utf-8") as f:
+        data = json.load(f)
+    scenes = data.get("scenes", [])
+
+    headline = (data.get("thumb_headline") or data.get("title") or "").strip()
+    accent = (data.get("thumb_accent") or "").strip()
+    labels, queries = [], []
+    for s in scenes:
+        term = (s.get("key_term") or "").strip()
+        if not term:
+            continue
+        labels.append(term)
+        kws = [k for k in (s.get("image_keywords") or []) if k and k.strip()]
+        queries.append(kws[0] if kws else term)
+
+    images = fetch_tile_images(queries, work_dir)
+    got = sum(1 for p in images if p)
+    print(f"   thumbnail: {len(labels)} tiles, {got} with a picture")
+    return render(headline, accent, labels, out_png, images=images)
 
 
 def _font(path, size):

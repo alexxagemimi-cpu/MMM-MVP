@@ -121,6 +121,8 @@ jobs:
           {
             "title": "Types of Business Expenses (engine test)",
             "description": "Engine test fixture in the money/business niche - not published content.",
+            "thumb_headline": "Types of Business Expenses",
+            "thumb_accent": "Business Expenses",
             "scenes": [
               {
                 "scene": 1,
@@ -168,6 +170,23 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
+      # Drawn from script.json alone - one tile per scene's key_term - so it
+      # needs no extra AI call and no extra quota. Deliberately allowed to
+      # fail: a missing thumbnail is a minor annoyance, and killing a
+      # fifteen-minute video build over one PNG is not a trade worth making.
+      - name: Make thumbnail
+        continue-on-error: true
+        env:
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+        run: |
+          python -c "import thumbnail; thumbnail.from_script('script.json', 'thumbnail.png')"
+          python -c "
+          from PIL import Image
+          im = Image.open('thumbnail.png')
+          print(f'thumbnail.png {im.size[0]}x{im.size[1]}')
+          assert im.size == (1280, 720), im.size
+          "
+
       - name: Run Engine (video assembler)
         env:
           VOICE: ${{ github.event.inputs.voice || github.event.client_payload.voice || 'en-US-GuyNeural' }}
@@ -189,6 +208,7 @@ jobs:
           name: finished-720p-video
           path: |
             final_video.mp4
+            thumbnail.png
             subtitles.srt
             captions.ass
           if-no-files-found: warn

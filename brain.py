@@ -224,6 +224,12 @@ SCRIPT_SCHEMA = {
         "description": {"type": "string"},
         "question":    {"type": "string"},
         "tags":        {"type": "array", "items": {"type": "string"}},
+        # Thumbnail text. Deliberately SHORTER than the title: the title is
+        # read, the thumbnail is glanced at. thumb_accent is the one phrase
+        # drawn in red and must be a literal part of thumb_headline, or the
+        # renderer has nothing to colour.
+        "thumb_headline": {"type": "string"},
+        "thumb_accent":   {"type": "string"},
         "scenes": {
             "type": "array",
             "items": {
@@ -241,7 +247,8 @@ SCRIPT_SCHEMA = {
             },
         },
     },
-    "required": ["title", "description", "question", "tags", "scenes"],
+    "required": ["title", "description", "question", "tags",
+                 "thumb_headline", "thumb_accent", "scenes"],
 }
 
 
@@ -613,7 +620,18 @@ FIELDS:
 - "title": under 70 characters, concrete, no clickbait, no ALL CAPS.
 - "question": the one question this film answers.
 - "description": 2-3 sentences.
-- "tags": 8-12 lowercase tags."""
+- "tags": 8-12 lowercase tags.
+- "thumb_headline": the words on the THUMBNAIL. Not the title - much shorter.
+  4 words or fewer, 26 characters or fewer, no punctuation. A title is read;
+  a thumbnail is glanced at on a phone, so every extra word shrinks the type.
+  Name the subject flatly and let the picture carry the rest.
+  Good: "Types of Business Expenses" / "Every Type of Phobia"
+  Bad: "The 5 Business Expenses That Are Quietly Killing Your Company"
+- "thumb_accent": the ONE phrase inside thumb_headline drawn in red, 1-2
+  words. It must appear in thumb_headline EXACTLY as written there - it is
+  matched against those words, so anything else leaves the headline all
+  black. Choose the words carrying the subject, not the filler.
+  For "Types of Business Expenses" -> "Business Expenses" (not "Types")."""
 
     print(f"[2/5] drafting {SCENE_COUNT} scenes (~{WORDS_PER_SCENE} words each)")
     data = call(prompt, schema=SCRIPT_SCHEMA)
@@ -785,6 +803,13 @@ How to move each number, concretely:
 - Every narration stays {WORDS_PER_SCENE}-{WORDS_PER_SCENE+45} words.
 - Add NO fact that is absent from the brief.
 - image_keywords: 7-9 real, photographable subjects per scene.
+- Each scene's "key_term" must still appear WORD FOR WORD in that same
+  scene's narration. If you reword the sentence containing it, either keep
+  the phrase intact or change key_term to match the new wording. It is
+  matched against the spoken audio to place a card on screen, so a term the
+  narration no longer says loses its card silently.
+- Keep "thumb_headline" (max 26 characters) and "thumb_accent", and
+  thumb_accent must still appear word for word inside thumb_headline.
 
 RESEARCH BRIEF:
 ---
@@ -834,6 +859,25 @@ def validate(d):
         fact = (s.get("key_fact") or "").strip()
         if len(fact) > 70:
             p.append(f"scene {i}: key_fact is {len(fact)} chars (max ~60)")
+    # The red phrase must be literally inside the headline, for exactly the
+    # reason key_term must be inside its narration: the renderer matches the
+    # words to decide what to colour, and a phrase that is not there fails
+    # SILENTLY - the thumbnail just comes out all black, with nothing in the
+    # log to say why.
+    head = (d.get("thumb_headline") or "").strip()
+    acc = (d.get("thumb_accent") or "").strip()
+    if not head:
+        p.append("missing thumb_headline (the words on the thumbnail)")
+    elif len(head) > 34:
+        p.append(f"thumb_headline is {len(head)} chars (max ~26) - long "
+                 f"headlines set small and are unreadable on a phone")
+    if head and acc:
+        flat = re.sub(r"[^a-z0-9]+", " ", head.lower())
+        want = re.sub(r"[^a-z0-9]+", " ", acc.lower()).strip()
+        if want and want not in flat:
+            p.append(f"thumb_accent {acc!r} is not inside thumb_headline "
+                     f"{head!r} - it must be a literal phrase from it")
+
     t = wordcount(d)
     if t < TOTAL_WORDS * 0.65:
         p.append(f"total {t} words, target ~{TOTAL_WORDS}")
