@@ -293,9 +293,47 @@ def _openai_compatible(prompt, schema, base_url, key, model, label):
         base_url, data=json.dumps(body).encode(),
         headers={"Authorization": f"Bearer {key}",
                  "Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=120) as r:
-        data = json.loads(r.read())
+    try:
+        with urllib.request.urlopen(req, timeout=120) as r:
+            data = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        # The BODY is the useful part and urllib drops it from str(e). A real
+        # run logged only "HTTP Error 403: Forbidden", which is unactionable;
+        # the body said the model was blocked at the organisation level and
+        # named the settings page to unblock it.
+        try:
+            detail = e.read().decode("utf-8", "replace")[:400]
+        except Exception:
+            detail = ""
+        raise RuntimeError(f"HTTP {e.code} from {label} ({model}): {detail}")
     return (data["choices"][0]["message"]["content"] or "").strip()
+
+
+def _oai_available_models(base_url, key):
+    """
+    Ask the provider which models this key may actually use.
+
+    Groq blocks most models by default on a new account and answers 403 for
+    them, so a hardcoded id is a coin flip. Rather than making the owner
+    hunt through project settings, discover it: /models returns exactly what
+    is permitted. Returns [] on any problem - discovery is best-effort.
+    """
+    try:
+        url = base_url.replace("/chat/completions", "/models")
+        req = urllib.request.Request(
+            url, headers={"Authorization": f"Bearer {key}"})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            data = json.loads(r.read())
+        ids = [m.get("id") for m in data.get("data", []) if m.get("id")]
+        # Prefer bigger/instruct chat models; skip audio, guard and vision ones.
+        bad = ("whisper", "tts", "guard", "vision", "embed", "rerank")
+        chat = [i for i in ids if not any(b in i.lower() for b in bad)]
+        chat.sort(key=lambda i: ("120b" in i, "70b" in i, "instruct" in i),
+                  reverse=True)
+        return chat
+    except Exception as e:
+        print(f"     .. model discovery failed on {base_url}: {str(e)[:110]}")
+        return []
 
 
 def _providers():
@@ -332,12 +370,14 @@ def call(prompt, schema=None, retries=2):
     last = None
     for name, conf in provs:
         drop_schema = False
+        tried_discovery = False
+        model = conf[2] if conf else None
         for attempt in range(retries):
             try:
                 if name == "gemini":
                     text = _gemini(prompt, schema, drop_schema)
                 else:
-                    base_url, key, model = conf
+                    base_url, key, _ = conf
                     text = _openai_compatible(prompt, schema, base_url, key,
                                               model, name)
                 if not text:
@@ -347,12 +387,31 @@ def call(prompt, schema=None, retries=2):
             except Exception as e:
                 last = e
                 msg = str(e)
-                print(f"   ! {name} attempt {attempt+1}/{retries}: {msg[:160]}")
+                print(f"   ! {name} attempt {attempt+1}/{retries}: {msg[:200]}")
                 if schema and not drop_schema and (
                         "schema" in msg.lower() or "invalid" in msg.lower()):
                     print("     -> dropping response_schema, retrying plain JSON")
                     drop_schema = True
                     continue
+
+                # 403/404 on an OpenAI-compatible provider almost always means
+                # THIS MODEL is not permitted on this account, not that the key
+                # is bad - Groq blocks most models by default for new accounts.
+                # Ask the provider what it will allow and take the best of
+                # those, rather than making the owner hunt through settings.
+                if (conf and not tried_discovery
+                        and ("HTTP 403" in msg or "HTTP 404" in msg
+                             or "model" in msg.lower())):
+                    tried_discovery = True
+                    avail = _oai_available_models(conf[0], conf[1])
+                    if avail:
+                        model = avail[0]
+                        print(f"     -> {name} refused that model; it offers "
+                              f"{len(avail)}. Retrying with {model!r}")
+                        continue
+                    print(f"     -> {name} listed no usable models "
+                          f"(key invalid, or all models blocked for this account)")
+
                 # a quota wall will not clear in 8 seconds; move to the next
                 # provider immediately instead of burning the retry budget
                 if "429" in msg or "RESOURCE_EXHAUSTED" in msg or "quota" in msg.lower():
