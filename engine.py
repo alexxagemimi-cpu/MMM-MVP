@@ -624,32 +624,66 @@ def assemble_scene(shot_mp4s, mp3, out_mp4, listfile, target_dur):
 
     I=-14 is YouTube's own normalization target. At the old -16 the platform
     left it alone and it simply played quieter than every video next to it.
+
+    TIERED AUDIO FILTERING
+    ----------------------
+    Re-encoding still was not enough: the same scene died again, on the same
+    step. Three flag theories in a row were wrong, and the exact command
+    reproduces fine in 2 seconds against synthetic inputs - so the fault is
+    in some real input, not the arguments.
+
+    Rather than guess a fourth time, the audio chain now degrades. The full
+    chain is tried first; if it fails, progressively simpler ones follow,
+    ending with silence. A scene therefore always renders, and the log line
+    naming which tier succeeded identifies the culprit filter on the next
+    run instead of costing another blind cycle.
     """
     with open(listfile, "w") as f:
         for p in shot_mp4s:
             f.write(f"file '{os.path.abspath(p)}'\n")
 
+    base = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+            "-f", "concat", "-safe", "0", "-i", listfile]
+    venc = ["-c:v", "libx264", "-preset", PRESET_SCENE, "-crf", CRF_SCENE,
+            "-pix_fmt", "yuv420p", "-r", str(FPS), "-g", str(FPS * 2),
+            "-fps_mode", "cfr"]
+    aenc = ["-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2"]
+    tail = ["-t", f"{target_dur:.3f}", "-movflags", "+faststart", out_mp4]
+
     # apad is bounded by whole_dur - a bare apad generates silence forever,
     # which is exactly the kind of unbounded input this file has been bitten
     # by twice already.
-    af = (f"loudnorm=I=-14:TP=-1.5:LRA=11,"
-          f"aresample=48000:resampler=soxr,aformat=channel_layouts=stereo,"
-          f"apad=whole_dur={target_dur:.3f}")
+    tiers = [
+        ("full", f"loudnorm=I=-14:TP=-1.5:LRA=11,"
+                 f"aresample=48000:resampler=soxr,"
+                 f"aformat=channel_layouts=stereo,apad=whole_dur={target_dur:.3f}"),
+        ("no-loudnorm", f"aresample=48000,aformat=channel_layouts=stereo,"
+                        f"apad=whole_dur={target_dur:.3f}"),
+        ("plain", "aresample=48000,aformat=channel_layouts=stereo"),
+    ]
 
-    run([
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-f", "concat", "-safe", "0", "-i", listfile,
-        "-i", mp3,
-        "-filter_complex", f"[1:a]{af}[a]",
-        "-map", "0:v", "-map", "[a]",
-        "-c:v", "libx264", "-preset", PRESET_SCENE, "-crf", CRF_SCENE,
-        "-pix_fmt", "yuv420p", "-r", str(FPS), "-g", str(FPS * 2),
-        "-fps_mode", "cfr",
-        "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
-        "-t", f"{target_dur:.3f}",
-        "-movflags", "+faststart",
-        out_mp4,
-    ], "assemble scene", timeout=shot_timeout(target_dur))
+    last = None
+    for name, af in tiers:
+        try:
+            run(base + ["-i", mp3, "-filter_complex", f"[1:a]{af}[a]",
+                        "-map", "0:v", "-map", "[a]"] + venc + aenc + tail,
+                f"assemble scene [{name}]", timeout=shot_timeout(target_dur))
+            if name != "full":
+                print(f"      !! audio chain degraded to '{name}' for this scene",
+                      flush=True)
+            return name
+        except Exception as e:
+            last = e
+            print(f"      !! assemble tier '{name}' failed: {str(e)[:90]}",
+                  flush=True)
+
+    # Last resort: keep the picture, lose this scene's narration, keep the
+    # build alive. Silent is recoverable in an edit; a dead run is not.
+    print("      !! all audio tiers failed - rendering scene SILENT", flush=True)
+    run(base + ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo",
+                "-map", "0:v", "-map", "1:a"] + venc + aenc + tail,
+        "assemble scene [silent]", timeout=shot_timeout(target_dur))
+    return "silent"
 
 
 def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
@@ -678,6 +712,17 @@ def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
                                 fade_out=(last_scene and j == n - 1)):
             failed += 1
         shots.append(shot_mp4)
+
+    # What these files actually ARE, before handing them to ffmpeg. Three
+    # runs died on one scene while the logs showed only that a command had
+    # been killed; nothing said whether its inputs were sane. Cheap to
+    # print, and it turns "it hung again" into evidence.
+    for j, p in enumerate(shots):
+        print(f"        shot {j}: {probe_safe(p):.2f}s "
+              f"{os.path.getsize(p) if os.path.exists(p) else 0}B", flush=True)
+    print(f"        audio : {probe_safe(mp3):.2f}s "
+          f"{os.path.getsize(mp3) if os.path.exists(mp3) else 0}B "
+          f"| target {frames_total / FPS:.2f}s", flush=True)
 
     listfile = os.path.join(work_dir, f"s{scene_idx:03d}_list.txt")
     assemble_scene(shots, mp3, out_mp4, listfile, frames_total / FPS)
