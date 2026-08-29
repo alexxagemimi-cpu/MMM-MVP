@@ -222,7 +222,19 @@ MODES = {
         "shape": (
             "ANSWER THE QUESTION IN SCENE 1. No exceptions, no teasing. "
             "Name the categories up front, then give each its own scene. "
-            "The viewer who wanted the list gets the list immediately."),
+            "The viewer who wanted the list gets the list immediately.\n"
+            "  Scene 1 is built in three moves, in this order:\n"
+            "   1. PATTERN INTERRUPT (first sentence): a blunt, concrete, "
+            "slightly counterintuitive statement. No throat-clearing, no "
+            "'in today's world', no question to the viewer.\n"
+            "   2. PAYOFF (by the second or third sentence): state plainly "
+            "what the viewer will know by the end, and NAME the categories. "
+            "This must land early - it is the single highest-leverage "
+            "sentence in the script.\n"
+            "   3. COMMITMENT (last sentence of scene 1): say which one is "
+            "most often got wrong, or which costs the most, WITHOUT saying "
+            "why yet. That unresolved thread is what carries the viewer past "
+            "the first half minute."),
         "person": "No second person coaching.",
         # NO fact_density floor. See the module docstring: on a taxonomy the
         # cheapest way to raise it is to invent a name or a date.
@@ -243,7 +255,11 @@ MODES = {
             "not hunt for a twist. Do not pad with history."),
         "shape": (
             "State the promise in scene 1 - what the viewer will be able to "
-            "do by the end. Then the steps, in order, one per scene."),
+            "do by the end. Then the steps, in order, one per scene.\n"
+            "  Scene 1: open on a blunt concrete statement (never a question "
+            "to the viewer), state the promise plainly within the first two "
+            "or three sentences, and end scene 1 by naming the step people "
+            "most often get wrong without yet saying how to fix it."),
         "person": "Second person is ALLOWED and expected here.",
         "targets": {**_SHARED_TARGETS,
                     "action_rate": (0.15, None, "share of sentences opening on an imperative verb")},
@@ -284,7 +300,11 @@ def craft_rules(mode):
 VOICE AND CRAFT RULES ({cfg['label'].upper()} MODE):
 
 1. COLD OPEN on a concrete, verifiable detail. Never "Imagine if", "In today's
-   world", "Have you ever wondered".
+   world", "Have you ever wondered". The opening seconds decide the video:
+   the steepest drop-off is between roughly 10 and 20 seconds in, so the
+   viewer must be told something specific and useful BEFORE that, not after.
+   Nothing in the first three sentences may be setup, context or throat-
+   clearing.
 2. SPECIFICITY OVER ADJECTIVES. Anchor every claim. If you cannot anchor it,
    cut the sentence.
 3. NO INVENTED PRECISION. Never state a statistic, date, or figure you are not

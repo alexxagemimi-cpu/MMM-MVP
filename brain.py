@@ -502,11 +502,13 @@ BEATS - assign each scene a beat, in order:
 FIELDS:
 - "narration": exact spoken words, plain prose, no stage directions. This
   string is fed straight to text-to-speech.
-- "image_keywords": 5-7 DISTINCT visuals in the order the narration reaches
+- "image_keywords": 7-9 DISTINCT visuals in the order the narration reaches
   them. These are searched against a real stock footage library, so name
   things that genuinely exist on film: real people doing real actions, real
   objects, real places. Vary macro / wide / person / object / environment.
-  4-9 words each, naming a concrete photographable SUBJECT.
+  4-9 words each, naming a concrete photographable SUBJECT. Explainer
+  editing cuts roughly every 5 seconds, so a scene needs several distinct
+  visuals; too few and the same clip has to be held far too long.
   Never write "cinematic", "4k", "moody", "dramatic lighting".
   Good: ["hands stitching a wool lapel", "crowded city street commuters",
          "rack of tailored suits in a shop", "close up of fabric weave",
@@ -694,7 +696,7 @@ How to move each number, concretely:
 - Keep exactly {SCENE_COUNT} scenes and the same beat order.
 - Every narration stays {WORDS_PER_SCENE}-{WORDS_PER_SCENE+45} words.
 - Add NO fact that is absent from the brief.
-- image_keywords: 5-7 real, photographable subjects per scene.
+- image_keywords: 7-9 real, photographable subjects per scene.
 
 RESEARCH BRIEF:
 ---

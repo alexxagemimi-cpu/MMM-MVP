@@ -67,8 +67,21 @@ MUSIC_GAIN  = 0.20
 WORDS_PER_CUE = 6
 MAX_CUE_GAP   = 0.65
 
-SHOTS_MAX     = 4                     # cap shots per scene regardless of keyword count
-MIN_SHOT_SEC  = 2.5                   # never slice a shot shorter than this
+# SHOT PACING - set from retention research, not taste.
+#
+# Explainer editing runs about 4-6 seconds per visual; high-performing
+# videos sit around one cut every 2-4s, and b-roll is typically held 3-7s.
+# The old settings here (SHOTS_MAX=4, no target) put one visual every 11-22
+# seconds on a 45-65s scene - a talking-head pace on an explainer, and a
+# large part of why the first output felt like an advert playing under a
+# voice rather than an edit.
+#
+# Shot count is now derived from the scene's real length divided by
+# TARGET_SHOT_SEC, bounded by MIN_SHOT_SEC and SHOTS_MAX, and limited in
+# practice by how many distinct keywords the script supplies.
+TARGET_SHOT_SEC = float(os.environ.get("TARGET_SHOT_SEC", "5.0"))
+SHOTS_MAX     = int(os.environ.get("SHOTS_MAX", "12"))
+MIN_SHOT_SEC  = 3.0                   # never slice a shot shorter than this
 
 # No ffmpeg/ffprobe call may outlive these. See run() for why this matters.
 #
@@ -586,13 +599,21 @@ def fetch_shot_asset(keyword, seed, out_stub, seen_video_ids):
 
 def plan_shots(keywords, audio_dur):
     """
-    Pick up to SHOTS_MAX distinct image keywords for one scene, in the order
-    the script gave them, never slicing a shot shorter than MIN_SHOT_SEC.
+    How many visuals this scene gets, and which keywords they use.
+
+    Driven by TARGET_SHOT_SEC (~5s, the explainer editing norm) rather than
+    a flat cap: a long scene earns more cuts, a short one does not get
+    chopped below MIN_SHOT_SEC. If the script supplied fewer keywords than
+    the scene has room for, the keywords are CYCLED rather than the cut rate
+    being abandoned - a second look at the same subject still reads as an
+    edit, whereas holding one clip for twenty seconds reads as a screensaver.
     """
     kws = [k.strip() for k in (keywords or []) if k and k.strip()] \
         or ["abstract dark texture"]
-    n = max(1, min(len(kws), SHOTS_MAX, int(audio_dur // MIN_SHOT_SEC) or 1))
-    return kws[:n]
+    want = int(round(audio_dur / TARGET_SHOT_SEC)) or 1
+    room = int(audio_dur // MIN_SHOT_SEC) or 1
+    n = max(1, min(want, room, SHOTS_MAX))
+    return [kws[i % len(kws)] for i in range(n)]
 
 
 # ----------------------------------------------------------------------------
