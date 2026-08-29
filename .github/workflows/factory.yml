@@ -166,6 +166,8 @@ jobs:
           # optional: real Pixabay stock footage/photos instead of AI images.
           # unset -> engine falls back to AI images only, same as before.
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          # explainer (bright, flat, readable) or cinematic (moody, narrative)
+          STYLE: ${{ vars.STYLE || 'explainer' }}
         run: python engine.py
 
       - name: Disk report

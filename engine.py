@@ -38,6 +38,7 @@ import sys
 import json
 import math
 import time
+import re
 import asyncio
 import subprocess
 import urllib.parse
@@ -94,13 +95,36 @@ def shot_timeout(seconds):
 
 WORK = "build"
 
-# Applied to every image request. Keeps the whole video visually coherent.
-VISUAL_STYLE = (
-    "cinematic 35mm film still, anamorphic widescreen, low-key moody lighting, "
-    "volumetric haze, muted desaturated teal and amber palette, shallow depth "
-    "of field, fine film grain, photorealistic, highly detailed, "
-    "no text, no watermark, no logo, no caption"
-)
+# LOOK
+# ----
+# An explainer and an advert are lit differently, and the old settings here
+# were the advert: "low-key moody lighting, volumetric haze, muted
+# desaturated teal and amber" is a literal description of a coffee
+# commercial, and that is exactly what the first real output looked like.
+# Explainers are bright, flat and high-contrast, because the viewer is
+# reading the screen, not admiring it.
+#
+# STYLE=explainer (default) or STYLE=cinematic for narrative/story videos.
+STYLE = os.environ.get("STYLE", "explainer").strip().lower()
+
+if STYLE == "cinematic":
+    VISUAL_STYLE = (
+        "cinematic 35mm film still, anamorphic widescreen, low-key moody lighting, "
+        "volumetric haze, muted desaturated teal and amber palette, shallow depth "
+        "of field, fine film grain, photorealistic, highly detailed, "
+        "no text, no watermark, no logo, no caption")
+    GRADE    = "eq=contrast=1.06:saturation=0.90:gamma=0.98"
+    VIGNETTE = "vignette=PI/5,"
+else:
+    VISUAL_STYLE = (
+        "bright clean editorial photograph, natural daylight, crisp focus, "
+        "high key lighting, simple uncluttered background, clear subject, "
+        "vivid but natural colour, sharp detail, "
+        "no text, no watermark, no logo, no caption")
+    # A touch more contrast and saturation, no gamma crush and NO vignette:
+    # a vignette darkens the corners, which is where term cards sit.
+    GRADE    = "eq=contrast=1.10:saturation=1.06:gamma=1.02"
+    VIGNETTE = ""
 
 # ----------------------------------------------------------------------------
 # SHELL HELPERS
@@ -328,22 +352,72 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Caption,DejaVu Sans,20,&H0000D7FF,&H00FFFFFF,&HD0000000,&H00000000,-1,0,0,0,100,100,0.3,0,1,2.4,0.8,2,20,20,46,1
+Style: Term,DejaVu Sans,30,&H00FFFFFF,&H00FFFFFF,&H14101010,&H14101010,-1,0,0,0,100,100,0.6,0,3,16,0,7,54,54,54,1
+Style: TermSub,DejaVu Sans,17,&H00D8D8D8,&H00D8D8D8,&H28101010,&H28101010,0,0,0,0,100,100,0.3,0,3,13,0,7,54,54,100,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
+TERM_HOLD    = 3.4    # seconds a term card stays up
+TERM_LEAD    = 0.15   # appear a beat before the word is actually said
 
-def write_ass(groups, path):
+
+def find_term_time(words, term):
     """
-    Word-synced karaoke captions: each word is white (SecondaryColour)
-    until spoken, then sweeps to gold (PrimaryColour) via \\kf - matched to
-    the real per-word TTS timing, not estimated. \\k durations run from each
-    word's own start to the NEXT word's start (last word to the group's
-    end), so gaps between words are absorbed into the sweep instead of
-    leaving a dead pause where nothing is highlighted - durations always
-    sum exactly to the line length, so the sweep can't drift out of sync.
-    A brief pop-in scale on each line's entry keeps it from feeling static.
+    When is `term` first spoken? Returns its start time, or None.
+
+    Matches on a normalised word sequence so "401(k)" or "compound
+    interest" line up with however TTS chopped them. Returning None simply
+    means no card for that scene - a missing card is invisible, a wrongly
+    timed one is worse than none.
+    """
+    if not term or not words:
+        return None
+    norm = lambda s: re.sub(r"[^a-z0-9]", "", s.lower())
+    want = [norm(t) for t in term.split() if norm(t)]
+    if not want:
+        return None
+    have = [norm(w[2]) for w in words]
+    for i in range(len(have) - len(want) + 1):
+        if have[i:i + len(want)] == want:
+            return words[i][0]
+    # single distinctive word anywhere is good enough to anchor the card
+    if len(want) == 1:
+        for i, h in enumerate(have):
+            if h and want[0] in h:
+                return words[i][0]
+    return None
+
+
+def ass_escape(s):
+    """ASS treats { } as override blocks and \\N as a line break."""
+    return (s or "").replace("\\", "").replace("{", "(").replace("}", ")").strip()
+
+
+def write_ass(groups, path, term_cards=None):
+    """
+    Word-synced karaoke captions plus on-screen TERM CARDS.
+
+    Captions: each word is white (SecondaryColour) until spoken, then
+    sweeps to gold (PrimaryColour) via \\kf - matched to the real per-word
+    TTS timing, not estimated. \\k durations run from each word's own start
+    to the NEXT word's start (last word to the group's end), so gaps
+    between words are absorbed into the sweep instead of leaving a dead
+    pause where nothing is highlighted - durations always sum exactly to
+    the line length, so the sweep can't drift out of sync.
+
+    Term cards are the thing that makes this read as an explainer rather
+    than an advert. In a money/business explainer there is nothing to
+    photograph - stock footage of an office carries no information - so the
+    words on screen have to carry it: the concept is named, in large type,
+    at the moment the narration says it, with one line of detail under it.
+
+    The card uses ASS BorderStyle=3 (opaque box), which sizes its own
+    background to the text. An earlier attempt at this drew the box with a
+    hardcoded 560px width and long definitions ran straight off the edge of
+    their own background; letting the renderer measure the glyphs removes
+    that failure mode entirely rather than fixing it arithmetically.
     """
     lines = [ASS_HEADER.format(w=W, h=H)]
     for start, end, words in groups:
@@ -355,9 +429,24 @@ def write_ass(groups, path):
         text = ("{\\fad(60,60)\\fscx118\\fscy118\\t(0,150,\\fscx100\\fscy100)}"
                  + "".join(parts).strip())
         lines.append(f"Dialogue: 0,{ass_ts(start)},{ass_ts(end)},Caption,,0,0,0,,{text}\n")
+
+    n_cards = 0
+    for start, term, fact in (term_cards or []):
+        a, b = max(start - TERM_LEAD, 0), start - TERM_LEAD + TERM_HOLD
+        # layer 1 so a card always sits above the caption layer
+        lines.append(
+            f"Dialogue: 1,{ass_ts(a)},{ass_ts(b)},Term,,0,0,0,,"
+            f"{{\\fad(180,260)\\move({-260},{54},{54},{54},0,220)}}"
+            f"{ass_escape(term).upper()}\n")
+        if fact:
+            lines.append(
+                f"Dialogue: 1,{ass_ts(a + 0.12)},{ass_ts(b)},TermSub,,0,0,0,,"
+                f"{{\\fad(220,260)}}{ass_escape(fact)}\n")
+        n_cards += 1
+
     with open(path, "w", encoding="utf-8") as f:
         f.writelines(lines)
-    print(f"   ✓ {len(groups)} karaoke caption cues -> {path}")
+    print(f"   ✓ {len(groups)} karaoke caption cues, {n_cards} term card(s) -> {path}")
 
 
 # ----------------------------------------------------------------------------
@@ -536,8 +625,8 @@ def ken_burns(idx, frames):
     return (
         f"scale={KB_W}:{KB_H}:flags=lanczos,"
         f"zoompan=z='{z}':x='{x}':y='{y}':d={frames}:s={W}x{H}:fps={FPS},"
-        f"eq=contrast=1.06:saturation=0.90:gamma=0.98,"
-        f"vignette=PI/5,"
+        f"{GRADE},"
+        f"{VIGNETTE}"
         f"format=yuv420p"
     )
 
@@ -552,7 +641,7 @@ def render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames, fade_in, fa
     share the same colour grade so cuts between the two never look jarring.
     """
     dur = frames / FPS
-    grade = "eq=contrast=1.06:saturation=0.90:gamma=0.98,vignette=PI/5,format=yuv420p"
+    grade = f"{GRADE},{VIGNETTE}format=yuv420p"
 
     if asset_kind == "video":
         # fps= FIRST, before anything else. Stock clips arrive at whatever
@@ -953,6 +1042,7 @@ async def build():
     # ---------------- phase 3: render ----------------------------------------
     print(f"\n[3/3] render x{total} scenes ({total_shots} shots) ...", flush=True)
     cues, parts, timeline, motion_cursor = [], [], 0.0, 0
+    term_cards = []
 
     for i, sc in enumerate(scenes):
         mp4 = os.path.join(WORK, f"s{i:03d}.mp4")
@@ -966,6 +1056,19 @@ async def build():
             scenes[i]["narration"].strip(), durs[i])
         actual = probe(mp4)
         cues += group_words(words, timeline)
+
+        # Term card for this scene, anchored to the moment the term is
+        # actually spoken. No match -> no card; a card at the wrong moment
+        # is worse than none.
+        term = (sc.get("key_term") or "").strip()
+        if term:
+            at = find_term_time(words, term)
+            if at is not None:
+                term_cards.append((at + timeline, term,
+                                   (sc.get("key_fact") or "").strip()))
+            else:
+                print(f"        (no term-card anchor for {term!r})", flush=True)
+
         timeline += actual
         parts.append(mp4)
         print(f"      scene {i+1}/{total} [{sc.get('beat','?')}] "
@@ -994,7 +1097,7 @@ async def build():
 
     write_srt(cues, "subtitles.srt")
     ass = "captions.ass"
-    write_ass(cues, ass)
+    write_ass(cues, ass, term_cards)
 
     if os.path.exists(MUSIC_FILE):
         print(f"> music: {MUSIC_FILE}", flush=True)

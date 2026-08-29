@@ -126,24 +126,28 @@ def main():
     E.synth = fake_synth
 
     scenes = [
-        {"scene": 1, "beat": "HOOK",
-         "narration": "Every cup of coffee begins the same way, with raw green "
-                      "beans tumbling inside a roaster until the oils inside them "
-                      "finally break open and the colour turns.",
+        {"scene": 1, "beat": "ANSWER", "key_term": "compound interest",
+         "key_fact": "Interest that earns interest on itself",
+         "narration": "Almost nobody plans for compound interest, and it quietly "
+                      "decides how much money you end up with after thirty years "
+                      "of doing nothing clever at all.",
          "image_keywords": ["a", "b", "c", "d"]},
-        {"scene": 2, "beat": "CONTEXT",
-         "narration": "Ground and pressed, the coffee meets hot water under nine "
-                      "bars of pressure, and everything soluble in it comes out in "
-                      "under thirty seconds flat.",
+        {"scene": 2, "beat": "CATEGORY", "key_term": "fixed costs",
+         "key_fact": "Costs that do not move when sales move",
+         "narration": "Your fixed costs are the ones that do not care how much you "
+                      "sell in a month, and they are the first thing to cut when "
+                      "the revenue stops arriving.",
          "image_keywords": ["e", "f", "g"]},
-        {"scene": 3, "beat": "TURN",
-         "narration": "A single bean holds more than a thousand aromatic compounds, "
-                      "more than red wine, more than almost anything else people "
-                      "regularly drink.",
+        {"scene": 3, "beat": "CATEGORY", "key_term": "gross margin",
+         "key_fact": "What is left after the cost of the product",
+         "narration": "Your gross margin is the number that decides everything else, "
+                      "because a thin one means every extra sale barely pays for "
+                      "the effort of making it.",
          "image_keywords": ["h", "i"]},
-        {"scene": 4, "beat": "RESONANCE",
-         "narration": "Then it becomes ordinary again: two people, a table, and a "
-                      "shared cup, repeated a billion times before noon.",
+        {"scene": 4, "beat": "CLOSE", "key_term": "runway",
+         "key_fact": "Months of cash left at current burn",
+         "narration": "Which leaves runway, the only number that ends the story, "
+                      "counted in months rather than in rupees or dollars.",
          "image_keywords": ["j", "k", "l"]},
     ]
 

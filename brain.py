@@ -201,9 +201,12 @@ SCRIPT_SCHEMA = {
                     "scene":          {"type": "integer"},
                     "beat":           {"type": "string"},
                     "narration":      {"type": "string"},
+                    "key_term":       {"type": "string"},
+                    "key_fact":       {"type": "string"},
                     "image_keywords": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["scene", "beat", "narration", "image_keywords"],
+                "required": ["scene", "beat", "narration", "key_term",
+                             "key_fact", "image_keywords"],
             },
         },
     },
@@ -495,6 +498,15 @@ FIELDS:
   Good: ["hands stitching a wool lapel", "crowded city street commuters",
          "rack of tailored suits in a shop", "close up of fabric weave",
          "empty tailoring workshop at night"]
+- "key_term": the ONE concept this scene is about, 1-4 words, written EXACTLY
+  as it appears in this scene's narration - it is matched against the spoken
+  words to place an on-screen card, so it must be a literal substring of the
+  narration. Not a sentence, not a description: the name of the thing.
+  Good: "compound interest", "fixed costs", "the 4% rule"
+  Bad: "understanding how interest builds over time"
+- "key_fact": ONE short line under that term, max 60 characters, giving the
+  single most useful thing to know about it. No period at the end.
+  Good: "Interest earning interest on itself"
 - "title": under 70 characters, concrete, no clickbait, no ALL CAPS.
 - "question": the one question this film answers.
 - "description": 2-3 sentences.
@@ -703,6 +715,22 @@ def validate(d):
             p.append(f"scene {i}: {w} words (need >= {MIN_WORDS_PER_SCENE})")
         if len(k) < 3:
             p.append(f"scene {i}: {len(k)} image keywords (need >= 3)")
+        # A term the narration never says cannot be timed to the voice, so
+        # its on-screen card would either be dropped or land at an arbitrary
+        # moment. Checked here, ignoring punctuation and case, because the
+        # engine matches the same way.
+        term = (s.get("key_term") or "").strip()
+        if not term:
+            p.append(f"scene {i}: missing key_term")
+        else:
+            flat = re.sub(r"[^a-z0-9]+", " ", s.get("narration", "").lower())
+            want = re.sub(r"[^a-z0-9]+", " ", term.lower()).strip()
+            if want and want not in flat:
+                p.append(f"scene {i}: key_term {term!r} is never spoken in the "
+                         f"narration - it must be a literal phrase from it")
+        fact = (s.get("key_fact") or "").strip()
+        if len(fact) > 70:
+            p.append(f"scene {i}: key_fact is {len(fact)} chars (max ~60)")
     t = wordcount(d)
     if t < TOTAL_WORDS * 0.65:
         p.append(f"total {t} words, target ~{TOTAL_WORDS}")
