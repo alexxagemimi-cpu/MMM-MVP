@@ -1,0 +1,215 @@
+#!/usr/bin/env python3
+"""
+test_engine_local.py - run the REAL engine against REAL ffmpeg, locally.
+
+WHY THIS EXISTS
+---------------
+Six CI runs were spent on a single ffmpeg hang, at roughly five minutes
+each, because the only way this project ever exercised engine.py was to
+push and watch GitHub Actions. That is using CI minutes as a test suite,
+and it is slow enough that debugging turns into guessing between cycles.
+
+This runs the actual build() - the real ffmpeg calls, the real filter
+chains, the real concat and assembly - against synthetic inputs generated
+on the spot. Only the three network calls are stubbed (Pixabay, the AI
+image fallback, Edge-TTS), because those need the internet and are not
+what breaks.
+
+The synthetic clips deliberately include the shapes that have actually
+caused failures: a 120fps slow-motion clip, a clip SHORTER than its shot
+(forcing the loop path), and an odd-sized portrait clip. If a change
+breaks scene assembly, this says so in about a minute instead of five.
+
+    python3 test_engine_local.py
+
+Requires ffmpeg + ffprobe on PATH. Exits non-zero on failure.
+"""
+
+import os
+import sys
+import json
+import types
+import shutil
+import asyncio
+import subprocess
+import importlib.util
+
+WORK = "localtest"
+ASSETS = os.path.join(WORK, "src")
+
+
+def sh(cmd, timeout=120):
+    p = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+    if p.returncode != 0:
+        print("FAILED:", " ".join(cmd)[:200])
+        print((p.stderr or "")[-1500:])
+        raise SystemExit(1)
+    return p.stdout.strip()
+
+
+def have_ffmpeg():
+    return shutil.which("ffmpeg") and shutil.which("ffprobe")
+
+
+def make_assets():
+    """Synthetic stock clips covering the shapes that have broken builds."""
+    os.makedirs(ASSETS, exist_ok=True)
+    specs = [
+        # name,           size,       fps, seconds   why it is here
+        ("slowmo.mp4",    "1920x1080", 120, 6),   # high fps - hung 3 CI runs
+        ("normal.mp4",    "1920x1080", 25,  8),   # the ordinary case
+        ("short.mp4",     "1280x720",  30,  2),   # shorter than a shot -> loop path
+        ("portrait.mp4",  "720x1280",  25,  6),   # wrong aspect -> crop path
+        ("tiny.mp4",      "640x360",   15,  1),   # very short + low fps
+    ]
+    for name, size, fps, secs in specs:
+        out = os.path.join(ASSETS, name)
+        if os.path.exists(out):
+            continue
+        sh(["ffmpeg", "-y", "-loglevel", "error",
+            "-f", "lavfi", "-i", f"testsrc2=size={size}:rate={fps}:duration={secs}",
+            "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", out])
+    # narration-length audio, one per scene
+    for i, secs in enumerate((10.4, 10.6, 8.9, 9.2)):
+        out = os.path.join(ASSETS, f"voice{i}.mp3")
+        if not os.path.exists(out):
+            sh(["ffmpeg", "-y", "-loglevel", "error",
+                "-f", "lavfi", "-i", f"sine=frequency={180+i*40}:duration={secs}",
+                "-c:a", "libmp3lame", out])
+    return [os.path.join(ASSETS, s[0]) for s in specs]
+
+
+def load_engine():
+    spec = importlib.util.spec_from_file_location("engine", "engine.py")
+    eng = importlib.util.module_from_spec(spec)
+    sys.modules["engine"] = eng
+    spec.loader.exec_module(eng)
+    return eng
+
+
+def main():
+    if not have_ffmpeg():
+        print("SKIP: ffmpeg/ffprobe not on PATH")
+        return 0
+
+    print("generating synthetic assets (real video, real audio) ...")
+    clips = make_assets()
+
+    # edge_tts is imported at module scope but never called here
+    sys.modules.setdefault("edge_tts", types.ModuleType("edge_tts"))
+    E = load_engine()
+    E.WORK = WORK
+    E.PIXABAY_API_KEY = "local-test"
+
+    # ---- stub ONLY the network. everything below is the real engine. ----
+    pool = list(clips)
+
+    def fake_video(keyword, out_mp4, seen):
+        src = pool[abs(hash(keyword)) % len(pool)]
+        shutil.copy(src, out_mp4)
+        return True
+
+    async def fake_synth(text, mp3_path, attempts=3):
+        idx = fake_synth.n % 4
+        fake_synth.n += 1
+        shutil.copy(os.path.join(ASSETS, f"voice{idx}.mp3"), mp3_path)
+        words, t = [], 0.0
+        for w in text.split():
+            words.append((t, t + 0.28, w))
+            t += 0.28
+        return words
+    fake_synth.n = 0
+
+    E.fetch_pixabay_video = fake_video
+    E.fetch_pixabay_photo = lambda k, o, s: False
+    E.fetch_image = lambda k, sd, o: False
+    E.synth = fake_synth
+
+    scenes = [
+        {"scene": 1, "beat": "HOOK",
+         "narration": "Every cup of coffee begins the same way, with raw green "
+                      "beans tumbling inside a roaster until the oils inside them "
+                      "finally break open and the colour turns.",
+         "image_keywords": ["a", "b", "c", "d"]},
+        {"scene": 2, "beat": "CONTEXT",
+         "narration": "Ground and pressed, the coffee meets hot water under nine "
+                      "bars of pressure, and everything soluble in it comes out in "
+                      "under thirty seconds flat.",
+         "image_keywords": ["e", "f", "g"]},
+        {"scene": 3, "beat": "TURN",
+         "narration": "A single bean holds more than a thousand aromatic compounds, "
+                      "more than red wine, more than almost anything else people "
+                      "regularly drink.",
+         "image_keywords": ["h", "i"]},
+        {"scene": 4, "beat": "RESONANCE",
+         "narration": "Then it becomes ordinary again: two people, a table, and a "
+                      "shared cup, repeated a billion times before noon.",
+         "image_keywords": ["j", "k", "l"]},
+    ]
+
+    shutil.rmtree(os.path.join(WORK, "concat.txt"), ignore_errors=True)
+    with open("script.json", "w") as f:
+        json.dump({"title": "local test", "scenes": scenes}, f)
+
+    print("running the real build() with real ffmpeg ...\n")
+    asyncio.run(E.build())
+
+    # ---- verify the ARTIFACT, not just the exit code ----
+    print("\n" + "=" * 62)
+    print("VERIFYING THE ACTUAL OUTPUT FILE")
+    print("=" * 62)
+    ok = True
+
+    if not os.path.exists("final_video.mp4"):
+        print("FAIL: no final_video.mp4"); return 1
+
+    dur = float(sh(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                    "-of", "default=nw=1:nk=1", "final_video.mp4"]))
+    streams = sh(["ffprobe", "-v", "error", "-show_entries", "stream=codec_type",
+                  "-of", "csv=p=0", "final_video.mp4"]).split()
+    size_mb = os.path.getsize("final_video.mp4") / 1_048_576
+    nframes = sh(["ffprobe", "-v", "error", "-select_streams", "v",
+                  "-count_packets", "-show_entries", "stream=nb_read_packets",
+                  "-of", "csv=p=0", "final_video.mp4"]).strip(",")
+
+    print(f"  duration : {dur:.2f}s")
+    print(f"  streams  : {streams}")
+    print(f"  frames   : {nframes}")
+    print(f"  size     : {size_mb:.2f} MB")
+
+    expected = sum(10.4 + 0.12 for _ in range(1))  # sanity anchor, see below
+    if dur < 20:
+        print(f"  FAIL: {dur:.2f}s is far too short for 4 narrated scenes"); ok = False
+    if "video" not in " ".join(streams):
+        print("  FAIL: no video stream"); ok = False
+    if "audio" not in " ".join(streams):
+        print("  FAIL: no audio stream"); ok = False
+    if size_mb < 0.05:
+        print("  FAIL: file is suspiciously empty"); ok = False
+
+    for f in ("captions.ass", "subtitles.srt"):
+        if not os.path.exists(f) or os.path.getsize(f) < 40:
+            print(f"  FAIL: {f} missing or empty"); ok = False
+    dialogue = sum(1 for l in open("captions.ass", encoding="utf-8")
+                   if l.startswith("Dialogue:"))
+    print(f"  caption lines : {dialogue}")
+    if dialogue < 4:
+        print("  FAIL: too few caption lines"); ok = False
+
+    leftovers = [f for f in os.listdir(WORK)
+                 if f.startswith("s") and f.endswith((".mp4", ".mp3", ".png"))]
+    if leftovers:
+        print(f"  FAIL: temp files leaked: {leftovers[:6]}"); ok = False
+
+    print("=" * 62)
+    print("LOCAL TEST PASSED" if ok else "LOCAL TEST FAILED")
+    return 0 if ok else 1
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    finally:
+        for p in ("script.json",):
+            if os.path.exists(p):
+                os.remove(p)

@@ -1,0 +1,30 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1280
+PlayResY: 720
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Caption,DejaVu Sans,20,&H0000D7FF,&H00FFFFFF,&HD0000000,&H00000000,-1,0,0,0,100,100,0.3,0,1,2.4,0.8,2,20,20,46,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.00,0:00:01.68,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}Every {\kf28}cup {\kf28}of {\kf28}coffee {\kf28}begins {\kf28}the
+Dialogue: 0,0:00:01.68,0:00:03.36,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}same {\kf28}way, {\kf28}with {\kf28}raw {\kf28}green {\kf28}beans
+Dialogue: 0,0:00:03.36,0:00:05.04,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}tumbling {\kf28}inside {\kf28}a {\kf28}roaster {\kf28}until {\kf28}the
+Dialogue: 0,0:00:05.04,0:00:06.72,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}oils {\kf28}inside {\kf28}them {\kf28}finally {\kf28}break {\kf28}open
+Dialogue: 0,0:00:06.72,0:00:07.84,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}and {\kf28}the {\kf28}colour {\kf28}turns.
+Dialogue: 0,0:00:10.60,0:00:12.28,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}Ground {\kf28}and {\kf28}pressed, {\kf28}the {\kf28}coffee {\kf28}meets
+Dialogue: 0,0:00:12.28,0:00:13.96,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}hot {\kf28}water {\kf28}under {\kf28}nine {\kf28}bars {\kf28}of
+Dialogue: 0,0:00:13.96,0:00:15.64,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}pressure, {\kf28}and {\kf28}everything {\kf28}soluble {\kf28}in {\kf28}it
+Dialogue: 0,0:00:15.64,0:00:17.32,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}comes {\kf28}out {\kf28}in {\kf28}under {\kf28}thirty {\kf28}seconds
+Dialogue: 0,0:00:17.32,0:00:17.77,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf45}flat.
+Dialogue: 0,0:00:21.36,0:00:23.04,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}A {\kf28}single {\kf28}bean {\kf28}holds {\kf28}more {\kf28}than
+Dialogue: 0,0:00:23.04,0:00:24.72,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}a {\kf28}thousand {\kf28}aromatic {\kf28}compounds, {\kf28}more {\kf28}than
+Dialogue: 0,0:00:24.72,0:00:26.40,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}red {\kf28}wine, {\kf28}more {\kf28}than {\kf28}almost {\kf28}anything
+Dialogue: 0,0:00:26.40,0:00:27.52,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}else {\kf28}people {\kf28}regularly {\kf28}drink.
+Dialogue: 0,0:00:30.44,0:00:31.84,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}Then {\kf28}it {\kf28}becomes {\kf28}ordinary {\kf28}again:
+Dialogue: 0,0:00:31.84,0:00:33.52,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}two {\kf28}people, {\kf28}a {\kf28}table, {\kf28}and {\kf28}a
+Dialogue: 0,0:00:33.52,0:00:35.20,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}shared {\kf28}cup, {\kf28}repeated {\kf28}a {\kf28}billion {\kf28}times
+Dialogue: 0,0:00:35.20,0:00:35.76,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}before {\kf28}noon.

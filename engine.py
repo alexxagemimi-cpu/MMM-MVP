@@ -149,6 +149,33 @@ def probe_safe(path):
 # ----------------------------------------------------------------------------
 # 1. VOICE  (audio + real word timings, no SubMaker version roulette)
 # ----------------------------------------------------------------------------
+def split_multiword(entries):
+    """
+    Break any timing entry holding several words into one entry per word,
+    dividing its span by word length.
+
+    Edge-TTS sentence boundaries arrive in the same shape as word
+    boundaries, so a whole sentence can turn up as a single timed "word".
+    Left alone that produces one caption per scene and a karaoke highlight
+    with nothing to step through.
+    """
+    out = []
+    for start, end, text in entries:
+        parts = text.split()
+        if len(parts) <= 1:
+            out.append((start, end, text))
+            continue
+        span = max(end - start, 0.001)
+        weights = [max(len(p), 1) for p in parts]
+        total = sum(weights)
+        t = start
+        for p, w in zip(parts, weights):
+            step = span * w / total
+            out.append((t, t + step, p))
+            t += step
+    return out
+
+
 async def synth(text, mp3_path, attempts=3):
     """
     Stream Edge-TTS. Returns [(start_s, end_s, word), ...], or [] when the
@@ -157,6 +184,14 @@ async def synth(text, mp3_path, attempts=3):
     Boundary offset/duration are in 100-nanosecond ticks. We match on the
     presence of offset+text rather than an exact type string, because that
     label has changed between edge-tts releases.
+
+    That tolerance has a cost: the service also emits SENTENCE boundaries,
+    which look identical in shape. A real run produced 4 caption cues for a
+    4-scene script - one whole sentence per scene, dumped on screen at once,
+    with nothing for the karaoke highlight to step through. Any entry
+    carrying more than one word is therefore split back into words here,
+    sharing its span out by word length, so downstream always sees real
+    per-word timing regardless of which boundary type arrived.
     """
     last = None
     for n in range(1, attempts + 1):
@@ -174,7 +209,7 @@ async def synth(text, mp3_path, attempts=3):
                             words.append((start, start + dur, chunk["text"]))
             if os.path.getsize(mp3_path) == 0:
                 raise RuntimeError("empty audio file")
-            return words
+            return split_multiword(words)
         except Exception as e:
             last = e
             print(f"      TTS retry {n}/{attempts} - {e}")
@@ -622,21 +657,24 @@ def assemble_scene(shot_mp4s, mp3, out_mp4, listfile, target_dur):
     The extra encode costs a few seconds per scene. Three dead runs cost 50
     minutes, so this trade is not close.
 
-    I=-14 is YouTube's own normalization target. At the old -16 the platform
-    left it alone and it simply played quieter than every video next to it.
+    NO loudnorm HERE - IT IS THE THING THAT HUNG
+    --------------------------------------------
+    Four theories about ffmpeg flags were wrong (-shortest, a missing -t,
+    timestamp copying, stream copying). The tiered fallback below caught the
+    real answer in a single run: with `loudnorm` in the chain the scene was
+    killed at 73s; without it the same scene assembled in 1.5 seconds.
+    loudnorm stalls on some particular narration clip, and no flag was ever
+    going to fix that.
 
-    TIERED AUDIO FILTERING
-    ----------------------
-    Re-encoding still was not enough: the same scene died again, on the same
-    step. Three flag theories in a row were wrong, and the exact command
-    reproduces fine in 2 seconds against synthetic inputs - so the fault is
-    in some real input, not the arguments.
+    Loudness is now normalised ONCE over the finished programme in finish()
+    instead of per scene - which is also simply the correct place for it.
+    Normalising each scene separately re-levels every scene against itself,
+    so a deliberately quiet beat gets pushed up and a loud one pulled down,
+    flattening exactly the dynamics between scenes that make narration feel
+    edited rather than machine-processed.
 
-    Rather than guess a fourth time, the audio chain now degrades. The full
-    chain is tried first; if it fails, progressively simpler ones follow,
-    ending with silence. A scene therefore always renders, and the log line
-    naming which tier succeeded identifies the culprit filter on the next
-    run instead of costing another blind cycle.
+    The remaining tiers still degrade, ending in silence, so one awkward
+    narration clip can never kill a build again.
     """
     with open(listfile, "w") as f:
         for p in shot_mp4s:
@@ -654,11 +692,8 @@ def assemble_scene(shot_mp4s, mp3, out_mp4, listfile, target_dur):
     # which is exactly the kind of unbounded input this file has been bitten
     # by twice already.
     tiers = [
-        ("full", f"loudnorm=I=-14:TP=-1.5:LRA=11,"
-                 f"aresample=48000:resampler=soxr,"
-                 f"aformat=channel_layouts=stereo,apad=whole_dur={target_dur:.3f}"),
-        ("no-loudnorm", f"aresample=48000,aformat=channel_layouts=stereo,"
-                        f"apad=whole_dur={target_dur:.3f}"),
+        ("standard", f"aresample=48000,aformat=channel_layouts=stereo,"
+                     f"apad=whole_dur={target_dur:.3f}"),
         ("plain", "aresample=48000,aformat=channel_layouts=stereo"),
     ]
 
@@ -668,7 +703,7 @@ def assemble_scene(shot_mp4s, mp3, out_mp4, listfile, target_dur):
             run(base + ["-i", mp3, "-filter_complex", f"[1:a]{af}[a]",
                         "-map", "0:v", "-map", "[a]"] + venc + aenc + tail,
                 f"assemble scene [{name}]", timeout=shot_timeout(target_dur))
-            if name != "full":
+            if name != tiers[0][0]:
                 print(f"      !! audio chain degraded to '{name}' for this scene",
                       flush=True)
             return name
@@ -779,6 +814,13 @@ def finish(body, ass, has_subs, music, out_mp4):
     the whole render down with it, which is not an acceptable way to lose a
     twenty-minute job over a caption file.
     """
+    # loudnorm lives HERE, once, over the whole finished programme - not per
+    # scene. Per-scene normalisation hung one narration clip outright (see
+    # assemble_scene) and is the wrong unit anyway: it re-levels every scene
+    # against itself, flattening the loud/quiet contrast between scenes that
+    # makes narration sound edited. I=-14 is YouTube's own target; below it
+    # the platform leaves the file alone and it simply plays quieter than
+    # everything beside it.
     afilt = (
         f"[1:a]volume={MUSIC_GAIN},aresample=48000,"
         f"aformat=channel_layouts=stereo[m];"
@@ -786,6 +828,7 @@ def finish(body, ass, has_subs, music, out_mp4):
         f"[m][0:a]sidechaincompress="
         f"threshold=0.030:ratio=9:attack=12:release=380:makeup=1[duck];"
         f"[0:a][duck]amix=inputs=2:duration=first:normalize=0,"
+        f"loudnorm=I=-14:TP=-1.5:LRA=11,"
         f"alimiter=limit=0.95[a]"
     )
 

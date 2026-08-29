@@ -1,0 +1,4 @@
+file '/home/user/MMM-MVP/localtest/s000.mp4'
+file '/home/user/MMM-MVP/localtest/s001.mp4'
+file '/home/user/MMM-MVP/localtest/s002.mp4'
+file '/home/user/MMM-MVP/localtest/s003.mp4'
