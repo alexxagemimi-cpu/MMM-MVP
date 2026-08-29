@@ -4,16 +4,27 @@ scout.py — choose what to make next, keep the runners-up, never repeat.
 
 THE PIPELINE THIS IMPLEMENTS
 ----------------------------
-    1. GENERATE   20 candidates in the niche, from a model that has just been
-                  told exactly what the gates will test.
-    2. RED-TEAM   topics.py: do independent sources agree there is a real,
-                  closed answer? Kills the "runway in a list of expense
-                  types" class of topic before a token is spent on a script.
-    3. RED-TEAM   youtube.py: does anyone watch this, is it still alive, and
-                  can a small channel break through?
-    4. KEEP THE REST. Every topic that survives both gates goes to a BACKLOG.
-    5. BLOCK.     Anything made, and anything rejected, can never be proposed
-                  again.
+    1. GENERATE   20 candidates .................... 1 model call
+    2. TRIAGE     judge all 20 on wording alone .... 1 model call
+    3. DEMAND     youtube.py on the survivors ...... 0 model calls
+    4. TRUTH      topics.py on the best few ........ ~4 model calls
+    5. KEEP THE REST in a BACKLOG, so later runs cost nothing.
+    6. BLOCK      anything made or rejected, forever.
+
+CHEAP FILTERS FIRST - THIS ORDER IS THE WHOLE POINT
+---------------------------------------------------
+The first live run ran the expensive truth gate on all twenty candidates,
+one model call each. Twenty-one calls exhausted Gemini's daily quota and
+tripped Groq's per-minute token limit before a single video existed.
+
+The two resources are not equally scarce:
+
+    a model call     scarce, rate limited, daily cap is real and was hit
+    a YouTube lookup 102 units of 10,000/day - about 98 available daily
+
+So the scarce one is spent last, on a handful. Measured on twenty
+candidates: 6 model calls where the old order used 21, and the expensive
+check now runs only on topics already known to have an audience.
 
 WHY THE BACKLOG IS THE IMPORTANT PART
 -------------------------------------
@@ -128,10 +139,83 @@ explanation, no preamble.""")
     return out[:n]
 
 
+def triage(cands, call, verbose=True):
+    """
+    Judge ALL candidates in ONE call, on shape alone - no web research.
+
+    Most bad candidates need no research to reject. "Best programming
+    language" is an opinion; "the seven habits of highly effective people" is
+    one author's framework, not an agreed taxonomy. Both can be thrown out by
+    reading the phrasing, and the first live run spent a full web fetch and a
+    model call proving each of them separately.
+
+    Returns the survivors in the model's own order of confidence.
+    """
+    listed = "\n".join(f"{i+1}. {c}" for i, c in enumerate(cands))
+    try:
+        data = call(f"""Here are {len(cands)} candidate explainer topics.
+
+{listed}
+
+For each, judge ON THE WORDING ALONE whether it names a REAL, CLOSED,
+AGREED set of members - a list independent sources would all give the same
+way. You are not researching, only reading the phrasing.
+
+REJECT: opinions ("best X", "top 10", "most important"), one author's
+framework rather than an agreed classification, anything open-ended, and
+anything where experts are known to classify differently.
+KEEP: named, countable, checkable sets a reference work would agree on.
+
+Return ONLY JSON, best candidates first:
+{{"keep":[{{"n":<number>,"why":"<6 words>"}}],"drop":[{{"n":<number>,"why":"<6 words>"}}]}}""",
+                    schema={"type": "object"})
+    except Exception as e:
+        # Triage is an optimisation, never a gate. If it cannot run, every
+        # candidate goes forward to the real check rather than being lost.
+        if verbose:
+            print(f"[scout] triage unavailable ({str(e)[:70]}) - checking all")
+        return list(cands), []
+
+    keep_n = {k.get("n") for k in data.get("keep", []) if isinstance(k, dict)}
+    drops = [(cands[d["n"] - 1], d.get("why", ""))
+             for d in data.get("drop", [])
+             if isinstance(d, dict) and isinstance(d.get("n"), int)
+             and 1 <= d["n"] <= len(cands)]
+    kept = [cands[k - 1] for k in keep_n
+            if isinstance(k, int) and 1 <= k <= len(cands)]
+    if verbose:
+        print(f"[scout] triage (1 call): kept {len(kept)}, "
+              f"dropped {len(drops)} on wording alone")
+        for t, why in drops[:8]:
+            print(f"        x {t[:56]:<56} {why[:40]}")
+    return (kept or list(cands)), drops
+
+
 def refill(niche, call, gather, probe=None, measure=None,
            demand_verdict=None, demand_score=None, n=CANDIDATES,
-           memory=MEMORY, verbose=True):
-    """Generate and gate a fresh batch, adding every survivor to the backlog."""
+           memory=MEMORY, verbose=True, deep=4):
+    """
+    Generate and gate a fresh batch, adding every survivor to the backlog.
+
+    THE ORDER HERE IS THE WHOLE POINT, and the first live run got it wrong.
+    It ran the expensive truth gate on all twenty candidates - one model call
+    each, twenty-one calls in total - which exhausted Gemini's daily quota and
+    tripped Groq's per-minute token limit before a single video existed.
+
+    Two resources, wildly different scarcity:
+        a model call        scarce, rate limited, and the daily cap is real
+        a YouTube lookup    102 units of a 10,000/day budget - about 98 a day
+
+    So the cheap filters run first and the scarce one runs last, on a handful:
+
+        1. brainstorm ............ 1 model call
+        2. triage all 20 at once .. 1 model call, no research
+        3. demand on survivors .... 0 model calls, ~102 quota units each
+        4. truth on the best few .. `deep` model calls
+
+    About 6 model calls where there were 21, and the expensive check now runs
+    only on topics already known to have an audience.
+    """
     state = load(memory)
     avoid = blocked(state) | {_key(b["topic"]) for b in state["backlog"]}
     cands = brainstorm(niche, call, n=n, avoid=avoid)
@@ -139,10 +223,55 @@ def refill(niche, call, gather, probe=None, measure=None,
         print(f"[scout] {len(cands)} candidates in '{niche}' "
               f"({len(avoid)} blocked or already shortlisted)")
 
+    # ---- 2. shape triage: one call for the whole list --------------------
+    cands, dropped = triage(cands, call, verbose=verbose)
+    for t, why in dropped:
+        state["rejected"].append({"topic": t, "why": f"wording: {why}"[:180],
+                                  "at": time.strftime("%Y-%m-%d")})
+
+    # ---- 3. demand, on everything left, before any research -------------
+    if probe and measure:
+        scored = []
+        for c in cands:
+            try:
+                m = measure(probe(c))
+                ok, why = demand_verdict(m)
+                sc = demand_score(m)
+                if verbose:
+                    print(f"  [{'WANTED' if ok else 'UNWANTED'}] {c[:56]:<56} "
+                          f"{sc}")
+                    if not ok:
+                        print(f"        - {why[0][:100]}")
+                if ok:
+                    scored.append((sc, c, m))
+                else:
+                    state["rejected"].append({
+                        "topic": c, "why": why[0][:180],
+                        "at": time.strftime("%Y-%m-%d")})
+            except Exception as e:
+                # A quota wall is not a measurement. Keep the topic in play
+                # rather than silently ranking it last.
+                if verbose:
+                    print(f"  [demand ] {c}: {str(e)[:90]}")
+                scored.append((None, c, None))
+        scored.sort(key=lambda x: -(x[0] if x[0] is not None else -1))
+        ordered = [(c, m) for _, c, m in scored][:deep]
+        if verbose:
+            print(f"[scout] {len(scored)} wanted; researching the top "
+                  f"{len(ordered)} in depth")
+    else:
+        ordered = [(c, None) for c in cands[:deep]]
+        if verbose:
+            print("[scout] no YouTube key - cannot rank by demand, so the "
+                  "deep check runs on an arbitrary few")
+
+    # ---- 4. the expensive truth gate, on a handful ----------------------
     survived, unchecked = [], []
-    for c in cands:
+    for c, dem in ordered:
         try:
             r = T.assess(c, call, gather, verbose=verbose)
+            r["demand"] = dem
+            r["score"] = demand_score(dem) if (dem and demand_score) else None
         except Exception as e:
             if verbose:
                 print(f"  [ERROR ] {c}: {str(e)[:90]}")
@@ -167,34 +296,8 @@ def refill(niche, call, gather, probe=None, measure=None,
         for u in unchecked:
             print(f"        ? {u}")
 
-    for r in survived[:MAX_DEMAND_CHECKS]:
-        if not (probe and measure):
-            r["score"] = None
-            continue
-        try:
-            m = measure(probe(r["topic"]))
-            ok, why = demand_verdict(m)
-            r["demand"], r["score"] = m, demand_score(m)
-            if verbose:
-                print(f"  [{'WANTED' if ok else 'UNWANTED'}] {r['topic']} "
-                      f"(score {r['score']})")
-                for w in why:
-                    print(f"        - {w}")
-            if not ok:
-                state["rejected"].append({
-                    "topic": r["topic"], "why": why[0][:180],
-                    "at": time.strftime("%Y-%m-%d")})
-                r["score"] = -1
-        except Exception as e:
-            # A quota wall must never look like a measurement of zero.
-            if verbose:
-                print(f"  [demand ] {r['topic']}: {str(e)[:100]}")
-            r["score"] = None
-
     added = 0
     for r in survived:
-        if r.get("score") is not None and r["score"] < 0:
-            continue                       # failed the demand gate outright
         state["backlog"].append({
             "topic": r["topic"], "members": r.get("members", []),
             "agreement": r.get("agreement"), "score": r.get("score"),
