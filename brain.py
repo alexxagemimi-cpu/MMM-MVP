@@ -35,6 +35,7 @@ import sys
 import json
 import time
 import urllib.request
+import urllib.error
 
 from google import genai
 from google.genai import types
@@ -90,6 +91,21 @@ CEREBRAS_MODEL = _env("CEREBRAS_MODEL", "gpt-oss-120b")
 OPENROUTER_KEY   = _env("OPENROUTER_API_KEY", "")
 OPENROUTER_MODEL = _env("OPENROUTER_MODEL",
                         "meta-llama/llama-3.3-70b-instruct:free")
+
+# Groq sits behind Cloudflare, and Cloudflare blocks urllib's default
+# "Python-urllib/3.11" User-Agent outright: the reply is HTTP 403 with a body
+# of "error code: 1010", which is Cloudflare's BROWSER SIGNATURE BANNED code,
+# not anything Groq's API said. Groq's own community forum carries this exact
+# report ("Cloudflare Blocking Urllib.request without User-Agent").
+#
+# This cost a full run and a wrong diagnosis: 403 was read as "this model is
+# blocked for your account", so model auto-discovery was built to work around
+# a permissions problem that did not exist - and discovery hit the same wall,
+# because /models is behind the same edge. research.py already sends a browser
+# UA on every request it makes, which is why web research kept working in the
+# same runs where every model call died.
+BROWSER_UA = ("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+              "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 TOTAL_WORDS         = int(TARGET_MINUTES * WPM)
 SCENE_COUNT         = max(8, min(16, round(TOTAL_WORDS / 165)))
@@ -292,7 +308,8 @@ def _openai_compatible(prompt, schema, base_url, key, model, label):
     req = urllib.request.Request(
         base_url, data=json.dumps(body).encode(),
         headers={"Authorization": f"Bearer {key}",
-                 "Content-Type": "application/json"})
+                 "Content-Type": "application/json",
+                 "User-Agent": BROWSER_UA})
     try:
         with urllib.request.urlopen(req, timeout=120) as r:
             data = json.loads(r.read())
@@ -321,7 +338,8 @@ def _oai_available_models(base_url, key):
     try:
         url = base_url.replace("/chat/completions", "/models")
         req = urllib.request.Request(
-            url, headers={"Authorization": f"Bearer {key}"})
+            url, headers={"Authorization": f"Bearer {key}",
+                          "User-Agent": BROWSER_UA})
         with urllib.request.urlopen(req, timeout=30) as r:
             data = json.loads(r.read())
         ids = [m.get("id") for m in data.get("data", []) if m.get("id")]
@@ -394,9 +412,20 @@ def call(prompt, schema=None, retries=2):
                     drop_schema = True
                     continue
 
-                # 403/404 on an OpenAI-compatible provider almost always means
-                # THIS MODEL is not permitted on this account, not that the key
-                # is bad - Groq blocks most models by default for new accounts.
+                # A 403 carrying "error code: 1010" is CLOUDFLARE, not the
+                # provider: the request was banned at the edge on its browser
+                # signature and never reached the API, so the model id is
+                # irrelevant and discovery would hit the same wall. Say so
+                # plainly - reading this as a permissions problem once already
+                # cost a run and a wrong fix.
+                if "1010" in msg:
+                    print(f"     -> blocked by Cloudflare at the edge (code 1010), "
+                          f"not by {name}. The request never reached the API. "
+                          f"This means the User-Agent is being refused.")
+                    break
+
+                # A genuine 403/404 from the provider usually means THIS MODEL
+                # is not permitted on this account, not that the key is bad.
                 # Ask the provider what it will allow and take the best of
                 # those, rather than making the owner hunt through settings.
                 if (conf and not tried_discovery
