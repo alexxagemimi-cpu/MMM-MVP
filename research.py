@@ -102,9 +102,55 @@ def _duckduckgo(query, max_results):
         return []
 
 
+def _wikipedia(query, max_results):
+    """
+    Keyless Wikipedia search. Free, no signup, no quota, and unusually
+    reliable next to the alternatives.
+
+    Added because a real run's fact-check came back with 27 of 27 claims
+    "UNSUPPORTED - not mentioned in the sources", while four of that run's
+    searches had errored outright (DuckDuckGo's backend returning
+    ConnectError against grokipedia and google.com). Absence of evidence
+    reported as a fact problem, when the absence was ours.
+
+    It is also the right shape for what keeps failing. The unconfirmed
+    claims are definitional - what "leg" means in denim, what selvedge is,
+    which rises exist - and an encyclopedia is precisely the source that
+    settles those, where a shopping result is not.
+    """
+    try:
+        base = "https://en.wikipedia.org/w/api.php"
+        q = urllib.parse.urlencode({
+            "action": "query", "list": "search", "srsearch": query,
+            "srlimit": max_results, "format": "json", "srprop": "snippet"})
+        req = urllib.request.Request(f"{base}?{q}",
+                                     headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=15) as r:
+            data = json.loads(r.read())
+        out = []
+        for h in data.get("query", {}).get("search", []):
+            title = h.get("title") or ""
+            snippet = _TAGS.sub("", h.get("snippet") or "")
+            out.append({
+                "title": title,
+                "url": "https://en.wikipedia.org/wiki/"
+                       + urllib.parse.quote(title.replace(" ", "_")),
+                "content": snippet.strip()})
+        return out
+    except Exception as e:
+        print(f"      [research] wikipedia failed: {str(e)[:120]}", flush=True)
+        return []
+
+
 def search(query, max_results=6):
-    """One query -> [{title, url, content}]. Never raises, may return []."""
-    for provider in (_tavily, _duckduckgo):
+    """
+    One query -> [{title, url, content}]. Never raises, may return [].
+
+    Wikipedia is tried when the others come back empty rather than first:
+    a general search reaches the whole web and an encyclopedia does not, so
+    it is the safety net for a failed search, not a replacement for one.
+    """
+    for provider in (_tavily, _duckduckgo, _wikipedia):
         hits = provider(query, max_results)
         if hits:
             return hits

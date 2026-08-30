@@ -35,7 +35,7 @@ content**. That is why term cards exist (§4).
 | File | Purpose | State |
 |---|---|---|
 | `brain.py` | Script writing: research → draft → fact-check → revise → validate | Runs green end-to-end on CI |
-| `research.py` | Web search + page reading, independent of any LLM | Verified working on CI |
+| `research.py` | Web search + page reading, independent of any LLM | Tavily → DDG → Wikipedia |
 | `modes.py` | story / explainer / guide: beats, craft rules, per-mode metrics | Wired into brain.py; detector 12/12 |
 | `engine.py` | Video assembly: TTS, visuals, Ken Burns, captions, term cards, mix | Runs green; produces real videos |
 | `graphics.py` | The on-screen system: white cards, persistent header, animated list | Wired in; verified on frames |
@@ -161,6 +161,14 @@ already wrote ("Rent, salaries, insurance, software") and it goes on screen as
 bullets: already written, already fact-checked, already spoken aloud, so it
 cannot be off-topic. It finds nothing in prose, on purpose — a wrong bullet is
 worse than no bullet.
+
+**4.21 CONTRADICTED and UNCONFIRMED are different findings.** "WRONG" means
+the sources say otherwise — never shippable, at any count. "UNSUPPORTED" means
+the pages we happened to fetch didn't mention it, which on a real run read
+*"Not mentioned in the sources"* while four of that run's searches had errored
+outright. Collapsing them made the publish gate fire on every single run, and
+**a gate that always fires is a gate nobody reads.** Same confusion as §5's
+worst bug: a failure to verify reported as a verdict.
 
 **4.20 The comparison card is the first DIAGRAM.** Everything else here is a
 list — it shows *what* the things are, never how they relate. A taxonomy is

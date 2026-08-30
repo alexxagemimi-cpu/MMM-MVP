@@ -791,6 +791,36 @@ def parse_verdicts(report):
     return bad
 
 
+def split_verdicts(bad):
+    """
+    CONTRADICTED and MERELY UNCONFIRMED are not the same finding.
+
+    "WRONG" means the sources say otherwise - that is a factual error and it
+    has to be fixed before anything ships. "UNSUPPORTED" means the eighteen
+    pages we happened to fetch did not mention it, and on a real run the
+    notes read "Not mentioned in the sources", "Drop rise is not mentioned".
+    That is absence of evidence, and it is much weaker - especially when four
+    of that run's searches errored outright, which makes the silence partly
+    ours rather than the world's.
+
+    Collapsing the two made the publish gate fire on every run, and a gate
+    that always fires is a gate nobody reads. It is the same confusion the
+    topic gate had: a failure to verify reported as a verdict.
+
+    Unsupported claims still matter - the runway lesson is exactly that a
+    plausible unsourced claim is the dangerous kind - so they are counted,
+    reported and sent to the reviser. They just do not, on their own and in
+    small numbers, mean the script is wrong.
+    """
+    wrong, unsupported = [], []
+    for line in bad:
+        parts = [p.strip().upper() for p in line.split("|")]
+        (wrong if any(p.startswith("WRONG") for p in parts[1:3])
+         else unsupported).append(line)
+    return wrong, unsupported
+    return bad
+
+
 def fact_check(data, chunk=4):
     """
     Independent verification against FRESH web sources, in chunks.
@@ -1381,7 +1411,9 @@ def main():
     print(f"   sources  : {len(sources)}")
     print(f"   density  : {final_m['fact_density']} anchors/100w "
           f"| rhythm sd {final_m['sent_len_sd']} | tells {final_m['ai_tells']}")
-    print(f"   unresolved: {len(grade(final_m))} craft, {len(fact_bad)} fact")
+    _w, _u = split_verdicts(fact_bad)
+    print(f"   unresolved: {len(grade(final_m))} craft, "
+          f"{len(_w)} CONTRADICTED, {len(_u)} unconfirmed")
 
     # IS THIS SHIPPABLE, and if not, say so where it cannot be missed.
     #
@@ -1396,9 +1428,19 @@ def main():
     # decides what gets published; the job here is to make sure they decide
     # knowing this, not to decide for them.
     blockers = []
-    if fact_bad:
-        blockers.append(f"{len(fact_bad)} claim(s) the fact-check could not "
-                        f"confirm against fresh sources")
+    wrong, unconfirmed = split_verdicts(fact_bad)
+    if wrong:
+        # Sources say otherwise. Never shippable, at any count.
+        blockers.append(f"{len(wrong)} claim(s) CONTRADICTED by sources")
+    # Absence of evidence, weighed rather than counted. A handful of claims
+    # our fetched pages did not happen to mention is normal; most of the
+    # script unconfirmed means the research did not really land, and that IS
+    # worth stopping for.
+    claims = max(1, len(fact_bad))
+    if unconfirmed and len(unconfirmed) >= 0.34 * claims and len(unconfirmed) >= 6:
+        blockers.append(f"{len(unconfirmed)} claim(s) not found in any source "
+                        f"we fetched - not proof they are wrong, but too much "
+                        f"of the script is unverified to publish")
     # rt_findings is a LIST of finding dicts, not a dict keyed by severity.
     hard_left = [f for f in (rt_findings or [])
                  if f.get("severity") == "hard"]
