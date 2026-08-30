@@ -82,6 +82,18 @@ def test_shrink():
     print(f"  {'ok  ' if same else 'FAIL'}  a prompt under the cap is untouched")
     bad += not same
 
+    # Cutting mid-number is worse than cutting less. A source ending
+    # "...the average inseam is 3" gives the fact-checker a figure whose
+    # digits were amputated, and it cannot tell that from a wrong one.
+    lines = "".join(f"SOURCE {i}: the measured inseam is {i}2 inches.\n"
+                    for i in range(400))
+    cut = B.shrink(head + lines + tail, 4000)
+    body = cut.split("\n\n[... source material")[0]
+    clean = body.rstrip().endswith("inches.")
+    print(f"  {'ok  ' if clean else 'FAIL'}  cuts on a line break, not "
+          f"mid-figure (ends {body.rstrip()[-24:]!r})")
+    bad += not clean
+
     # A cap smaller than the marker must not produce a negative slice.
     tiny = B.shrink(prompt, 80)
     ok = len(tiny) <= 80 or len(tiny) < len(prompt)

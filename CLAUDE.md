@@ -49,6 +49,7 @@ content**. That is why term cards exist (§4).
 | `test_relevance.py` | Stock-relevance check vs tags from REAL runs | 12/12, incl. the retriever |
 | `verify.py` | A model WATCHES the finished video and reports edit faults | 9/9 offline; unproven live |
 | `contact.py` | 12 frames of the finished video on one JPEG, plus measurements | **How faults get found** |
+| `test_providers.py` | The fallback writer, against a provider that refuses on size | 12/12 |
 | `test_engine_local.py` | Runs the REAL engine against REAL ffmpeg locally, ~50s | Passing |
 | `.github/workflows/factory.yml` | The workflow. Has a no-AI engine-only test mode | Stable |
 
@@ -269,6 +270,27 @@ card is done. Found on a rendered frame; invisible in every log.
 on a 720-high frame — 2.8% of frame height, unreadable on a phone, which is
 where this audience watches. Now 40 (~5.5%).
 
+**5.11 The fallback writer could never accept a real prompt.** Run 36:
+Gemini's *daily* quota was gone, Groq answered `HTTP 413 ... Limit 8000,
+Requested 8373`, the code waited 20s and re-sent **the same bytes**, and the
+run died with a provider that was up, keyed and willing. Groq's free tier
+meters tokens *per minute* (8,000 for gpt-oss-120b) — nothing to do with the
+model's context window — and research's 34,832 chars of source text put us 373
+tokens over. `too_large` was computed in `_call_sweep` and **never once acted
+on**, so the 413 fell through to the rate-limit branch: Groq's 413 body says
+"rate limit" and carries `code: rate_limit_exceeded`. **A size limit does not
+clear by waiting.** That retry could not ever have worked, so the entire
+reason a quota wall is meant to be survivable had never caught a single run.
+Now `PROVIDER_CHAR_CAP` trims per provider *before* sending, and a 413 reads
+"Limit N, Requested M" out of the refusal and re-sends at 60% of the limit.
+`shrink()` cuts the **middle** — instructions are at the top, the required
+output shape at the bottom; trimming the tail deletes the part saying what to
+produce — and snaps to a line break so a figure never loses its digits.
+**Same shape as 5.6/5.8: a safety mechanism that was written, looked right,
+and was never run.** The regression asserts the retry is SMALLER than the
+request that failed; before the fix every request in the sequence was
+byte-identical.
+
 **The pattern under most of these:** they shipped because they were reasoned
 about and never *run*, with CI used as the test suite at ~5 minutes a cycle.
 That is what `test_engine_local.py` exists to end.
@@ -308,7 +330,7 @@ GitHub → Settings → Secrets and variables → Actions.
 |---|---|---|
 | `GEMINI_API_KEY` | Yes | Free tier. Daily quota is real and *does* run out mid-project. |
 | `PIXABAY_API_KEY` | Recommended | Free, no card. Without it, visuals fall back to AI images. |
-| `GROQ_API_KEY` | **Recommended** | Free, no card. The fallback writer. Without it, a Gemini quota wall kills the run outright. |
+| `GROQ_API_KEY` | **Recommended** | Free, no card. The fallback writer. Without it, a Gemini quota wall kills the run outright. **Free tier is 8,000 tokens per MINUTE** — see §5.11; prompts are capped to fit it. |
 | `TAVILY_API_KEY` | Optional | Better search. Not required — keyless DuckDuckGo is confirmed working on the runner. |
 | `OPENROUTER_API_KEY` | Optional | Last resort; only ~50 requests/day free. |
 
@@ -332,6 +354,7 @@ until July 2026), which is why every model id is an env var.
     python3 test_relevance.py        # stock relevance vs real logged tags
     python3 redteam.py               # runway regression, both directions
     python3 test_verify.py           # video-verifier logic, no network
+    python3 test_providers.py        # the fallback writer when Gemini is out
     python3 contact.py final_video.mp4   # LOOK at what was just built
 
 Workflow test mode: run with `skip_brain_test_fixture=true` to render a
@@ -348,6 +371,12 @@ artifact host is unreachable, which it is from some sandboxes.
 
 ## 9. Known-untested / open
 
+- **A script written by the fallback is less grounded than one written by
+  Gemini, and nothing yet says so in the output.** Groq's cap (§5.11) means it
+  sees ~16,000 of research's ~35,000 characters — under half the sources. That
+  is the right trade against a dead run, but a fallback-written script should
+  probably be marked as such so the publish gate and the owner can weigh it.
+  Not built.
 - Whether the quality loop converges within `MAX_PASSES` or always spends the
   budget.
 - Pixabay behaviour across a long video's worth of requests (~45 shots).

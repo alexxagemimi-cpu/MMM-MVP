@@ -450,7 +450,19 @@ def shrink(prompt, cap):
     keep = cap - len(mark)
     head = int(keep * 0.62)          # instructions + the start of the sources
     tail = keep - head               # the output shape, which must survive
-    return prompt[:head] + mark + prompt[-tail:]
+    a, b = prompt[:head], prompt[-tail:]
+
+    # Cut on a LINE BREAK where one is near, not mid-word. A source ending
+    # "...the average inseam for a 32 waist is 3" hands the model a number
+    # with its digits amputated, and a fact-checker cannot tell a truncated
+    # figure from a wrong one. Only snap when a break is close enough that
+    # obeying it costs little - otherwise the trim quietly stops being a trim.
+    snap = max(200, keep // 20)
+    if (i := a.rfind("\n", max(0, head - snap))) > 0:
+        a = a[:i]
+    if (j := b.find("\n", 0, snap)) > 0:
+        b = b[j:]
+    return a + mark + b
 
 
 def _providers():
