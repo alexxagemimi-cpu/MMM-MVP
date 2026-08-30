@@ -278,6 +278,19 @@ def test_precap_avoids_the_round_trip():
         bad += not ok
     print(f"  request sizes sent : {fake.sizes} "
           f"(prompt was {len(prompt):,})")
+
+    # A quality drop the owner cannot see is the fault this project keeps
+    # being caught by. A trimmed call must leave a trace in the output.
+    cut, total = B.TRIMMED_CALLS
+    checks2 = [
+        ("the trim was counted, not silent", cut >= 1),
+        ("the fallback writer was recorded", B.PROVIDER_USE.get("groq", 0) >= 1),
+    ]
+    for what, ok in checks2:
+        print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+        bad += not ok
+    print(f"  recorded           : {cut} of {total} calls trimmed, "
+          f"providers {dict(B.PROVIDER_USE)}")
     return bad
 
 

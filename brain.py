@@ -455,6 +455,19 @@ def _oai_available_models(base_url, key):
 # worth more than squeezing in two more paragraphs.
 PROVIDER_CHAR_CAP = {"groq": 16000}
 
+# WHO ACTUALLY WROTE THIS SCRIPT, AND HOW MUCH OF THE RESEARCH THEY SAW.
+#
+# A fallback-written script is not the same product as a Gemini-written one:
+# the cap above means Groq sees ~16,000 of research's ~35,000 characters, so
+# roughly half the sources never reach the writer at all. That trade is right
+# - half the sources beats a dead run - but it is invisible in the output, and
+# an invisible quality drop is the thing this project keeps getting caught by.
+#
+# So it is recorded and reported. Not as a blocker: the owner decides what
+# ships (§1), and the job here is to make sure they decide knowing this.
+PROVIDER_USE = {}      # provider name -> times it answered
+TRIMMED_CALLS = [0, 0]  # [calls whose prompt was cut, calls total]
+
 
 def shrink(prompt, cap):
     """
@@ -576,6 +589,9 @@ def _call_sweep(prompt, schema, retries, provs):
                                               model, name, drop_schema)
                 if not text:
                     raise RuntimeError("empty response")
+                PROVIDER_USE[name] = PROVIDER_USE.get(name, 0) + 1
+                TRIMMED_CALLS[1] += 1
+                TRIMMED_CALLS[0] += len(body) < len(prompt)
                 return json.loads(strip_fences(text)) if schema else text
 
             except Exception as e:
@@ -1587,7 +1603,29 @@ def main():
     if not VERIFIED_MEMBERS:
         blockers.append("no verified member list - nothing checked that the "
                         "categories explained are really members of the topic")
-    data["publishable"] = {"ok": not blockers, "blockers": blockers}
+
+    # Who wrote it, and on how much of the research. NOT a blocker - see the
+    # note on PROVIDER_USE. A caveat the owner reads is the whole point; a
+    # gate that fires on it would be a gate nobody reads (§4.21).
+    caveats = []
+    cut, total = TRIMMED_CALLS
+    if cut:
+        caveats.append(f"{cut} of {total} model calls had their prompt "
+                       f"trimmed to fit a provider's limit - that much of the "
+                       f"research never reached the writer")
+    fallback = {p: n for p, n in PROVIDER_USE.items() if p != "gemini"}
+    if fallback:
+        caveats.append("written partly by the fallback writer ("
+                       + ", ".join(f"{p}: {n} call(s)"
+                                   for p, n in sorted(fallback.items()))
+                       + ") - less grounded than a full Gemini run")
+    data["written_by"] = dict(sorted(PROVIDER_USE.items()))
+    data["publishable"] = {"ok": not blockers, "blockers": blockers,
+                           "caveats": caveats}
+    if caveats:
+        print("\n  CAVEATS (not blockers - you decide):")
+        for c in caveats:
+            print(f"    - {c}")
 
     print("=" * 64)
     if blockers:
