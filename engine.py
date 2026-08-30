@@ -57,6 +57,13 @@ except Exception as _e:                       # pragma: no cover
     graphics = None
     print(f"!! graphics unavailable ({_e}) - no section cards or headers")
 try:
+    import scriptbits
+except Exception as _e:
+    scriptbits = None
+    print(f"   !! scriptbits unavailable ({_e}) - drawn shot cards will "
+          f"carry only the term and its definition", flush=True)
+
+try:
     import sfx
 except Exception as _e:                       # pragma: no cover
     sfx = None
@@ -516,8 +523,15 @@ def write_ass(groups, path, term_cards=None):
         lines.append(f"Dialogue: 0,{ass_ts(start)},{ass_ts(end)},Caption,,0,0,0,,{text}\n")
 
     n_cards = 0
-    for start, term, fact in (term_cards or []):
-        a, b = max(start - TERM_LEAD, 0), start - TERM_LEAD + TERM_HOLD
+    for start, term, fact, until in (term_cards or []):
+        a = max(start - TERM_LEAD, 0)
+        b = a + TERM_HOLD
+        # `until` is the moment a drawn card takes the screen. The term card
+        # comes DOWN then rather than sitting on top of a card that already
+        # prints the same term and the same definition in larger type - seen
+        # on a rendered frame with both showing the identical sentence.
+        if until is not None:
+            b = min(b, until)
         # layer 1 so a card always sits above the caption layer
         lines.append(
             f"Dialogue: 1,{ass_ts(a)},{ass_ts(b)},Term,,0,0,0,,"
@@ -582,7 +596,24 @@ STOP_WORDS = {"a", "an", "the", "of", "on", "in", "at", "to", "and", "or",
               "with", "for", "from", "by", "up", "out", "over", "into"}
 
 
-def _relevant(hit, keyword, need=1):
+# Tags so common across Pixabay's catalogue that matching one proves
+# nothing. A clip tagged "business" could be literally any clip; a clip
+# tagged "warehouse" is about a warehouse.
+GENERIC_TAGS = {
+    "business", "person", "people", "office", "desk", "work", "working",
+    "table", "hand", "hands", "man", "woman", "men", "women", "computer",
+    "laptop", "technology", "background", "modern", "professional",
+    "indoor", "indoors", "outdoor", "outdoors", "city", "urban", "home",
+    "room", "young", "adult", "team", "meeting", "corporate", "concept",
+}
+
+
+def _tag_set(hit):
+    return {t.strip() for t in (hit.get("tags") or "").lower().split(",")
+            if t.strip()}
+
+
+def _relevant(hit, keyword):
     """
     Does this clip have anything to do with what was asked for?
 
@@ -592,24 +623,46 @@ def _relevant(hit, keyword, need=1):
     hit number one, and no step between the search and the screen ever
     considered whether it matched.
 
-    Pixabay labels every hit with its own tags, so the check is cheap: at
-    least one meaningful word from the search must appear in them. Words
-    shorter than four characters and common joining words are ignored, since
-    "of" or "on" matching proves nothing.
+    THE FIRST VERSION OF THIS CHECK DID NOT WORK, and it is worth being
+    precise about why, because it passed a 7/7 offline test and then let 15
+    out of 15 clips through on a real run - a golden retriever on a patio
+    under "fixed costs, variable costs and one-off costs", a crop sprayer
+    under "materials, packaging, payment processing".
 
-    Deliberately lenient - one word is enough. The job is to throw out the
-    clip that is about a different subject entirely, not to insist on a
-    perfect match and end up with a video of blank slates.
+    Two faults. It needed only ONE word of the search phrase to appear in the
+    tags, and it matched by SUBSTRING anywhere in the tag string. Between
+    them, a three-word phrase passed on one weak hit - and the word that hit
+    was almost always the generic one, because Pixabay tags half its
+    catalogue "business", "person", "office", "work". Matching those proves
+    nothing at all: it is the stock-footage equivalent of matching "the".
+
+    So now: tags are compared as whole tags, not substrings; a match on a
+    generic tag does not count on its own; and a phrase with several
+    meaningful words needs more than one of them. A clip that cannot clear
+    that bar is not shown - the caller draws a card from the script's own
+    words instead, which is always about the right subject.
     """
-    tags = " " + (hit.get("tags") or "").lower() + " "
+    tags = _tag_set(hit)
+    if not tags:
+        return False
     words = [w for w in re.sub(r"[^a-z0-9 ]", " ", keyword.lower()).split()
              if len(w) >= 4 and w not in STOP_WORDS]
     if not words:
-        return True                      # nothing to check against
-    hits = sum(1 for w in words
-               if w in tags or (w.endswith("s") and w[:-1] in tags)
-               or (not w.endswith("s") and w + "s" in tags))
-    return hits >= need
+        return False
+
+    def hits(w):
+        # whole-tag match, allowing a plural on either side. "front" must not
+        # match "frontier", and "stock" must not match "stockholm".
+        return any(w == t or w == t + "s" or w + "s" == t
+                   or w in t.split() for t in tags)
+
+    matched = [w for w in words if hits(w)]
+    strong = [w for w in matched if w not in GENERIC_TAGS]
+    if not strong:
+        return False                      # only generic words matched
+    # one meaningful word carries a short phrase; a longer one has to do
+    # better than a single hit out of four
+    return len(matched) >= (1 if len(words) <= 2 else 2)
 
 
 def _pick(hits, keyword):
@@ -681,6 +734,13 @@ def fetch_pixabay_video(keyword, out_mp4, seen_ids):
         if not hits:
             return False
         hit = _pick(hits, keyword)
+        # What we actually chose, and why it was allowed through. The first
+        # version of _relevant passed 15 clips out of 15 on a real run and
+        # there was no way to tell from the log WHY - the keyword was
+        # printed, the tags it supposedly matched were not. Two lines of
+        # logging turns "the footage is wrong again" into evidence.
+        print(f"        pixabay video {keyword[:30]!r} <- "
+              f"{(hit.get('tags') or '?')[:60]}", flush=True)
         seen_ids.add(hit["id"])
         vids = hit.get("videos", {})
         url = (vids.get("medium") or vids.get("small")
@@ -711,6 +771,8 @@ def fetch_pixabay_photo(keyword, out_png, seen_ids):
         if not hits:
             return False
         hit = _pick(hits, keyword)
+        print(f"        pixabay photo {keyword[:30]!r} <- "
+              f"{(hit.get('tags') or '?')[:60]}", flush=True)
         seen_ids.add(hit["id"])
         url = hit.get("largeImageURL") or hit.get("webformatURL")
         if not url:
@@ -728,13 +790,22 @@ def fetch_pixabay_photo(keyword, out_png, seen_ids):
         return False
 
 
-def fetch_shot_asset(keyword, seed, out_stub, seen_video_ids):
+def fetch_shot_asset(keyword, seed, out_stub, seen_video_ids,
+                     prefer_card=False):
     """
     Visual source chain for one shot: Pixabay video -> Pixabay photo ->
     Pollinations AI image -> flat slate. Returns ("video"|"image", path, ok)
     where ok=False only for the final flat-slate fallback. fetch_image()
     (the tail of the chain) never raises, so this never does either - worst
     case is a slate image, never a crashed build.
+
+    With `prefer_card`, the chain STOPS when Pixabay has nothing relevant and
+    returns ("none", None, False) so the caller can draw a card out of the
+    script's own words instead. That is the right order for this niche and it
+    is what the reference explainer does: where no real picture of the subject
+    exists it puts a drawn thing on screen, never a photograph of an unrelated
+    office. An AI render of "empty desk chairs" is still a photograph of an
+    unrelated office - it just cost a network round trip first.
     """
     if PIXABAY_API_KEY:
         video_path = out_stub + ".mp4"
@@ -744,9 +815,62 @@ def fetch_shot_asset(keyword, seed, out_stub, seen_video_ids):
         if fetch_pixabay_photo(keyword, photo_path, seen_video_ids):
             return "image", photo_path, True
 
+    if prefer_card:
+        return "none", None, False
+
     png_path = out_stub + ".png"
     ok = fetch_image(keyword, seed, png_path)
     return "image", png_path, ok
+
+
+def _draw_shot_card(scene, out_png, section=None, n_sections=0,
+                    section_name=""):
+    """
+    A shot drawn from the scene's own narration, for when no relevant picture
+    of the subject exists.
+
+    Best case the narration contains an actual list - "Rent, salaries,
+    insurance, software" - and those four words go on screen as four bullets,
+    which is precisely what the reference explainer puts there. Failing that
+    it falls back to the term and its one-line definition, which is still the
+    subject of the scene rather than a stranger's dog.
+
+    Returns the same ("kind", path, ok) shape as fetch_shot_asset. On any
+    failure it returns ("image", None, False) so the caller's existing
+    slate path still catches it - a missing picture must never fail a build.
+    """
+    try:
+        term = (scene.get("key_term") or "").strip()
+        fact = (scene.get("key_fact") or "").strip()
+        bullets = scriptbits.list_items(scene.get("narration") or "") \
+            if scriptbits else []
+        if not bullets and not (term or fact):
+            return "image", None, False
+
+        headed = section is not None and section_name
+        # Don't print the same words twice on one frame. When the section
+        # header already names the term, the big heading carries the line
+        # that DEFINES it and the bullets carry the examples - name at the
+        # top, meaning in the middle, evidence below. Rendered with both set
+        # to the term, "VARIABLE COSTS" appeared twice on the same card.
+        same = headed and section_name.strip().lower() == term.lower()
+        heading = (fact if (same and fact) else (term or fact)).strip()
+        note = None if (same or not bullets) else fact
+        if not bullets and not note and heading != fact and fact:
+            note = fact
+
+        graphics.point_card(
+            (section + 1) if headed else 0,
+            n_sections if headed else 0,
+            section_name if headed else "",
+            heading=heading,
+            bullets=bullets or None,
+            note=note or None,
+            out_png=out_png)
+        return "card", out_png, True
+    except Exception as e:
+        print(f"      !! could not draw a card ({str(e)[:60]})", flush=True)
+        return "image", None, False
 
 
 def plan_shots(keywords, audio_dur):
@@ -1027,6 +1151,41 @@ def assemble_scene(shot_mp4s, mp3, out_mp4, listfile, target_dur):
     return "silent"
 
 
+def split_frames(frames_total, n, first_frames=None):
+    """
+    How a scene's frame budget is divided between its shots.
+
+    Even, except that `first_frames` pins the FIRST shot and splits what is
+    left across the others. The section card needs the pin, and the reason is
+    measured, not stylistic: with an even split and two shots in a scene the
+    card took half the scene, and sampling a finished 40-second video every
+    half second showed 51% of it was one card that never changed - the exact
+    failure this project already wrote down as a rule. The card is a beat,
+    not a shot; it gets a beat's worth of time and the footage gets the rest.
+
+    A function rather than inline arithmetic because build() has to know the
+    same boundaries render_scene uses - to tell which shot a term card would
+    land on. Two copies of this sum would drift, and the symptom would be a
+    caption suppressed over the wrong shot, which nothing would ever catch.
+
+    The counts always sum to exactly frames_total; the remainder goes to the
+    last shot.
+    """
+    if first_frames and n > 1:
+        # clamped so the pin can never starve the remaining shots, however
+        # short the scene turns out to be
+        head = max(1, min(int(first_frames), frames_total - (n - 1)))
+        rest = frames_total - head
+        base = rest // (n - 1)
+        counts = [head] + [base] * (n - 1)
+        counts[-1] += rest - base * (n - 1)
+        return counts
+    base = frames_total // n
+    counts = [base] * n
+    counts[-1] += frames_total - base * n
+    return counts
+
+
 def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
                   first_scene, last_scene, frames_total, overlay_png=None,
                   first_frames=None):
@@ -1042,28 +1201,7 @@ def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
     out for itself.
     """
     n = len(assets)
-    if first_frames and n > 1:
-        # `first_frames` pins the FIRST shot and splits what is left across
-        # the others. The section card needs this, and the reason is
-        # measured, not stylistic: with an even split and two shots in a
-        # scene the card took half the scene, and sampling a finished
-        # 40-second video every half second showed 51% of it was one card
-        # that never changed. A still held for five seconds is the exact
-        # failure this project already wrote down as a rule - a block where
-        # nothing changes is a hole viewers leak out of. The card is a beat,
-        # not a shot; it gets a beat's worth of time, footage gets the rest.
-        #
-        # Clamped so the pin can never starve the remaining shots, however
-        # short the scene turns out to be.
-        head = max(1, min(int(first_frames), frames_total - (n - 1)))
-        rest = frames_total - head
-        base = rest // (n - 1)
-        frame_counts = [head] + [base] * (n - 1)
-        frame_counts[-1] += rest - base * (n - 1)
-    else:
-        base = frames_total // n
-        frame_counts = [base] * n
-        frame_counts[-1] += frames_total - base * n
+    frame_counts = split_frames(frames_total, n, first_frames)
 
     shots, failed = [], 0
     for j, ((kind, path), frames) in enumerate(zip(assets, frame_counts)):
@@ -1224,6 +1362,47 @@ async def build():
     scenes = [s for s in (data["scenes"] if isinstance(data, dict) else data)
               if (s.get("narration") or "").strip()]
     total = len(scenes)
+
+    # WHICH SCENES ARE ACTUALLY ITEMS IN THE LIST.
+    #
+    # This used to be "every scene's key_term", and that is how RUNWAY ended
+    # up on screen as a type of business expense. Runway is not an expense -
+    # it is months of cash left at the current burn - and it was the CLOSE
+    # beat, the scene that sums up and sends the viewer off. A closing scene
+    # is not a member of the taxonomy the video is listing, and neither is
+    # the opening ANSWER, the FRAME, the EDGE case or the APPLY.
+    #
+    # modes.py already says which beat carries a list item: CATEGORY in an
+    # explainer ("one scene per type") and STEP in a guide ("one scene per
+    # step"). Nothing else does. A story has neither, so it gets no
+    # checklist at all, which is correct - a story is not a list.
+    #
+    # This does not fix the taxonomy problem in section 11 of CLAUDE.md;
+    # nothing here checks that the CATEGORY scenes are genuinely members of
+    # the category. It fixes the narrower bug of putting scenes on the list
+    # that never claimed to be items in the first place.
+    MEMBER_BEATS = {"CATEGORY", "STEP"}
+    # scenes that belong to no section at all - the wrap-up, whatever the
+    # mode calls it
+    CLOSING_BEATS = {"CLOSE", "RESONANCE"}
+    member_idx = [i for i, s in enumerate(scenes)
+                  if (s.get("beat") or "").strip().upper() in MEMBER_BEATS
+                  and (s.get("key_term") or "").strip()]
+    members = [scenes[i]["key_term"].strip() for i in member_idx]
+    # where each scene sits in the list, or None if it is not an item
+    member_of = {si: k for k, si in enumerate(member_idx)}
+    use_cards = graphics is not None and len(members) >= 2
+
+    # Which section each scene BELONGS to, item or not, so a drawn shot card
+    # can carry the same header the footage in that section carries. None
+    # means no section: before the first item, or the closing scene.
+    section_of, _run = {}, None
+    for _i, _s in enumerate(scenes):
+        if _i in member_of:
+            _run = member_of[_i]
+        section_of[_i] = None if (_s.get("beat") or "").strip().upper() \
+            in CLOSING_BEATS else _run
+
     print("=" * 62, flush=True)
     print(f"  MMM ENGINE | {total} scenes | {W}x{H} @ {FPS}fps | voice={VOICE}",
           flush=True)
@@ -1274,12 +1453,30 @@ async def build():
 
     seen_pixabay_ids = set()
 
+    # Drawing a card needs graphics.py; without it the old chain (AI image,
+    # then slate) is still the only thing available.
+    prefer_card = graphics is not None
+
     async def do_asset(item):
         i, j, kw, seed, out_stub = item
         kind, path, ok = await asyncio.to_thread(
-            fetch_shot_asset, kw, seed, out_stub, seen_pixabay_ids)
+            fetch_shot_asset, kw, seed, out_stub, seen_pixabay_ids,
+            prefer_card)
+        if kind == "none":
+            # NOTHING RELEVANT EXISTS FOR THIS KEYWORD, so put the script's
+            # own words on screen. They are already written, already
+            # fact-checked and already spoken aloud a moment later, so a card
+            # built from them cannot be off-topic - which is more than could
+            # be said for the golden retriever Pixabay offered for "fixed
+            # costs, variable costs and one-off costs".
+            sec = section_of.get(i)
+            kind, path, ok = _draw_shot_card(
+                scenes[i], out_stub + ".png",
+                section=sec, n_sections=len(members),
+                section_name=(members[sec] if sec is not None else ""))
         asset_paths[i][j] = (kind, path)
-        tag = "video" if kind == "video" else ("image" if ok else "SLATE")
+        tag = {"video": "video", "card": "CARD"}.get(
+            kind, "image" if ok else "SLATE")
         print(f"      shot scene {i+1} #{j+1} [{tag}] | {kw[:44]}", flush=True)
         return kind == "video", ok
 
@@ -1289,6 +1486,7 @@ async def build():
             *(do_asset(item) for item in work_items[b:b + 5]))
     real_footage = sum(1 for is_video, _ in results if is_video)
     failed_images = sum(1 for _, ok in results if not ok)
+    drawn = sum(1 for row in asset_paths for k, _ in row if k == "card")
 
     # ---------------- phase 3: render ----------------------------------------
     #
@@ -1303,35 +1501,6 @@ async def build():
     #
     # Both are built from data the script already carries - one key_term per
     # scene - so this costs no extra model call and no extra quota.
-    # WHICH SCENES ARE ACTUALLY ITEMS IN THE LIST.
-    #
-    # This used to be "every scene's key_term", and that is how RUNWAY ended
-    # up on screen as a type of business expense. Runway is not an expense -
-    # it is months of cash left at the current burn - and it was the CLOSE
-    # beat, the scene that sums up and sends the viewer off. A closing scene
-    # is not a member of the taxonomy the video is listing, and neither is
-    # the opening ANSWER, the FRAME, the EDGE case or the APPLY.
-    #
-    # modes.py already says which beat carries a list item: CATEGORY in an
-    # explainer ("one scene per type") and STEP in a guide ("one scene per
-    # step"). Nothing else does. A story has neither, so it gets no
-    # checklist at all, which is correct - a story is not a list.
-    #
-    # This does not fix the taxonomy problem in section 11 of CLAUDE.md;
-    # nothing here checks that the CATEGORY scenes are genuinely members of
-    # the category. It fixes the narrower bug of putting scenes on the list
-    # that never claimed to be items in the first place.
-    MEMBER_BEATS = {"CATEGORY", "STEP"}
-    # scenes that belong to no section at all - the wrap-up, whatever the
-    # mode calls it
-    CLOSING_BEATS = {"CLOSE", "RESONANCE"}
-    member_idx = [i for i, s in enumerate(scenes)
-                  if (s.get("beat") or "").strip().upper() in MEMBER_BEATS
-                  and (s.get("key_term") or "").strip()]
-    members = [scenes[i]["key_term"].strip() for i in member_idx]
-    # where each scene sits in the list, or None if it is not an item
-    member_of = {si: k for k, si in enumerate(member_idx)}
-    use_cards = graphics is not None and len(members) >= 2
     if use_cards:
         n_cards = len(members) + (0 if 0 in member_of else 1)
         print(f"      drawing {n_cards} cards + headers, list of "
@@ -1463,13 +1632,47 @@ async def build():
                 # landing a beat later still lands on its own subject; what
                 # 4.3 forbids is a card at a moment the narration never
                 # says the word at all.
-                if card_frames:
-                    card_end = timeline + card_frames / FPS
-                    if at < card_end:
-                        at = card_end + 0.15
-                if at < timeline + actual - 0.6:
+                # Which shot is actually on screen at that moment.
+                # NOT named `run` - that is this module's ffmpeg runner, and
+                # shadowing it here made every later ffmpeg call raise
+                # "'float' object is not callable" from inside build().
+                bounds, acc = [], 0.0
+                for cnt in split_frames(frames_total, len(assets),
+                                        card_frames):
+                    acc += cnt / FPS
+                    bounds.append(acc)
+                k = next((x for x, b in enumerate(bounds)
+                          if at - timeline < b), len(assets) - 1)
+                kind_here = assets[k][0]
+
+                if kind_here == "cardclip":
+                    # the section card: wait for it (see above)
+                    at = timeline + bounds[k] + 0.15
+                elif kind_here == "card":
+                    # A DRAWN CARD is already doing this card's job - it
+                    # names the term in large type and prints the same
+                    # definition under it. Rendered, the two appeared
+                    # together and said exactly the same thing twice.
+                    print(f"        (term card for {term!r} skipped - the "
+                          f"drawn card already says it)", flush=True)
+                    at = None
+
+                # If a DRAWN card starts later in this scene, the term card
+                # comes down when it does.
+                until = next((timeline + bounds[x - 1]
+                              for x in range(k + 1, len(assets))
+                              if assets[x][0] == "card"), None)
+
+                if at is None:
+                    pass                 # deliberately suppressed just above
+                elif until is not None and until - at < 1.2:
+                    # too little of it would be seen to be worth showing
+                    print(f"        (term card for {term!r} skipped - a "
+                          f"drawn card takes the screen)", flush=True)
+                elif at < timeline + actual - 0.6:
                     term_cards.append((at, term,
-                                       (sc.get("key_fact") or "").strip()))
+                                       (sc.get("key_fact") or "").strip(),
+                                       until))
                     # a card appearing silently is half an edit
                     sfx_events.append((at - TERM_LEAD, "pop"))
                 else:
@@ -1554,6 +1757,12 @@ async def build():
     if PIXABAY_API_KEY:
         print(f"   visuals  : {real_footage}/{total_shots} real Pixabay footage",
               flush=True)
+    if drawn:
+        # Not a failure line. A drawn card is the CORRECT answer when the
+        # stock library has nothing about the subject, and the ratio is the
+        # single most useful number for judging a run in this niche.
+        print(f"   drawn    : {drawn}/{total_shots} shots drawn from the "
+              f"script (no relevant footage existed)", flush=True)
     if failed_images:
         print(f"   !! {failed_images} shot(s) used a fallback slate",
               flush=True)

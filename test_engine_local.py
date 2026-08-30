@@ -104,7 +104,18 @@ def main():
     # ---- stub ONLY the network. everything below is the real engine. ----
     pool = list(clips)
 
+    # HALF THE SHOTS FIND NOTHING, on purpose.
+    #
+    # On a real run that is the common case, not the rare one: Pixabay has no
+    # footage of an abstraction, so the relevance check rejects everything it
+    # offers and the engine has to draw a card out of the script instead.
+    # With the mock succeeding every time, that entire path - the one that
+    # decides what most of a money/business video actually looks like - was
+    # never executed by this test. Keywords are stable strings, so which ones
+    # fail is deterministic and the build stays reproducible.
     def fake_video(keyword, out_mp4, seen):
+        if sum(ord(c) for c in keyword) % 2:
+            return False                 # "nothing relevant for this one"
         src = pool[abs(hash(keyword)) % len(pool)]
         shutil.copy(src, out_mp4)
         return True

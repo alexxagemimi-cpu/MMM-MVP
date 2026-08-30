@@ -60,6 +60,13 @@ DONE    = (34, 148, 90)
 MARGIN  = 56
 HEAD_H  = 108               # the band the section header owns, on every frame
 
+# The lowest line anything drawn here may reach. Below it belongs to the two
+# things engine.py burns ON TOP of these cards afterwards: the term card
+# (its box reaches ~554) and the caption block (~564 down). A card that draws
+# into that region looks fine on its own and is a pile-up in the finished
+# video - which is exactly how it was found.
+SAFE_BOTTOM = 436
+
 
 def _f(p, s):
     return ImageFont.truetype(p, s)
@@ -222,13 +229,26 @@ def overview_card(items, current=None, eyebrow=None, out_png="card.png"):
 def point_card(index, total, name, heading, bullets=None, note=None,
                out_png="card.png"):
     """A section's own page: the persistent header, one heading, a few short
-    lines. This is what carries an explanation when no real artifact exists."""
+    lines. This is what carries an explanation when no real artifact exists.
+
+    `total` of 0 (or no name) draws it WITHOUT the section header, for the
+    scenes that belong to no section - the opening before the first item, and
+    the closing summary. Drawing the header anyway printed "00 OF 00" there.
+    """
     img = Image.new("RGB", (W, H), PAPER)
     d = ImageDraw.Draw(img)
-    draw_header(d, index, total, name)
+    headed = bool(total) and bool(name)
+    if headed:
+        draw_header(d, index, total, name)
 
-    y = HEAD_H + 46
-    hf, hl = _fit(d, heading, F_DISPLAY, W - MARGIN * 2, 68, 30, max_lines=2)
+    y = (HEAD_H + 46) if headed else (MARGIN + 10)
+    # With bullets underneath, the heading gets ONE line - _fit shrinks the
+    # type until it fits rather than wrapping. A two-line heading pushed the
+    # bullets down far enough that the SAFE_BOTTOM cut-off dropped three of
+    # the four, so the card lost most of its content to make room for a
+    # bigger restatement of what the header already said.
+    hf, hl = _fit(d, heading, F_DISPLAY, W - MARGIN * 2, 68, 24,
+                  max_lines=1 if bullets else 2)
     for ln in hl:
         d.text((MARGIN, y), ln.upper(), font=hf, fill=INK)
         y += int(hf.size * 1.10)
@@ -242,6 +262,14 @@ def point_card(index, total, name, heading, bullets=None, note=None,
     for b in (bullets or [])[:4]:
         bf = _f(F_TEXT, 28)
         lines = _wrap(d, b, bf, W - MARGIN * 2 - 44)[:2]
+        # Stop before SAFE_BOTTOM rather than running past it. A two-line
+        # heading pushes the bullets down, and with four of them the last
+        # ones were landing under the term card - seen on a rendered frame,
+        # where "Deposit" was hidden behind an opaque black box. Dropping a
+        # bullet is a loss; printing one where it cannot be read is a loss
+        # AND a mess.
+        if y + len(lines) * 38 > SAFE_BOTTOM:
+            break
         for k, ln in enumerate(lines):
             if k == 0:
                 d.ellipse((MARGIN + 4, y + 12, MARGIN + 14, y + 22), fill=ACCENT)
@@ -251,7 +279,15 @@ def point_card(index, total, name, heading, bullets=None, note=None,
 
     if note:
         nf, nl = _fit(d, note, F_TEXT, W - MARGIN * 2, 25, 16, max_lines=2)
-        ny = H - MARGIN - len(nl) * int(nf.size * 1.3)
+        # Flowing under the content, NOT anchored to the bottom of the frame.
+        #
+        # Bottom-anchored put it at y~647, which is inside two things that
+        # get burned on top of this card later: the caption block (engine.py
+        # CAP_MARGIN_V/CAP_SIZE put it from ~564 down) and the term card
+        # (TERM_Y 496, its box reaching ~554). Seen on a rendered frame with
+        # all three stacked on each other. SAFE_BOTTOM is the line nothing
+        # drawn here may cross.
+        ny = min(y + 16, SAFE_BOTTOM - len(nl) * int(nf.size * 1.3))
         for ln in nl:
             d.text((MARGIN, ny), ln, font=nf, fill=MUTED)
             ny += int(nf.size * 1.3)

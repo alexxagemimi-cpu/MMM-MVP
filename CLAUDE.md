@@ -38,7 +38,16 @@ content**. That is why term cards exist (§4).
 | `research.py` | Web search + page reading, independent of any LLM | Verified working on CI |
 | `modes.py` | story / explainer / guide: beats, craft rules, per-mode metrics | Wired into brain.py; detector 12/12 |
 | `engine.py` | Video assembly: TTS, visuals, Ken Burns, captions, term cards, mix | Runs green; produces real videos |
-| `test_engine_local.py` | Runs the REAL engine against REAL ffmpeg locally, ~40s | Passing |
+| `graphics.py` | The on-screen system: white cards, persistent header, animated list | Wired in; verified on frames |
+| `sfx.py` | Synthesised sound kit — whoosh/pop/tick/thud/riser, no key, no quota | Wired in; levels measured |
+| `thumbnail.py` | Grid-style thumbnail drawn from script.json | Wired in |
+| `scout.py` | Chooses the topic: 20 candidates → triage → demand → truth gate | 6 model calls, not 21 |
+| `topics.py` | Truth gate: do independent sources agree the list is real? | Tested on known good/bad |
+| `youtube.py` | Demand gate: does anyone actually search for this? | Free API, gated on kill rules |
+| `redteam.py` | Attacks the finished script; "not-a-member" is a hard finding | Wired into brain.py |
+| `scriptbits.py` | Pulls the real lists back out of narration, for drawn cards | 9/9 on good + bad samples |
+| `contact.py` | 12 frames of the finished video on one JPEG, plus measurements | **How faults get found** |
+| `test_engine_local.py` | Runs the REAL engine against REAL ffmpeg locally, ~50s | Passing |
 | `.github/workflows/factory.yml` | The workflow. Has a no-AI engine-only test mode | Stable |
 
 ---
@@ -107,6 +116,43 @@ own frame budget (`frames / FPS`), not from probing a file and not from
 `-shortest`. Every hang in this file traces to asking ffmpeg to work out a
 duration itself.
 
+**4.9 The section card is a BEAT, with a fixed dwell — never a share of the
+scene.** On an equal split with two shots it took half the scene: measured on
+a finished 40s build sampled every 0.5s, **51% of the video was one card that
+never changed a pixel.** It is the one shot with no inherent motion, so it is
+the one that must not be long. Fixed at 2.4s (3.6s opening) → re-measured 29%.
+
+**4.10 Only what changed moves.** The opening card animates its rows arriving;
+every card after it animates *only* the tick landing and the box moving. The
+reference video's single structural lesson is that elements accumulate on a
+stable canvas — replaying the build animation at every section contradicts it.
+
+**4.11 Only CATEGORY (explainer) and STEP (guide) beats are list items.**
+The checklist used to be built from every scene's `key_term`, which is exactly
+how RUNWAY reached the screen as a type of business expense — it was the CLOSE
+beat. A story has neither beat and correctly gets no checklist at all. A CLOSE
+also inherits no section header, or the wrap-up gets labelled "3 OF 3".
+
+**4.13 When the stock library has nothing relevant, DRAW the shot.** Not an
+AI image, not a slate. Measured on a real run: with the old check, 15 of 15
+clips passed and the video showed a golden retriever under "fixed costs,
+variable costs and one-off costs" and a crop sprayer under "materials,
+packaging, payment processing". §1 already said why — there is nothing to
+photograph in this niche. `scriptbits.list_items()` pulls the list the writer
+already wrote ("Rent, salaries, insurance, software") and it goes on screen as
+bullets: already written, already fact-checked, already spoken aloud, so it
+cannot be off-topic. It finds nothing in prose, on purpose — a wrong bullet is
+worse than no bullet.
+
+**4.14 One thing says a thing once.** The term card is suppressed where a
+drawn card or the checklist already names the term, and clipped to the moment
+a drawn card takes the screen. Three separate rendered frames showed the same
+words printed twice on one screen, once literally on top of themselves.
+
+**4.12 The header plate is fully opaque.** At alpha 232 it looked like a
+reasonable "barely there" choice; over saturated footage the colour read
+straight through and the supposedly stable white band changed with every shot.
+
 ---
 
 ## 5. Real bugs found here (do not reintroduce)
@@ -147,9 +193,28 @@ by reading a real run's log and noticing an explainer being asked for
 asked for "low-key moody lighting, volumetric haze, muted desaturated teal and
 amber" — a description of a commercial. `STYLE=explainer` is now the default.
 
+**5.8 `overview_clip` — built, tested, never imported. Exactly 5.6 again.**
+The animated card existed the whole time while `build()` rendered a still PNG
+instead. This is now a two-time bug: **after writing a module, grep for its
+name and confirm something calls it.**
+
+**5.9 The term card printed straight through the section card's own list.**
+It slid in and put "GROSS MARGIN" on top of the checklist's GROSS MARGIN row.
+The three-band layout assumes the middle of the frame is a *picture*; on a
+section card the middle of the frame is the *list*. It now waits until the
+card is done. Found on a rendered frame; invisible in every log.
+
+**5.10 Captions were half the size YouTube's own default burns in.** Size 20
+on a 720-high frame — 2.8% of frame height, unreadable on a phone, which is
+where this audience watches. Now 40 (~5.5%).
+
 **The pattern under most of these:** they shipped because they were reasoned
 about and never *run*, with CI used as the test suite at ~5 minutes a cycle.
 That is what `test_engine_local.py` exists to end.
+
+**And the pattern under 5.7, 5.9 and 5.10:** they were all invisible in a
+green log and obvious in a frame. That is what `contact.py` exists to end —
+one 60KB JPEG of twelve frames, uploaded by every run.
 
 ---
 
@@ -198,22 +263,35 @@ until July 2026), which is why every model id is an env var.
 
 ## 8. Testing
 
-    python3 test_engine_local.py     # real engine, real ffmpeg, ~40s
+    python3 test_engine_local.py     # real engine, real ffmpeg, ~50s
     python3 modes.py                 # mode detector against its test set
+    python3 graphics.py              # renders one of each card to graphics_demo/
+    python3 sfx.py                   # builds the kit and measures every level
+    python3 scriptbits.py            # list extractor vs known-good/known-bad
+    python3 contact.py final_video.mp4   # LOOK at what was just built
 
 Workflow test mode: run with `skip_brain_test_fixture=true` to render a
 hand-written script with **no AI quota at all**. Use it for any engine or
 visual change.
 
+**Always finish by looking.** `contact.py` puts twelve frames of the finished
+video on one ~60KB JPEG with per-frame measurements, and CI uploads it as
+`contact_sheet.jpg` on every run. Run the workflow with `log_frames=true` to
+have the sheet printed into the log as base64 as well — needed when the
+artifact host is unreachable, which it is from some sandboxes.
+
 ---
 
 ## 9. Known-untested / open
 
-- Term cards over real stock footage at full video length (verified on
-  rendered frames and on a 4-scene fixture only).
 - Whether the quality loop converges within `MAX_PASSES` or always spends the
   budget.
 - Pixabay behaviour across a long video's worth of requests (~45 shots).
+- The animated cards and the three-band layout at **full video length** —
+  verified on a 5-scene fixture and on rendered frames, not on 12 minutes.
+- Music still does not fit or vary; one bed for the whole video.
+- Still no **diagrams**. The owner asked for them explicitly. Cards carry
+  words and lists; nothing yet draws a *relationship* between two things.
 - Nothing yet judged by the owner as publishable. That is the real bar.
 
 ---
@@ -276,7 +354,28 @@ wrong, which is worse than a video that looks cheap.
 
 The fix is a research stage that establishes the real membership of the
 category from sources FIRST, and a check that every `key_term` survives it.
-Not written yet. It should come before any further visual work.
+
+**Partly closed, and it is important to be exact about which part.**
+
+*Done:* `topics.py` is the truth gate — it asks whether independent sources
+agree the category has a real, closed membership, before a script is written
+at all. `redteam.py` treats "not a member" as a hard finding against the
+finished script. And the reason RUNWAY specifically reached the screen turned
+out to be narrower than it looked: the on-screen checklist was built from
+*every* scene's `key_term`, so the CLOSE beat became an item. Only CATEGORY
+and STEP beats are list items now (§4.11), and both test fixtures — which had
+the same fault, written by this project's own author — are corrected, with
+runway deliberately left on the CLOSE as the regression test.
+
+*Still open:* nothing checks that a **CATEGORY scene the model wrote** is
+genuinely a member of the category. If the writer invents a fourth type of
+expense and labels it CATEGORY, it goes on the list. `topics.py` gates the
+*topic*; `redteam.py` attacks the *script*; neither of them holds the
+verified membership list from research and diffs the scenes against it.
+`brain.py` has a `VERIFIED_MEMBERS` global for exactly this and it is still
+an empty list. **That is the remaining work, and it is the highest-value
+thing left in the whole project** — a viewer who looks it up and finds the
+video is wrong is worse than a video that looks cheap.
 
 ---
 
