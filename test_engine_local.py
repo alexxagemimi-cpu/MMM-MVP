@@ -188,7 +188,16 @@ def main():
                       "large, and usually what turns a good month into a "
                       "loss.",
          "image_keywords": ["j", "k", "l"]},
-        {"scene": 5, "beat": "CLOSE", "key_term": "runway",
+        {"scene": 5, "beat": "EDGE", "key_term": "semi-variable costs",
+         "key_fact": "A base you always pay, plus a part that grows",
+         # An EDGE beat with two members already explained, so the
+         # comparison diagram has something real to compare and this path
+         # is covered locally instead of shipping untested.
+         "narration": "The awkward ones sit between the two. A phone plan "
+                      "has a base you always pay and a part that grows with "
+                      "use, so it behaves like both at once.",
+         "image_keywords": ["o", "p", "q"]},
+        {"scene": 6, "beat": "CLOSE", "key_term": "runway",
          "key_fact": "Months of cash left at current burn",
          "narration": "Add all three up against your cash and you get "
                       "runway, counted in months rather than in rupees, "

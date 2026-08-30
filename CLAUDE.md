@@ -162,6 +162,15 @@ bullets: already written, already fact-checked, already spoken aloud, so it
 cannot be off-topic. It finds nothing in prose, on purpose — a wrong bullet is
 worse than no bullet.
 
+**4.20 The comparison card is the first DIAGRAM.** Everything else here is a
+list — it shows *what* the things are, never how they relate. A taxonomy is
+mostly about the difference between neighbours, and a difference is a picture.
+Fires on the EDGE/APPLY beat (where `modes.py` puts "how these differ") with
+the two most recently explained members, and both columns are the writer's own
+`key_term` + `key_fact`, already fact-checked. **A made-up comparison is a
+made-up fact carrying a diagram's authority** — so it never invents a
+relationship, it only draws one the script already stated.
+
 **4.19 Numbers get their own card.** `scriptbits.headline_number()` finds a
 real figure (money, %, multiple, span) in a scene's narration and
 `graphics.stat_clip` puts it on screen alone and large. Digits only, and years
@@ -337,8 +346,9 @@ artifact host is unreachable, which it is from some sandboxes.
 - The animated cards and the three-band layout at **full video length** —
   verified on a 5-scene fixture and on rendered frames, not on 12 minutes.
 - Music still does not fit or vary; one bed for the whole video.
-- Still no **diagrams**. The owner asked for them explicitly. Cards carry
-  words and lists; nothing yet draws a *relationship* between two things.
+- Diagrams: the comparison card exists (§4.20). A *spectrum* — items placed
+  along an ordered axis — does not, and cannot be built safely until the
+  ordering itself is verified: inventing an order is inventing a fact.
 - `verify.py` has never run against a real video - it needs a live run with
   Gemini quota. Its parsing is tested; its usefulness is not.
 - Nothing yet judged by the owner as publishable. That is the real bar.

@@ -494,6 +494,126 @@ def point_clip(index, total, name, heading, bullets, out_mp4, frames,
     return _encode(tmp, "f%04d.png", fps, out_mp4)
 
 
+def compare_card(left, right, out_png="card.png", eyebrow=None,
+                 design=False, reveal=2):
+    """
+    TWO THINGS SIDE BY SIDE, with what separates them.
+
+    The owner asked for diagrams and this project has never had one. Every
+    card so far is a LIST - it shows what the things are, never how they
+    relate. A taxonomy video is mostly about the difference between
+    neighbours ("fixed costs do not move when sales move; variable costs
+    rise and fall with every sale") and that difference is a relationship,
+    which is a picture, not a bullet.
+
+    `left` and `right` are (title, [lines]). Both come from text the writer
+    already wrote and the fact-checker already passed - a key_term and its
+    key_fact - so this cannot introduce a claim. That matters more here than
+    anywhere: a made-up comparison is a made-up fact with a diagram's
+    authority.
+
+    `reveal` is how many columns are drawn, so the animation can bring the
+    second one in against the first rather than presenting both at once -
+    the comparison lands when the second arrives.
+    """
+    img = Image.new("RGB", (W, H), PAPER)
+    d = ImageDraw.Draw(img)
+
+    top = MARGIN + (56 if eyebrow else 8)
+    if eyebrow:
+        d.text((MARGIN, MARGIN - 14), _track(eyebrow.upper(), 2),
+               font=_f(F_BODY, 19), fill=ACCENT)
+
+    gap = 34
+    cw = (W - MARGIN * 2 - gap) / 2
+    bottom = SAFE_BOTTOM
+
+    # MEASURE FIRST, THEN CENTRE. Drawing straight from the top left the
+    # columns stacked in the upper third with half the frame empty under
+    # them - the same fault the checklist had before note 4.15.
+    bf_m = _f(F_TEXT, 29)
+    heights = []
+    for title, lines in (left, right):
+        tf_m, _ = _fit(d, (title or "").upper(), F_DISPLAY, cw - 36, 40, 20)
+        h = tf_m.size + 26 + 30
+        for ln in (lines or [])[:4]:
+            h += len(_wrap(d, ln, bf_m, cw - 34)[:3]) * 40 + 12
+        heights.append(h)
+    block = max(heights) if heights else 0
+    top = top + max(0, (bottom - top - block) / 2)
+
+    for col, (title, lines) in enumerate((left, right)):
+        if col >= reveal:
+            continue
+        x = MARGIN + col * (cw + gap)
+        # a chip, so the two names read as labels of columns rather than as
+        # two headings that happen to sit near each other
+        tf, tl = _fit(d, (title or "").upper(), F_DISPLAY, cw - 36, 40, 20)
+        th = tf.size + 26
+        d.rounded_rectangle((x, top, x + cw, top + th), radius=10,
+                            fill=ACCENT if col == 0 else INK)
+        t = tl[0] if tl else ""
+        d.text((x + (cw - _w(d, t, tf)) / 2, top + 11), t, font=tf,
+               fill=PAPER)
+
+        y = top + th + 30
+        bf = _f(F_TEXT, 29)
+        for ln in (lines or [])[:4]:
+            for k, part in enumerate(_wrap(d, ln, bf, cw - 34)[:3]):
+                if y + 40 > bottom:
+                    break
+                if k == 0:
+                    d.ellipse((x + 4, y + 12, x + 15, y + 23), fill=ACCENT)
+                d.text((x + 30, y), part, font=bf,
+                       fill=INK if k == 0 else MUTED)
+                y += 40
+            y += 12
+
+    # the divider, drawn last so it sits over nothing and reads as the axis
+    # the two columns are separated along
+    if reveal > 1:
+        mx = MARGIN + cw + gap / 2
+        d.line((mx, top + 6, mx, top + block), fill=LINE, width=2)
+
+    return _out(img, out_png, design)
+
+
+def compare_clip(left, right, out_mp4, frames, fps=25, eyebrow=None,
+                 tmp="_cmptmp"):
+    """
+    The left column holds, then the right one arrives beside it.
+
+    A comparison read all at once is two lists; read in order it is a
+    contrast, because the viewer has the first thing in mind when the second
+    lands. Same reason the section card ticks one item before boxing the
+    next instead of just cutting to the new state.
+    """
+    os.makedirs(tmp, exist_ok=True)
+    one_p = os.path.join(tmp, "_one.png")
+    both_p = os.path.join(tmp, "_both.png")
+    compare_card(left, right, one_p, eyebrow, design=True, reveal=1)
+    compare_card(left, right, both_p, eyebrow, design=True, reveal=2)
+    with Image.open(one_p) as im:
+        one = im.convert("RGB").copy()
+    with Image.open(both_p) as im:
+        both = im.convert("RGB").copy()
+
+    half = (W // 2, 0, W, H)
+    total_f = int(frames)
+    for fi in range(total_f):
+        t = fi / max(total_f - 1, 1)
+        p = _ease(max(0.0, min(1.0, (t - 0.30) / 0.34)))
+        fr = one.copy()
+        if p > 0:
+            dx = int((1 - p) * 46)
+            lay = Image.new("RGB", (half[2] - half[0], H), PAPER)
+            lay.paste(both.crop(half), (dx, 0))
+            fr.paste(Image.blend(fr.crop(half), lay, p), (half[0], half[1]))
+        fr.save(os.path.join(tmp, f"f{fi:04d}.png"))
+
+    return _encode(tmp, "f%04d.png", fps, out_mp4)
+
+
 def stat_card(index, total, name, value, label, out_png="card.png",
               design=False):
     """One number, as large as it fits. A figure spoken aloud is gone in a

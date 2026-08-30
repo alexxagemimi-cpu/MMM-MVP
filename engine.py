@@ -1023,6 +1023,27 @@ def _draw_stat_card(value, label, out_png, section=None, n_sections=0,
         return "image", None, False, None
 
 
+def _draw_compare_card(pair, out_png, eyebrow=None):
+    """
+    Two neighbouring members side by side, with what separates them.
+
+    Both columns are the writer's own key_term and key_fact, already
+    fact-checked - so this cannot introduce a claim. That is the whole
+    safety argument for putting a diagram on screen at all: a made-up
+    comparison is a made-up fact carrying a diagram's authority.
+    """
+    try:
+        recipe = {"kind": "compare", "left": pair[0], "right": pair[1],
+                  "eyebrow": eyebrow}
+        graphics.compare_card(pair[0], pair[1], out_png=out_png,
+                              eyebrow=eyebrow)
+        return "card", out_png, True, recipe
+    except Exception as e:
+        print(f"      !! could not draw a comparison ({str(e)[:60]})",
+              flush=True)
+        return "image", None, False, None
+
+
 def plan_shots(keywords, audio_dur):
     """
     How many visuals this scene gets, and which keywords they use.
@@ -1623,6 +1644,32 @@ async def build():
     # card, which is where the list is spoken. The rest of the scene still
     # uses footage. This is the one place the engine stops asking Pixabay a
     # question it cannot answer.
+    # A DIAGRAM, on the beat that is about how things relate.
+    #
+    # The owner asked for diagrams and this project has only ever drawn
+    # lists. modes.py puts EDGE (and APPLY) after the categories, which is
+    # where a video says how neighbouring types differ - so that is where a
+    # comparison belongs. Needs two members already explained, or there is
+    # nothing to compare.
+    COMPARE_BEATS = {"EDGE", "APPLY"}
+    comparey = {}
+    if graphics is not None:
+        for i, sc_ in enumerate(scenes):
+            if (sc_.get("beat") or "").strip().upper() not in COMPARE_BEATS:
+                continue
+            prior = [k for k in member_idx if k < i]
+            if len(prior) < 2:
+                continue
+            cols = []
+            for k in prior[-2:]:
+                lines = [(scenes[k].get("key_fact") or "").strip()]
+                if scriptbits:
+                    lines += scriptbits.list_items(
+                        scenes[k].get("narration") or "")[:2]
+                cols.append((scenes[k].get("key_term") or "",
+                             [ln for ln in lines if ln][:3]))
+            comparey[i] = tuple(cols)
+
     subject = subject_terms(scenes) if scriptbits else set()
     if subject:
         print(f"      subject anchor: {', '.join(sorted(subject))} - a clip "
@@ -1636,7 +1683,7 @@ async def build():
     statty = {}
     if scriptbits:
         for i, sc_ in enumerate(scenes):
-            if i in listy:
+            if i in listy or i in comparey:
                 continue
             n = scriptbits.headline_number(sc_.get("narration") or "")
             if n:
@@ -1651,13 +1698,18 @@ async def build():
         # failure 4.9 exists to prevent. Three shots means card, list,
         # picture.
         if j == 1 and graphics is not None \
-                and (i in listy or i in statty) \
+                and (i in listy or i in statty or i in comparey) \
                 and len(shots_per_scene[i]) >= 3:
             sec = section_of.get(i)
             common = dict(section=sec, n_sections=len(members),
                           section_name=(members[sec] if sec is not None
                                         else ""))
-            if i in listy:
+            if i in comparey:
+                kind, path, ok, recipe = _draw_compare_card(
+                    comparey[i], out_stub + ".png",
+                    eyebrow="what separates them")
+                what = f"{comparey[i][0][0]} vs {comparey[i][1][0]}"
+            elif i in listy:
                 kind, path, ok, recipe = _draw_shot_card(
                     scenes[i], out_stub + ".png", **common)
                 what = ", ".join(scriptbits.list_items(scenes[i]["narration"]))
@@ -1669,7 +1721,8 @@ async def build():
             if kind == "card":
                 card_recipes[(i, j)] = recipe
                 asset_paths[i][j] = (kind, path)
-                tag = "LIST" if i in listy else "STAT"
+                tag = ("DIAGRAM" if i in comparey
+                       else "LIST" if i in listy else "STAT")
                 print(f"      shot scene {i+1} #{j+1} [{tag}] | {what[:44]}",
                       flush=True)
                 return False, True
@@ -1826,8 +1879,9 @@ async def build():
             recipe = card_recipes.get((i, j))
             if kind != "card" or not recipe:
                 continue
-            animate = (graphics.stat_clip if recipe["kind"] == "stat"
-                       else graphics.point_clip)
+            animate = {"stat": graphics.stat_clip,
+                       "compare": graphics.compare_clip,
+                       "point": graphics.point_clip}[recipe["kind"]]
             if recipe["kind"] == "point" and not recipe.get("bullets"):
                 continue          # nothing to arrive; the still is correct
             try:
