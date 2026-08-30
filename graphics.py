@@ -339,6 +339,46 @@ def point_card(index, total, name, heading, bullets=None, note=None,
     return out_png
 
 
+def stat_clip(index, total, name, value, label, out_mp4, frames, fps=25,
+              tmp="_sttmp"):
+    """
+    The number arriving: it comes up from below and settles, then the label
+    fades in under it.
+
+    Same reason every other card animates now - a still held for a shot's
+    length is a block where nothing changes, which is the hole note 4.9
+    exists to close. A number that lands is also simply better television
+    than a number that is already there when you cut to it.
+    """
+    os.makedirs(tmp, exist_ok=True)
+    full_p = os.path.join(tmp, "_full.png")
+    stat_card(index, total, name, value, label, full_p)
+    with Image.open(full_p) as im:
+        full = im.convert("RGB").copy()
+
+    # The value and the label as separate bands, taken from the finished card
+    # so there is no second layout to disagree with it.
+    head_h = HEAD_H + 4 if (total and name) else 0
+    band = (0, head_h, W, SAFE_BOTTOM)
+    body = full.crop(band)
+    base = full.copy()
+    ImageDraw.Draw(base).rectangle(band, fill=PAPER)
+
+    total_f = int(frames)
+    for fi in range(total_f):
+        t = fi / max(total_f - 1, 1)
+        p = _ease(max(0.0, min(1.0, t / 0.38)))
+        fr = base.copy()
+        if p > 0:
+            dy = int((1 - p) * 40)
+            lay = Image.new("RGB", (band[2] - band[0], band[3] - band[1]), PAPER)
+            lay.paste(body, (0, dy))
+            fr.paste(Image.blend(fr.crop(band), lay, p), (band[0], band[1]))
+        fr.save(os.path.join(tmp, f"f{fi:04d}.png"))
+
+    return _encode(tmp, "f%04d.png", fps, out_mp4)
+
+
 def point_clip(index, total, name, heading, bullets, out_mp4, frames,
                fps=25, note=None, tmp="_ptmp"):
     """
@@ -417,10 +457,15 @@ def point_clip(index, total, name, heading, bullets, out_mp4, frames,
 
 def stat_card(index, total, name, value, label, out_png="card.png"):
     """One number, as large as it fits. A figure spoken aloud is gone in a
-    second; on screen it is the only thing in the frame."""
+    second; on screen it is the only thing in the frame.
+
+    `total` of 0 (or no name) draws it without the section header, same rule
+    as point_card - a closing scene belongs to no section.
+    """
     img = Image.new("RGB", (W, H), PAPER)
     d = ImageDraw.Draw(img)
-    draw_header(d, index, total, name)
+    if total and name:
+        draw_header(d, index, total, name)
     f, _ = _fit(d, str(value), F_DISPLAY, W - MARGIN * 2, 260, 60)
     lf, ll = _fit(d, label, F_DISPLAY, W - MARGIN * 2, 52, 24, max_lines=2)
 
@@ -430,7 +475,9 @@ def stat_card(index, total, name, value, label, out_png="card.png"):
     vb = d.textbbox((0, 0), str(value), font=f)
     vh = vb[3] - vb[1]
     block = vh + 26 + len(ll) * lf.size * 1.12
-    y = HEAD_H + max(24, (H - HEAD_H - block) / 2 - 20)
+    top = HEAD_H if (total and name) else MARGIN
+    # centre inside the band the captions leave alone, not the whole frame
+    y = top + max(24, (SAFE_BOTTOM - top - block) / 2)
     d.text(((W - _w(d, str(value), f)) / 2, y - vb[1]), str(value),
            font=f, fill=ACCENT)
     y += vh + 26

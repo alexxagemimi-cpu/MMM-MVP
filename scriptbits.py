@@ -115,6 +115,89 @@ BAD = [
     "made a decision that would take twenty years to matter.",
 ]
 
+# ---------------------------------------------------------------------------
+# the one number worth putting on screen
+# ---------------------------------------------------------------------------
+# A figure spoken aloud is gone in a second. On screen, alone and large, it
+# is the most "edited" thing a money video can show - and graphics.stat_card
+# has been sitting in this repo unused the whole time.
+#
+# DIGITS ONLY, and deliberately. "three kinds" is not a statistic, it is a
+# sentence, and a card reading "3" over narration about categories would be
+# noise. A year is not a statistic either - "in 2019 the company changed
+# hands" is context - so bare four-digit years are excluded unless money is
+# attached to them.
+_MONEY = r"[$£€₹]\s?\d[\d,]*(?:\.\d+)?(?:\s?(?:k|m|bn|billion|million|crore|lakh))?"
+_PCT   = r"\d[\d,]*(?:\.\d+)?\s?(?:%|per ?cent)"
+_MULT  = r"\d[\d,]*(?:\.\d+)?\s?(?:x|times)\b"
+_SPAN  = r"\d[\d,]*\s?(?:months?|years?|weeks?|days?|hours?)\b"
+_BIG   = r"\d{1,3}(?:,\d{3})+(?:\.\d+)?"
+
+_NUMBER = re.compile(f"({_MONEY}|{_PCT}|{_MULT}|{_SPAN}|{_BIG})", re.I)
+_YEAR = re.compile(r"^(19|20)\d\d$")
+_DANGLE = {"a", "an", "the", "of", "in", "on", "at", "to", "and", "or",
+           "for", "from", "with", "by", "you", "your", "have", "has",
+           "is", "are", "was", "were", "that", "this", "it", "its"}
+
+
+def headline_number(text, max_label_words=7):
+    """
+    The most striking figure in `text`, with a short label, or None.
+
+    Returns (value, label). The label is the words around the number in its
+    own sentence, trimmed - so the card says what the number IS rather than
+    leaving a bare figure on screen with no referent.
+
+    Ordered by how much a viewer cares: money, then a percentage, then a
+    multiple, then a span of time. Returns None far more often than not, on
+    purpose - the same rule the list extractor follows, because a card built
+    from a number that was not really a statistic is worse than no card.
+    """
+    for sentence in re.split(r"(?<=[.!?])\s+", text or ""):
+        for m in _NUMBER.finditer(sentence):
+            value = m.group(1).strip()
+            if _YEAR.match(value.replace(",", "")):
+                continue
+            # The label is what comes AFTER the number, because that is what
+            # describes it: "60% OF REVENUE", "18 MONTHS OF RUNWAY". Taking
+            # words from both sides spliced the sentence back together with
+            # its own number cut out of the middle and produced captions like
+            # "insurance can eat of revenue before you".
+            after = re.split(r"[,;:]", sentence[m.end():])[0].split()
+            label = " ".join(after[:max_label_words])
+            if not label:
+                label = " ".join(sentence[:m.start()].split()[-max_label_words:])
+            label = re.sub(r"[^A-Za-z0-9 %'-]", " ", label)
+            words = label.split()
+            # Don't end a caption on a dangling word. Cutting at a fixed
+            # length left "of revenue before you have sold a" hanging on its
+            # article, which reads like the text was clipped - because it was.
+            while words and words[-1].lower() in _DANGLE:
+                words.pop()
+            label = " ".join(words).strip()
+            if not label:
+                continue
+            return value.replace(" per cent", "%").replace(" percent", "%"), label
+    return None
+
+
+NUM_GOOD = [
+    ("Rent, salaries and insurance can eat 60% of revenue before you have "
+     "sold a single thing.", "60%"),
+    ("Most companies that fail do it with 18 months of runway still on the "
+     "books.", "18 months"),
+    ("That is $1,200 a month you cannot avoid paying.", "$1,200"),
+    ("A bad month can cost you 3x what a good one does.", "3x"),
+]
+
+NUM_BAD = [
+    "Every cost a business has falls into one of three kinds.",
+    "Fixed costs, variable costs, and one-off costs.",
+    "In 2019 the company changed hands and nothing else changed.",
+    "They do not move when your sales move.",
+]
+
+
 if __name__ == "__main__":
     ok = True
     print("KNOWN-GOOD (a list is really there)\n")
@@ -133,6 +216,25 @@ if __name__ == "__main__":
         ok &= good
         print(f"  {'ok ' if good else 'FAIL'}  {got or '(nothing)'}   "
               f"<- {text[:52]}...")
+
+    print("\nHEADLINE NUMBER (a real statistic is there)\n")
+    for text, want in NUM_GOOD:
+        got = headline_number(text)
+        val = got[0] if got else None
+        good = val == want
+        ok &= good
+        lab = got[1] if got else ""
+        print(f"  {'ok ' if good else 'FAIL'}  {str(val):<12} label: {lab}")
+        if not good:
+            print(f"        wanted {want!r}")
+
+    print("\nHEADLINE NUMBER (no statistic - must find nothing)\n")
+    for text in NUM_BAD:
+        got = headline_number(text)
+        good = got is None
+        ok &= good
+        print(f"  {'ok ' if good else 'FAIL'}  {got or '(nothing)'}   "
+              f"<- {text[:48]}...")
 
     print(f"\n{'ALL PASS' if ok else 'FAILURES ABOVE'}")
     raise SystemExit(0 if ok else 1)

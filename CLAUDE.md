@@ -45,7 +45,7 @@ content**. That is why term cards exist (§4).
 | `topics.py` | Truth gate: do independent sources agree the list is real? | Tested on known good/bad |
 | `youtube.py` | Demand gate: does anyone actually search for this? | Free API, gated on kill rules |
 | `redteam.py` | Attacks the finished script; "not-a-member" is a hard finding | 3/3 runway regression |
-| `scriptbits.py` | Pulls the real lists back out of narration, for drawn cards | 9/9 on good + bad samples |
+| `scriptbits.py` | Pulls real lists and figures back out of narration | 17/17 on good + bad samples |
 | `test_relevance.py` | Stock-relevance check vs tags from REAL runs | 12/12, incl. the retriever |
 | `contact.py` | 12 frames of the finished video on one JPEG, plus measurements | **How faults get found** |
 | `test_engine_local.py` | Runs the REAL engine against REAL ffmpeg locally, ~50s | Passing |
@@ -161,6 +161,12 @@ bullets: already written, already fact-checked, already spoken aloud, so it
 cannot be off-topic. It finds nothing in prose, on purpose — a wrong bullet is
 worse than no bullet.
 
+**4.19 Numbers get their own card.** `scriptbits.headline_number()` finds a
+real figure (money, %, multiple, span) in a scene's narration and
+`graphics.stat_clip` puts it on screen alone and large. Digits only, and years
+excluded — "three kinds" is a sentence, not a statistic, and a card reading
+"3" would be noise. A list beats a number where a scene has both.
+
 **4.18 Every drawn card MOVES.** The section card animates its tick; the
 content cards animate their bullets arriving, one at a time, over the first
 70% of the shot. A card held still for five seconds is the same hole as §4.9
@@ -227,10 +233,13 @@ by reading a real run's log and noticing an explainer being asked for
 asked for "low-key moody lighting, volumetric haze, muted desaturated teal and
 amber" — a description of a commercial. `STYLE=explainer` is now the default.
 
-**5.8 `overview_clip` — built, tested, never imported. Exactly 5.6 again.**
-The animated card existed the whole time while `build()` rendered a still PNG
-instead. This is now a two-time bug: **after writing a module, grep for its
-name and confirm something calls it.**
+**5.8 Modules built, tested, and never imported — FOUR times now.**
+`modes.py` (5.6), then `overview_clip` (an animated card existed the whole
+time while `build()` rendered a still PNG), then `point_card`, then
+`stat_card` — which had its own bug fixes in it and had never once been
+called. The owner found the last one by asking whether the templates were
+actually being used. **After writing a module, grep for its name and confirm
+something calls it.**
 
 **5.9 The term card printed straight through the section card's own list.**
 It slid in and put "GROSS MARGIN" on top of the checklist's GROSS MARGIN row.

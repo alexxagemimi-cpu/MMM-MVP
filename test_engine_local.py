@@ -167,9 +167,13 @@ def main():
          "image_keywords": ["a", "b", "c", "d"]},
         {"scene": 2, "beat": "CATEGORY", "key_term": "fixed costs",
          "key_fact": "They do not move when your sales move",
+         # Deliberately a NUMBER and no list, so the stat-card path is
+         # covered here too. Scene 4 carries the list; this one carries the
+         # figure. Without a fixture like this, stat_card would go on being
+         # the module nothing calls.
          "narration": "Your fixed costs are the ones that do not care how "
-                      "much you sell in a month. Rent, salaries, insurance: "
-                      "a quiet month costs exactly what a busy one does.",
+                      "much you sell in a month. For a small business they "
+                      "eat 60% of revenue before a single sale is made.",
          "image_keywords": ["e", "f", "g"]},
         {"scene": 3, "beat": "CATEGORY", "key_term": "variable costs",
          "key_fact": "They rise and fall with every sale",

@@ -876,6 +876,7 @@ def _draw_shot_card(scene, out_png, section=None, n_sections=0,
             note = fact
 
         recipe = {
+            "kind": "point",
             "index": (section + 1) if headed else 0,
             "total": n_sections if headed else 0,
             "name": section_name if headed else "",
@@ -883,10 +884,41 @@ def _draw_shot_card(scene, out_png, section=None, n_sections=0,
             "bullets": bullets or None,
             "note": note or None,
         }
-        graphics.point_card(out_png=out_png, **recipe)
+        graphics.point_card(out_png=out_png,
+                            **{k: v for k, v in recipe.items()
+                               if k != "kind"})
         return "card", out_png, True, recipe
     except Exception as e:
         print(f"      !! could not draw a card ({str(e)[:60]})", flush=True)
+        return "image", None, False, None
+
+
+def _draw_stat_card(value, label, out_png, section=None, n_sections=0,
+                    section_name=""):
+    """
+    One number, alone and large. graphics.stat_card has existed and been
+    tested since the day this design was written and NOTHING has ever called
+    it - the fourth module in this repo built and left orphaned, after
+    modes.py, overview_clip and point_card. In a money channel a figure
+    filling the frame is about the most edited thing on offer, and it was
+    sitting unused while the engine looked for stock photographs instead.
+    """
+    try:
+        headed = section is not None and section_name
+        recipe = {
+            "kind": "stat",
+            "index": (section + 1) if headed else 0,
+            "total": n_sections if headed else 0,
+            "name": section_name if headed else "",
+            "value": value,
+            "label": label,
+        }
+        graphics.stat_card(out_png=out_png,
+                           **{k: v for k, v in recipe.items() if k != "kind"})
+        return "card", out_png, True, recipe
+    except Exception as e:
+        print(f"      !! could not draw a stat card ({str(e)[:60]})",
+              flush=True)
         return "image", None, False, None
 
 
@@ -1492,6 +1524,17 @@ async def build():
     # question it cannot answer.
     listy = {i for i, s in enumerate(scenes)
              if scriptbits and scriptbits.list_items(s.get("narration") or "")}
+    # A scene with no list but a real figure in it gets that number on
+    # screen instead. The list wins where a scene has both: four things
+    # named is more of the explanation than one number is.
+    statty = {}
+    if scriptbits:
+        for i, sc_ in enumerate(scenes):
+            if i in listy:
+                continue
+            n = scriptbits.headline_number(sc_.get("narration") or "")
+            if n:
+                statty[i] = n
 
     async def do_asset(item):
         i, j, kw, seed, out_stub = item
@@ -1501,18 +1544,27 @@ async def build():
         # would hold for seven seconds without moving, which is the exact
         # failure 4.9 exists to prevent. Three shots means card, list,
         # picture.
-        if j == 1 and i in listy and graphics is not None \
+        if j == 1 and graphics is not None \
+                and (i in listy or i in statty) \
                 and len(shots_per_scene[i]) >= 3:
             sec = section_of.get(i)
-            kind, path, ok, recipe = _draw_shot_card(
-                scenes[i], out_stub + ".png",
-                section=sec, n_sections=len(members),
-                section_name=(members[sec] if sec is not None else ""))
+            common = dict(section=sec, n_sections=len(members),
+                          section_name=(members[sec] if sec is not None
+                                        else ""))
+            if i in listy:
+                kind, path, ok, recipe = _draw_shot_card(
+                    scenes[i], out_stub + ".png", **common)
+                what = ", ".join(scriptbits.list_items(scenes[i]["narration"]))
+            else:
+                value, lab = statty[i]
+                kind, path, ok, recipe = _draw_stat_card(
+                    value, lab, out_stub + ".png", **common)
+                what = f"{value} - {lab}"
             if kind == "card":
                 card_recipes[(i, j)] = recipe
                 asset_paths[i][j] = (kind, path)
-                print(f"      shot scene {i+1} #{j+1} [LIST] | "
-                      f"{', '.join(scriptbits.list_items(scenes[i]['narration']))[:44]}",
+                tag = "LIST" if i in listy else "STAT"
+                print(f"      shot scene {i+1} #{j+1} [{tag}] | {what[:44]}",
                       flush=True)
                 return False, True
 
@@ -1664,13 +1716,17 @@ async def build():
         counts = split_frames(frames_total, len(assets), card_frames)
         for j, (kind, path) in enumerate(assets):
             recipe = card_recipes.get((i, j))
-            if kind != "card" or not recipe or not recipe.get("bullets"):
+            if kind != "card" or not recipe:
                 continue
+            animate = (graphics.stat_clip if recipe["kind"] == "stat"
+                       else graphics.point_clip)
+            if recipe["kind"] == "point" and not recipe.get("bullets"):
+                continue          # nothing to arrive; the still is correct
             try:
                 clip = os.path.join(WORK, f"pt{i:03d}_{j:02d}.mp4")
-                graphics.point_clip(out_mp4=clip, frames=counts[j], fps=FPS,
-                                    tmp=os.path.join(WORK, f"pt{i:03d}{j:02d}"),
-                                    **recipe)
+                animate(out_mp4=clip, frames=counts[j], fps=FPS,
+                        tmp=os.path.join(WORK, f"pt{i:03d}{j:02d}"),
+                        **{k: v for k, v in recipe.items() if k != "kind"})
                 assets[j] = ("cardclip", clip)
             except Exception as e:
                 # the still is already drawn and correct; losing the
@@ -1726,12 +1782,22 @@ async def build():
                     bounds.append(acc)
                 k = next((x for x, b in enumerate(bounds)
                           if at - timeline < b), len(assets) - 1)
-                kind_here = assets[k][0]
+                # A shot is a DRAWN card if it has a recipe. Kind alone can
+                # no longer tell: animating the content cards turned them
+                # into "cardclip", the same kind the section card uses, and
+                # the two need opposite treatment - wait for a section card,
+                # get out of the way of a drawn one. Rendered, that mistake
+                # put the term card straight across "60% OF REVENUE BEFORE A
+                # SINGLE SALE".
+                # NOT named `drawn` - that is the run-wide count of drawn
+                # shots printed in the summary, and shadowing it here made
+                # the summary print a function object. Second time a local
+                # has shadowed a module name in this file today.
+                def is_drawn(x):
+                    return (i, x) in card_recipes
 
-                if kind_here == "cardclip":
-                    # the section card: wait for it (see above)
-                    at = timeline + bounds[k] + 0.15
-                elif kind_here == "card":
+                kind_here = assets[k][0]
+                if is_drawn(k):
                     # A DRAWN CARD is already doing this card's job - it
                     # names the term in large type and prints the same
                     # definition under it. Rendered, the two appeared
@@ -1739,12 +1805,15 @@ async def build():
                     print(f"        (term card for {term!r} skipped - the "
                           f"drawn card already says it)", flush=True)
                     at = None
+                elif kind_here == "cardclip":
+                    # the section card: wait for it (see above)
+                    at = timeline + bounds[k] + 0.15
 
                 # If a DRAWN card starts later in this scene, the term card
                 # comes down when it does.
                 until = next((timeline + bounds[x - 1]
                               for x in range(k + 1, len(assets))
-                              if assets[x][0] == "card"), None)
+                              if is_drawn(x)), None)
 
                 if at is None:
                     pass                 # deliberately suppressed just above
