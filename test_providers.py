@@ -31,6 +31,7 @@ which the real one cannot.
 import os
 import json
 import sys
+import time
 import types
 
 os.environ.setdefault("GEMINI_API_KEY", "")
@@ -294,6 +295,69 @@ def test_precap_avoids_the_round_trip():
     return bad
 
 
+def test_cooldown():
+    line("a provider that is out for the day is not asked again every call")
+    bad = 0
+    B.PROVIDER_COOLDOWN.clear()
+    B.PROVIDER_CHAR_CAP = {}
+    tried = []
+
+    def dead_gemini(prompt, schema, drop_schema):
+        tried.append("gemini")
+        raise RuntimeError("429 RESOURCE_EXHAUSTED. You exceeded your "
+                           "current quota")
+
+    def live_groq(prompt, schema, base_url, key, model, name,
+                  drop_schema=False):
+        tried.append("groq")
+        return '{"ok": true}'
+
+    B._gemini = dead_gemini
+    B._openai_compatible = live_groq
+    B._providers = lambda: [("gemini", None),
+                            ("groq", ("u", "k", "openai/gpt-oss-120b"))]
+
+    # First call pays the wait and discovers gemini is out.
+    B.COOLDOWN_SECONDS = 420
+    real_sleep, B.time.sleep = B.time.sleep, lambda s: None
+    try:
+        B.call("write something", schema={"x": 1}, retries=2)
+        first = list(tried)
+        tried.clear()
+        # Three more calls. Gemini must not be asked again.
+        for _ in range(3):
+            B.call("write something", schema={"x": 1}, retries=2)
+    finally:
+        B.time.sleep = real_sleep
+
+    checks = [
+        ("the first call did try gemini", "gemini" in first),
+        ("it fell through to groq", "groq" in first),
+        ("gemini was parked after that", "gemini" not in tried),
+        ("groq answered all three later calls",
+         tried.count("groq") == 3),
+    ]
+    for what, ok in checks:
+        print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+        bad += not ok
+    print(f"  first call: {first}   next three: {tried}")
+
+    # THE DANGEROUS CASE. If every provider is parked, skipping them all
+    # means the run dies of its own cooldown - a far worse failure than one
+    # more wasted 429. It must try anyway.
+    line("when EVERY provider is cooling off, it still tries")
+    tried.clear()
+    B.PROVIDER_COOLDOWN["gemini"] = time.time() + 999
+    B.PROVIDER_COOLDOWN["groq"] = time.time() + 999
+    got = B.call("write something", schema={"x": 1}, retries=2)
+    ok = got == {"ok": True} and "groq" in tried
+    print(f"  {'ok  ' if ok else 'FAIL'}  did not die of its own cooldown "
+          f"(tried {tried})")
+    bad += not ok
+    B.PROVIDER_COOLDOWN.clear()
+    return bad
+
+
 def test_real_cap_against_run36():
     line("the configured cap vs the size that actually got refused")
     # Run 36: 8,373 tokens requested against a 8,000 limit.
@@ -318,6 +382,7 @@ def main():
     bad += test_413_shrinks_and_succeeds()
     bad += test_json_mode_400()
     bad += test_precap_avoids_the_round_trip()
+    bad += test_cooldown()
     B.PROVIDER_CHAR_CAP = real_cap
     bad += test_real_cap_against_run36()
 

@@ -468,6 +468,23 @@ PROVIDER_CHAR_CAP = {"groq": 16000}
 PROVIDER_USE = {}      # provider name -> times it answered
 TRIMMED_CALLS = [0, 0]  # [calls whose prompt was cut, calls total]
 
+# STOP RE-ASKING A PROVIDER THAT IS OUT FOR THE DAY.
+#
+# Watching run 38: every single call went gemini -> 429 -> wait 20s -> gemini
+# -> 429 -> switch to groq. Forty seconds of pure waiting per call, on a
+# provider whose DAILY quota was already known to be gone, repeated for every
+# call of every pass. The job has a 45-minute cap (4.6), so this is not just
+# untidy - it is minutes taken away from actually building the video.
+#
+# A cooldown, NOT a permanent write-off, and that distinction is the whole
+# design. A per-minute limit genuinely clears and is worth waiting out; a
+# daily quota is not. We cannot always tell which we hit - Gemini's message
+# says only "You exceeded your current quota" - so parking the provider for a
+# few minutes is the honest middle: a per-minute limit is long over by then,
+# and a daily quota stops costing 40s a call.
+PROVIDER_COOLDOWN = {}     # provider -> unix time it may be tried again
+COOLDOWN_SECONDS = 420
+
 
 def shrink(prompt, cap):
     """
@@ -559,7 +576,24 @@ def call(prompt, schema=None, retries=2):
 
 def _call_sweep(prompt, schema, retries, provs):
     last = None
-    for name, conf in provs:
+
+    # Skip providers still cooling off - but NEVER skip all of them. If every
+    # provider is parked the run is over, and a stale cooldown is a far worse
+    # reason to die than one more wasted 429. When they are all cold, try them
+    # all: this is the last chance, not an optimisation.
+    now = time.time()
+    live = [(n, c) for n, c in provs if PROVIDER_COOLDOWN.get(n, 0) <= now]
+    if not live:
+        soonest = min(PROVIDER_COOLDOWN.get(n, 0) for n, _ in provs)
+        print(f"   .. every provider is cooling off (next free in "
+              f"{soonest - now:.0f}s) - trying them all anyway")
+        live = provs
+    elif len(live) < len(provs):
+        parked = [n for n, _ in provs if PROVIDER_COOLDOWN.get(n, 0) > now]
+        print(f"   .. skipping {', '.join(parked)} - out of quota earlier, "
+              f"cooling off")
+
+    for name, conf in live:
         drop_schema = False
         tried_discovery = False
         waited_out_a_limit = False
@@ -709,7 +743,13 @@ def _call_sweep(prompt, schema, retries, provs):
                     time.sleep(wait)
                     continue
                 if rate_limited:
-                    print(f"     -> {name} is rate/quota limited, switching provider")
+                    # It already had its one real wait above and came back
+                    # limited anyway, so this is not a busy minute. Park it,
+                    # rather than paying 40s for the same answer next call.
+                    PROVIDER_COOLDOWN[name] = time.time() + COOLDOWN_SECONDS
+                    print(f"     -> {name} is rate/quota limited, switching "
+                          f"provider and resting it for "
+                          f"{COOLDOWN_SECONDS // 60} min")
                     break
                 time.sleep(4 * (attempt + 1))
         print(f"   .. {name} exhausted, trying next provider")
