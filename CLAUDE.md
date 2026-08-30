@@ -291,6 +291,30 @@ and was never run.** The regression asserts the retry is SMALLER than the
 request that failed; before the fix every request in the sequence was
 byte-identical.
 
+**5.12 "Dropping the schema" never dropped the schema — 5.11's twin, found
+the same afternoon.** With the size fix in, run 37 got further than any run
+ever had on the fallback (`brief: 765 words`, written by Groq) and then died
+one stage later on `HTTP 400: 'messages' must contain the word 'json' ... to
+use 'response_format' of type 'json_object'`. The log said *"dropping
+response_schema, retrying plain JSON"* — and the retry was byte-identical,
+because `drop_schema` was set in `_call_sweep`, printed about, and **never
+passed to `_openai_compatible`**, which set `response_format` whenever
+`schema` was truthy. Underneath was a real Groq rule nobody knew: JSON mode
+is refused unless the literal word "json" appears in the messages. Most
+prompts here say "Reply with JSON"; the *drafting* prompt relies on the
+schema and never says it — so **stage 2 could never have been answered by
+this provider, on any run.** Both now fixed, and the trim reserves 160 chars
+for the appended instruction so the fix that follows the trim cannot defeat
+it. **Look for this shape elsewhere: a flag that is set, logged, and not
+plumbed through is indistinguishable in the log from one that works.**
+
+**A note on how 5.12's test was got wrong first.** The first version of the
+regression faked `_openai_compatible` — the function the fix lives *inside* —
+so the fixed code never ran and the test reported FAIL against a working fix.
+It now fakes `urlopen`, so the real request-building code runs and the exact
+bytes Groq would receive are asserted on. **Testing one layer above the
+change proves nothing about the change.**
+
 **The pattern under most of these:** they shipped because they were reasoned
 about and never *run*, with CI used as the test suite at ~5 minutes a cycle.
 That is what `test_engine_local.py` exists to end.
@@ -372,11 +396,15 @@ artifact host is unreachable, which it is from some sandboxes.
 ## 9. Known-untested / open
 
 - **A script written by the fallback is less grounded than one written by
-  Gemini, and nothing yet says so in the output.** Groq's cap (§5.11) means it
-  sees ~16,000 of research's ~35,000 characters — under half the sources. That
-  is the right trade against a dead run, but a fallback-written script should
-  probably be marked as such so the publish gate and the owner can weigh it.
-  Not built.
+  Gemini.** Groq's cap (§5.11) means it sees ~16,000 of research's ~35,000
+  characters — under half the sources. Right trade against a dead run, but it
+  was invisible. *Now reported:* `script.json` carries `written_by`, and
+  `publishable.caveats` says how many calls were trimmed and which fallback
+  answered. Deliberately **not** a blocker — the owner decides, and a gate
+  that fires on every fallback run is the §4.21 mistake. **What is still
+  open: nobody has yet judged whether a Groq-written script is actually
+  worse, or by how much.** The caveat says "less grounded"; that is reasoning,
+  not a measurement.
 - Whether the quality loop converges within `MAX_PASSES` or always spends the
   budget.
 - Pixabay behaviour across a long video's worth of requests (~45 shots).
