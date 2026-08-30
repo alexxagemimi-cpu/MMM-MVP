@@ -60,7 +60,8 @@ them via `research.py` → read the result pages → write a brief from that
 source text → draft → fact-check against *fresh* searches → revise → validate.
 
 **Video** (`engine.py`): Edge-TTS per scene with real word timings → per shot,
-Pixabay video → Pixabay photo → AI image → slate → render each shot → assemble
+a drawn list card where the script has one, else Pixabay video → Pixabay photo
+→ drawn card → slate → render each shot → assemble
 each scene in ONE ffmpeg pass → concat → burn karaoke captions + term cards,
 mix ducked music, normalise loudness once.
 
@@ -159,6 +160,16 @@ already wrote ("Rent, salaries, insurance, software") and it goes on screen as
 bullets: already written, already fact-checked, already spoken aloud, so it
 cannot be off-topic. It finds nothing in prose, on purpose — a wrong bullet is
 worse than no bullet.
+
+**4.17 A scene with a real list SPENDS a shot showing it.** Not as a fallback
+— as the plan. Two runs in a row drew zero cards: the video filter rejected
+clip after clip and the photo step then found something every single time, so
+the drawn card never once reached the screen while narration listed the four
+things that mattered. Drawing only when Pixabay comes back empty treats the
+card as a failure state; in this niche it is the better answer. Shot index 1
+(right after the section card, where the list is spoken) carries it. **Guarded
+at ≥3 shots** — with two, the scene would be section card + list card, a still
+held ~7s, which is §4.9 again.
 
 **4.14 One thing says a thing once.** The term card is suppressed where a
 drawn card or the checklist already names the term, and clipped to the moment
