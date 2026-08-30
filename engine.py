@@ -636,12 +636,64 @@ GENERIC_TAGS = {
 }
 
 
+# A numeral is never what a film is about. "three" turned up as a subject
+# term on the business-costs script purely because "three kinds" and "all
+# three" recur, and anchoring on it would have meant rejecting every clip in
+# the library for the wrong reason.
+_COUNTING = {"one", "two", "three", "four", "five", "six", "seven", "eight",
+             "nine", "ten", "first", "second", "third", "every", "each",
+             "kinds", "kind", "type", "types", "explained", "means"}
+
+
+def subject_terms(scenes, limit=2):
+    """
+    What the WHOLE video is about, taken from the narration itself.
+
+    A shot keyword describes one moment; it does not say what the film is.
+    Asked for "man wearing high rise jeans", Pixabay returned an Osaka
+    skyline tagged `high rise building, urban, osaka` - a perfect match on
+    "high" and "rise" and nothing whatever to do with jeans. Same run:
+    "ruler measuring front rise" got a chemistry lab, "hand holding denim
+    fabric" got a subway train, and "close up of slim fit denim knee" got a
+    tarantula, because "knee" appears in "red knee poisonous".
+
+    Every one of those has NO `jeans` and NO `denim` tag. Every clip that
+    was actually right has one or both. So the rule is: a clip has to be
+    about the subject of the film, not merely about the words of one query.
+
+    The TWO most frequent such words, not the top six. In a jeans script the
+    frequency order comes out jeans, denim, rise, leg, waist - and "rise" is
+    an ATTRIBUTE, not the subject. Allowing it as an anchor is precisely how
+    `high rise building` gets in. The one or two things a film is actually
+    about are what a clip has to be about too.
+
+    Words that appear in at least half the scenes, which is what a subject
+    does and what a passing detail does not. No model call, no config, and
+    it adapts per video: on the business-expenses script the surviving term
+    is "expenses", so almost nothing in a stock library qualifies and the
+    drawn cards carry the film - which is what section 1 of CLAUDE.md says
+    should happen in that niche anyway.
+    """
+    from collections import Counter
+    n = max(1, len(scenes))
+    seen = Counter()
+    for sc in scenes:
+        text = re.sub(r"[^a-z0-9 ]", " ",
+                      (sc.get("narration") or "").lower())
+        seen.update({w for w in text.split()
+                     if len(w) >= 4 and w not in STOP_WORDS
+                     and w not in GENERIC_TAGS and w not in _COUNTING})
+    need = max(2, round(n * 0.5))
+    ranked = [w for w, c in seen.most_common() if c >= need]
+    return set(ranked[:limit])
+
+
 def _tag_set(hit):
     return {t.strip() for t in (hit.get("tags") or "").lower().split(",")
             if t.strip()}
 
 
-def _relevant(hit, keyword):
+def _relevant(hit, keyword, subject=None):
     """
     Does this clip have anything to do with what was asked for?
 
@@ -683,6 +735,27 @@ def _relevant(hit, keyword):
         # match "frontier", and "stock" must not match "stockholm".
         return any(w == t or w == t + "s" or w + "s" == t
                    or w in t.split() for t in tags)
+
+    # THE SUBJECT ANCHOR. A clip about a different subject is wrong however
+    # well it matches the words of one query - see subject_terms above.
+    if subject and not any(hits(w) for w in subject):
+        return False
+
+    # WITH AN ANCHOR, BEING ABOUT THE SUBJECT IS THE WHOLE TEST.
+    #
+    # The word rules below exist to stop one weak match carrying a clip that
+    # is about something else entirely, and the anchor already settles that
+    # far better. Running them anyway rejected every genuinely good clip in
+    # the run this was built from: "man wearing classic straight fit"
+    # against a photo tagged `jeans, pants, clothing, blue, fashion, fabric,
+    # denim, denim pants` has no word in common with the query at all, and
+    # is exactly the picture that shot wanted.
+    #
+    # Specificity is not lost by this: the query is what Pixabay searched
+    # on, so a jeans-tagged clip returned for "classic straight fit" is
+    # already the library's best answer to that phrase.
+    if subject:
+        return True
 
     matched = [w for w in words if hits(w)]
     strong = [w for w in matched if w not in GENERIC_TAGS]
@@ -754,7 +827,7 @@ def _pixabay_get(endpoint, keyword, extra):
         return json.loads(r.read()).get("hits", [])
 
 
-def fetch_pixabay_video(keyword, out_mp4, seen_ids):
+def fetch_pixabay_video(keyword, out_mp4, seen_ids, subject=None):
     """
     Real stock footage for this keyword, if Pixabay has one. Picks the first
     hit not already used elsewhere in this build, to cut down on the same
@@ -765,7 +838,7 @@ def fetch_pixabay_video(keyword, out_mp4, seen_ids):
     try:
         raw = [h for h in _pixabay_get("videos/", keyword, "&orientation=horizontal")
                if h.get("id") not in seen_ids]
-        hits = [h for h in raw if _relevant(h, keyword)]
+        hits = [h for h in raw if _relevant(h, keyword, subject)]
         if raw and not hits:
             print(f"      !! {len(raw)} clips for {keyword[:34]!r}, none "
                   f"relevant - skipping rather than showing the wrong thing",
@@ -799,14 +872,14 @@ def fetch_pixabay_video(keyword, out_mp4, seen_ids):
         return False
 
 
-def fetch_pixabay_photo(keyword, out_png, seen_ids):
+def fetch_pixabay_photo(keyword, out_png, seen_ids, subject=None):
     """Real stock photo for this keyword, resized like an AI image. Never raises."""
     if not PIXABAY_API_KEY:
         return False
     try:
         raw = [h for h in _pixabay_get("", keyword, "&image_type=photo&orientation=horizontal")
                if h.get("id") not in seen_ids]
-        hits = [h for h in raw if _relevant(h, keyword)]
+        hits = [h for h in raw if _relevant(h, keyword, subject)]
         if not hits:
             return False
         hit = _pick(hits, keyword)
@@ -830,7 +903,7 @@ def fetch_pixabay_photo(keyword, out_png, seen_ids):
 
 
 def fetch_shot_asset(keyword, seed, out_stub, seen_video_ids,
-                     prefer_card=False):
+                     prefer_card=False, subject=None):
     """
     Visual source chain for one shot: Pixabay video -> Pixabay photo ->
     Pollinations AI image -> flat slate. Returns ("video"|"image", path, ok)
@@ -848,10 +921,10 @@ def fetch_shot_asset(keyword, seed, out_stub, seen_video_ids,
     """
     if PIXABAY_API_KEY:
         video_path = out_stub + ".mp4"
-        if fetch_pixabay_video(keyword, video_path, seen_video_ids):
+        if fetch_pixabay_video(keyword, video_path, seen_video_ids, subject):
             return "video", video_path, True
         photo_path = out_stub + ".png"
-        if fetch_pixabay_photo(keyword, photo_path, seen_video_ids):
+        if fetch_pixabay_photo(keyword, photo_path, seen_video_ids, subject):
             return "image", photo_path, True
 
     if prefer_card:
@@ -1550,6 +1623,11 @@ async def build():
     # card, which is where the list is spoken. The rest of the scene still
     # uses footage. This is the one place the engine stops asking Pixabay a
     # question it cannot answer.
+    subject = subject_terms(scenes) if scriptbits else set()
+    if subject:
+        print(f"      subject anchor: {', '.join(sorted(subject))} - a clip "
+              f"has to be about this, not just match the query", flush=True)
+
     listy = {i for i, s in enumerate(scenes)
              if scriptbits and scriptbits.list_items(s.get("narration") or "")}
     # A scene with no list but a real figure in it gets that number on
@@ -1598,7 +1676,7 @@ async def build():
 
         kind, path, ok = await asyncio.to_thread(
             fetch_shot_asset, kw, seed, out_stub, seen_pixabay_ids,
-            prefer_card)
+            prefer_card, subject)
         if kind == "none":
             # NOTHING RELEVANT EXISTS FOR THIS KEYWORD, so put the script's
             # own words on screen. They are already written, already

@@ -89,6 +89,70 @@ CASES = [
 ]
 
 
+# Real pairs from the JEANS run (run 34), tags exactly as logged. The
+# subject anchor is what these test: every clip that was wrong has no
+# `jeans` and no `denim` tag, and every clip that was right has one.
+# What subject_terms() actually returns for this script: the TWO most
+# frequent content words. "rise" ranks third and is deliberately excluded -
+# it is an attribute of jeans, and it is the word that lets `high rise
+# building` in.
+JEANS_SUBJECT = {"jeans", "denim"}
+
+JEANS = [
+    ("man wearing high rise jeans above",
+     "high rise building, urban, osaka, evening, japan",
+     False, "an Osaka skyline - matched 'high' and 'rise', not jeans"),
+    ("ruler measuring front rise from",
+     "measure, science, lab, chemistry, experiment, ruler, measurement",
+     False, "a chemistry lab"),
+    ("hand holding denim fabric swatch",
+     "public transport, subway, train, metro, holding on, hands, grip",
+     False, "a subway train"),
+    ("close up of slim fit denim knee",
+     "bird spider-legs, spider legs, spider, haired, redknee, "
+     "mexican red knee poisonous, crawl",
+     False, "a tarantula - 'knee' appears in 'red knee poisonous'"),
+    ("red levis tab on back pocket of",
+     "letters, letter, loop, transparent, back, plan, color, red, blue",
+     False, "an abstract letters animation"),
+    ("man sitting on bench wearing tapered",
+     "man, bench, sunset, afternoon, trees, forest, netherlands, drenthe",
+     False, "a bench in a forest"),
+
+    ("close up of men jeans size tag",
+     "jeans, trousers, trouser buttons, clothing, blue jeans, blue, "
+     "fashion, detail shot, textiles, seam",
+     True, "actually jeans"),
+    ("man wearing classic straight fit",
+     "jeans, pants, clothing, blue, fashion, fabric, denim, denim pants",
+     True, "actually jeans"),
+    ("measuring denim inseam from crotch",
+     "denim, fabric, texture, blue, trouser, trouser pocket, seam, denim",
+     True, "actually denim"),
+    ("man wearing fitted skinny jeans",
+     "feet, legs, standing, waiting, crossed legs, shoes, sneakers, "
+     "converse, denim pants, blue jeans, urban, jeans",
+     True, "actually jeans"),
+]
+
+
+def jeans_check():
+    width = max(len(k) for k, *_ in JEANS)
+    bad = 0
+    print(f"\nSUBJECT ANCHOR - real pairs from the jeans run")
+    print(f"subject terms: {', '.join(sorted(JEANS_SUBJECT))}\n")
+    print(f"{'keyword':<{width}}  want  got   note")
+    print("-" * (width + 44))
+    for keyword, tags, want, why in JEANS:
+        got = E._relevant({"tags": tags}, keyword, subject=JEANS_SUBJECT)
+        ok = got == want
+        bad += not ok
+        print(f"{keyword:<{width}}  {'pass' if want else 'drop'}  "
+              f"{'pass' if got else 'drop'}  {'' if ok else '<< WRONG '}{why}")
+    print(f"\n{len(JEANS) - bad}/{len(JEANS)} correct")
+    return bad
+
+
 def main():
     width = max(len(k) for k, *_ in CASES)
     bad = 0
@@ -101,7 +165,8 @@ def main():
         print(f"{keyword:<{width}}  {'pass' if want else 'drop'}  "
               f"{'pass' if got else 'drop'}  {'' if ok else '<< WRONG '}{why}")
 
-    print(f"\n{len(CASES) - bad}/{len(CASES)} correct")
+    bad += jeans_check()
+    print(f"\n{len(CASES) + len(JEANS) - bad}/{len(CASES) + len(JEANS)} correct overall")
     if bad:
         print("A wrong 'pass' puts an unrelated picture on screen.\n"
               "A wrong 'drop' costs a usable clip and draws a card instead - "

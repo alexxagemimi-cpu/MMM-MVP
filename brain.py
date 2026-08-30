@@ -437,10 +437,33 @@ def call(prompt, schema=None, retries=2):
         raise RuntimeError("No LLM provider configured (need GEMINI_API_KEY, "
                            "CEREBRAS_API_KEY or GROQ_API_KEY)")
 
+    # TWO SWEEPS OF THE WHOLE CHAIN, not one.
+    #
+    # On the first real AI run every provider failed inside the same minute -
+    # Gemini answered 503 "high demand" twice, Groq answered 400 then 429 -
+    # and one bad minute cost three of four revision passes. The script
+    # shipped with 28 unverified claims because the loop that would have
+    # fixed them could not make a single call. Both of those errors clear on
+    # their own; nothing about them justified abandoning the run.
+    last = None
+    for sweep in range(2):
+        if sweep:
+            print("   .. every provider failed this minute - waiting 45s and "
+                  "trying the whole chain once more", flush=True)
+            time.sleep(45)
+        try:
+            return _call_sweep(prompt, schema, retries, provs)
+        except RuntimeError as e:
+            last = e
+    raise RuntimeError(f"All LLM providers failed twice. Last error: {last}")
+
+
+def _call_sweep(prompt, schema, retries, provs):
     last = None
     for name, conf in provs:
         drop_schema = False
         tried_discovery = False
+        waited_out_a_limit = False
         model = conf[2] if conf else None
         for attempt in range(retries):
             try:
@@ -508,12 +531,30 @@ def call(prompt, schema=None, retries=2):
                     print(f"     -> {name} offers no alternative model "
                           f"(key invalid, or everything blocked)")
 
-                # A per-minute token limit DOES clear, unlike a daily quota, so
-                # it is worth one short wait before abandoning the provider.
-                if rate_limited and "per day" not in msg.lower() and attempt == 0:
-                    print(f"     -> {name} rate limited; waiting 20s "
-                          f"(a per-minute limit clears, a daily one does not)")
-                    time.sleep(20)
+                # 503 / UNAVAILABLE / "high demand" is the provider being
+                # busy, not the request being wrong. It was falling through
+                # to the generic 4-second backoff and burning the provider's
+                # whole budget in twelve seconds.
+                overloaded = ("503" in msg or "UNAVAILABLE" in msg
+                              or "high demand" in msg.lower()
+                              or "overloaded" in msg.lower())
+
+                # A per-minute token limit DOES clear, unlike a daily quota,
+                # so it is worth one real wait before abandoning a provider.
+                #
+                # Keyed on "have we waited yet", NOT on attempt == 0. Groq
+                # spent attempt 0 on an unrelated schema-validation 400, so
+                # when the 429 arrived on attempt 1 this branch was already
+                # unreachable and the provider was dropped without ever
+                # waiting the limit out.
+                transient = overloaded or (rate_limited
+                                           and "per day" not in msg.lower())
+                if transient and not waited_out_a_limit:
+                    waited_out_a_limit = True
+                    wait = 20 if rate_limited else 30
+                    print(f"     -> {name} is busy, not broken; waiting "
+                          f"{wait}s and trying again")
+                    time.sleep(wait)
                     continue
                 if rate_limited:
                     print(f"     -> {name} is rate/quota limited, switching provider")
@@ -1341,7 +1382,42 @@ def main():
     print(f"   density  : {final_m['fact_density']} anchors/100w "
           f"| rhythm sd {final_m['sent_len_sd']} | tells {final_m['ai_tells']}")
     print(f"   unresolved: {len(grade(final_m))} craft, {len(fact_bad)} fact")
+
+    # IS THIS SHIPPABLE, and if not, say so where it cannot be missed.
+    #
+    # The first real run ended with 28 claims the fact-checker could not
+    # confirm - including invented-looking precision like "a front rise under
+    # eight inches" - and announced it in one grey line between two other
+    # numbers. A polished video full of unverified measurements is the
+    # runway bug wearing a better suit, and it is worse than no video,
+    # because it is the version a viewer believes.
+    #
+    # The run is NOT failed over it. The owner's own rule is that a human
+    # decides what gets published; the job here is to make sure they decide
+    # knowing this, not to decide for them.
+    blockers = []
+    if fact_bad:
+        blockers.append(f"{len(fact_bad)} claim(s) the fact-check could not "
+                        f"confirm against fresh sources")
+    # rt_findings is a LIST of finding dicts, not a dict keyed by severity.
+    hard_left = [f for f in (rt_findings or [])
+                 if f.get("severity") == "hard"]
+    if hard_left:
+        blockers.append(f"{len(hard_left)} unfixed HARD red-team finding(s): "
+                        + ", ".join(sorted({f.get("kind", "?")
+                                            for f in hard_left})))
+    if not VERIFIED_MEMBERS:
+        blockers.append("no verified member list - nothing checked that the "
+                        "categories explained are really members of the topic")
+    data["publishable"] = {"ok": not blockers, "blockers": blockers}
+
     print("=" * 64)
+    if blockers:
+        print("!! NOT READY TO PUBLISH")
+        for b in blockers:
+            print(f"   - {b}")
+        print("   The video will still build so it can be looked at.")
+        print("=" * 64)
     for s in data["scenes"]:
         print(f"   {s['scene']:>2}. [{s.get('beat','?')[:10]:<10}] "
               f"{len(s['narration'].split()):>4}w  "

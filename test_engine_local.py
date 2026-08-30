@@ -113,7 +113,7 @@ def main():
     # decides what most of a money/business video actually looks like - was
     # never executed by this test. Keywords are stable strings, so which ones
     # fail is deterministic and the build stays reproducible.
-    def fake_video(keyword, out_mp4, seen):
+    def fake_video(keyword, out_mp4, seen, subject=None):
         if sum(ord(c) for c in keyword) % 2:
             return False                 # "nothing relevant for this one"
         src = pool[abs(hash(keyword)) % len(pool)]
@@ -141,7 +141,7 @@ def main():
     E.TARGET_SHOT_SEC = 3.4
 
     E.fetch_pixabay_video = fake_video
-    E.fetch_pixabay_photo = lambda k, o, s: False
+    E.fetch_pixabay_photo = lambda k, o, s, subj=None: False
     E.fetch_image = lambda k, sd, o: False
     E.synth = fake_synth
 
