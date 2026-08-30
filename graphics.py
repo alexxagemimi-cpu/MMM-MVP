@@ -64,9 +64,18 @@ OUT_W, OUT_H = _RES.get(os.environ.get("RESOLUTION", "540").strip(),
                         (960, 540))
 
 
-def _out(img, path):
-    """Save at the output size. The only place the two spaces meet."""
-    if (OUT_W, OUT_H) != (W, H):
+def _out(img, path, design=False):
+    """Save at the output size. The only place the two spaces meet.
+
+    `design=True` saves at the DESIGN size instead, for the intermediate
+    images the clip builders composite from. They measure in design
+    coordinates - _layout, the bullet boxes, the header band - so handing
+    them an already-shrunk card makes every crop land in the wrong place.
+    Seen on a 540p CI frame: black rectangles down the right of the opening
+    card, two rows boxed red at once, rows printed over each other. The
+    clips are scaled once at encode time instead.
+    """
+    if not design and (OUT_W, OUT_H) != (W, H):
         img = img.resize((OUT_W, OUT_H), Image.Resampling.LANCZOS)
     img.save(path)
     return path
@@ -207,13 +216,14 @@ def section_overlay(index, total, name, out_png):
     img.paste(plate, (0, 0))
     d = ImageDraw.Draw(img)
     draw_header(d, index, total, name)
-    return _out(img, out_png)
+    return _out(img, out_png, design)
 
 
 # ---------------------------------------------------------------------------
 # cards
 # ---------------------------------------------------------------------------
-def overview_card(items, current=None, eyebrow=None, out_png="card.png"):
+def overview_card(items, current=None, eyebrow=None, out_png="card.png",
+                  design=False):
     """
     EVERY item at once, numbered, with the finished ones ticked and the
     current one boxed in red.
@@ -282,11 +292,11 @@ def overview_card(items, current=None, eyebrow=None, out_png="card.png"):
                    fill=INK if strong else MUTED)
             ly += f.size * 1.08
 
-    return _out(img, out_png)
+    return _out(img, out_png, design)
 
 
 def point_card(index, total, name, heading, bullets=None, note=None,
-               out_png="card.png", boxes_out=None):
+               out_png="card.png", boxes_out=None, design=False):
     """A section's own page: the persistent header, one heading, a few short
     lines. This is what carries an explanation when no real artifact exists.
 
@@ -359,7 +369,7 @@ def point_card(index, total, name, heading, bullets=None, note=None,
         for ln in nl:
             d.text((MARGIN, ny), ln, font=nf, fill=MUTED)
             ny += int(nf.size * 1.3)
-    return _out(img, out_png)
+    return _out(img, out_png, design)
 
 
 def stat_clip(index, total, name, value, label, out_mp4, frames, fps=25,
@@ -375,7 +385,7 @@ def stat_clip(index, total, name, value, label, out_mp4, frames, fps=25,
     """
     os.makedirs(tmp, exist_ok=True)
     full_p = os.path.join(tmp, "_full.png")
-    stat_card(index, total, name, value, label, full_p)
+    stat_card(index, total, name, value, label, full_p, design=True)
     with Image.open(full_p) as im:
         full = im.convert("RGB").copy()
 
@@ -427,7 +437,7 @@ def point_clip(index, total, name, heading, bullets, out_mp4, frames,
     boxes = []
     full_p = os.path.join(tmp, "_full.png")
     point_card(index, total, name, heading, bullets, note, full_p,
-               boxes_out=boxes)
+               boxes_out=boxes, design=True)
     with Image.open(full_p) as im:
         full = im.convert("RGB").copy()
 
@@ -478,7 +488,8 @@ def point_clip(index, total, name, heading, bullets, out_mp4, frames,
     return _encode(tmp, "f%04d.png", fps, out_mp4)
 
 
-def stat_card(index, total, name, value, label, out_png="card.png"):
+def stat_card(index, total, name, value, label, out_png="card.png",
+              design=False):
     """One number, as large as it fits. A figure spoken aloud is gone in a
     second; on screen it is the only thing in the frame.
 
@@ -507,7 +518,7 @@ def stat_card(index, total, name, value, label, out_png="card.png"):
     for ln in ll:
         d.text(((W - _w(d, ln, lf)) / 2, y), ln.upper(), font=lf, fill=INK)
         y += lf.size * 1.12
-    return _out(img, out_png)
+    return _out(img, out_png, design)
 
 
 # ---------------------------------------------------------------------------
@@ -592,7 +603,7 @@ def overview_clip(items, current, out_mp4, seconds=4.0, fps=25, eyebrow=None,
     items = [i.strip() for i in items if i and i.strip()]
     os.makedirs(tmp, exist_ok=True)
     full_p = os.path.join(tmp, "_full.png")
-    overview_card(items, current, eyebrow, full_p)
+    overview_card(items, current, eyebrow, full_p, design=True)
     with Image.open(full_p) as im:
         full = im.convert("RGB").copy()
 
@@ -656,8 +667,8 @@ def advance_clip(items, current, out_mp4, frames, fps=25, eyebrow=None,
 
     before_p = os.path.join(tmp, "_a.png")
     after_p = os.path.join(tmp, "_b.png")
-    overview_card(items, previous, eyebrow, before_p)
-    overview_card(items, current, eyebrow, after_p)
+    overview_card(items, previous, eyebrow, before_p, design=True)
+    overview_card(items, current, eyebrow, after_p, design=True)
     with Image.open(before_p) as im:
         before = im.convert("RGB").copy()
     with Image.open(after_p) as im:
