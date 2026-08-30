@@ -38,6 +38,8 @@ difference matters enormously in what comes back.
 import re
 import json
 
+import modes
+
 FLUFF = [
     "it's important to note", "it is important to note", "let's dive in",
     "buckle up", "delve", "testament to", "game-changer", "game changer",
@@ -114,9 +116,27 @@ def check(script, verified_members=None, max_grade=9.5):
     # --- membership: the check that would have caught "runway" ------------
     if verified_members:
         allowed = {_norm_member(m) for m in verified_members}
+        # If the script carries no beats at all, we cannot tell which scenes
+        # claim to be items - so check every one. Skipping them all would
+        # turn a missing field into a silently disabled safety check, which
+        # is the worse failure by a long way: a false "not-a-member" costs a
+        # revision pass, a missed one puts a wrong item on screen.
+        beat_aware = any(modes.beat_of(s) for s in scenes)
+
+        def claims_membership(s):
+            return modes.is_member(s) if beat_aware else True
         for i, s in enumerate(scenes, 1):
             term = (s.get("key_term") or "").strip()
             if not term:
+                continue
+            # ONLY scenes that claim to be items. A CLOSE beat naming
+            # "runway" is not a taxonomy error - it is a closing scene doing
+            # its job, and flagging it produced a HARD finding the writer
+            # could only satisfy by deleting a legitimate ending. The bug
+            # was never that runway was mentioned; it was that runway was
+            # LISTED. Same rule the engine uses to build the on-screen
+            # checklist, which is why it lives in modes.py.
+            if not claims_membership(s):
                 continue
             k = _norm_member(term)
             if not k:
@@ -134,6 +154,8 @@ def check(script, verified_members=None, max_grade=9.5):
                 })
         covered = set()
         for s in scenes:
+            if not claims_membership(s):
+                continue
             k = _norm_member(s.get("key_term") or "")
             for a in allowed:
                 if k and (k == a or k in a or a in k):
@@ -255,29 +277,70 @@ def report(findings):
 
 
 if __name__ == "__main__":
+    # THE RUNWAY REGRESSION, in both directions.
+    #
+    # The owner caught a video that listed runway as a type of business
+    # expense. Every sentence about runway was true; it simply is not an
+    # expense. So the check has to fire when runway is presented as one of
+    # the items - and must NOT fire when runway is the closing scene, which
+    # is a legitimate thing for a video about costs to end on. Getting only
+    # the first half right produces a hard finding the writer can satisfy
+    # only by deleting a good ending.
+    members = ["fixed costs", "variable costs", "semi-variable costs"]
+
     GOOD = {"scenes": [
-        {"scene": 1, "key_term": "fixed costs",
+        {"scene": 1, "beat": "CATEGORY", "key_term": "fixed costs",
          "narration": "Fixed costs stay the same no matter how much you sell. "
                       "Rent is one. So is insurance. A slow month costs you "
                       "exactly what a busy one does."},
-        {"scene": 2, "key_term": "variable costs",
+        {"scene": 2, "beat": "CATEGORY", "key_term": "variable costs",
          "narration": "Variable costs move with every sale. Materials, "
                       "packaging, delivery. Sell nothing and you pay almost "
-                      "nothing."}]}
+                      "nothing."},
+        {"scene": 3, "beat": "CATEGORY", "key_term": "semi-variable costs",
+         "narration": "Semi-variable costs have a base you pay whatever "
+                      "happens, plus a part that grows as you sell more. A "
+                      "phone plan with an included allowance is one."},
+        {"scene": 4, "beat": "CLOSE", "key_term": "runway",
+         "narration": "Add all three against your cash and you get runway: "
+                      "the months you have left at your current burn."}]}
+
     BAD = {"scenes": [
-        {"scene": 1, "key_term": "fixed costs",
+        {"scene": 1, "beat": "CATEGORY", "key_term": "fixed costs",
          "narration": "It is important to note that fixed costs, which might "
                       "possibly be considered somewhat foundational, play a "
                       "crucial role in the ever-evolving landscape of "
                       "commercial operations and could arguably be utilized "
                       "to facilitate an optimal methodology."},
-        {"scene": 2, "key_term": "runway",
+        {"scene": 2, "beat": "CATEGORY", "key_term": "runway",
          "narration": "Runway is how many months of cash you have left at "
                       "your current burn rate."}]}
-    members = ["fixed costs", "variable costs", "semi-variable costs"]
-    for name, s in (("CLEAN SCRIPT", GOOD), ("BAD SCRIPT", BAD)):
-        print(f"\n{name}   reading grade "
+
+    # No beats at all: the check must still run on every scene rather than
+    # silently disabling itself because a field is missing.
+    NOBEATS = {"scenes": [
+        {"scene": 1, "key_term": "fixed costs", "narration": "Fixed costs "
+         "stay the same no matter how much you sell."},
+        {"scene": 2, "key_term": "runway", "narration": "Runway is months of "
+         "cash left at the current burn rate."}]}
+
+    ok = True
+    for name, s, want_member_finding in (
+            ("GOOD  (runway is the CLOSE)", GOOD, False),
+            ("BAD   (runway listed as a TYPE)", BAD, True),
+            ("NOBEATS (field missing entirely)", NOBEATS, True)):
+        findings = check(s, members)
+        member_hits = [f for f in findings if f["kind"] == "not-a-member"]
+        got = bool(member_hits)
+        good = got == want_member_finding
+        ok &= good
+        print(f"\n{name}")
+        print(f"  reading grade "
               f"{reading_grade(' '.join(x['narration'] for x in s['scenes']))}")
-        txt, hard = report(check(s, members))
-        print(" ", txt.replace("\n", "\n "))
-        print(f"  -> {'PASS' if hard == 0 else 'BLOCKED, ' + str(hard) + ' hard'}")
+        txt, hard = report(findings)
+        print("  " + txt.replace("\n", "\n  "))
+        print(f"  not-a-member fired: {got}, wanted {want_member_finding}"
+              f"  {'ok' if good else '<< WRONG'}")
+
+    print(f"\n{'ALL PASS' if ok else 'FAILURES ABOVE'}")
+    raise SystemExit(0 if ok else 1)

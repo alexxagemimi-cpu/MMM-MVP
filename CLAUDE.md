@@ -44,7 +44,7 @@ content**. That is why term cards exist (§4).
 | `scout.py` | Chooses the topic: 20 candidates → triage → demand → truth gate | 6 model calls, not 21 |
 | `topics.py` | Truth gate: do independent sources agree the list is real? | Tested on known good/bad |
 | `youtube.py` | Demand gate: does anyone actually search for this? | Free API, gated on kill rules |
-| `redteam.py` | Attacks the finished script; "not-a-member" is a hard finding | Wired into brain.py |
+| `redteam.py` | Attacks the finished script; "not-a-member" is a hard finding | 3/3 runway regression |
 | `scriptbits.py` | Pulls the real lists back out of narration, for drawn cards | 9/9 on good + bad samples |
 | `test_relevance.py` | Stock-relevance check vs tags from REAL runs | 12/12, incl. the retriever |
 | `contact.py` | 12 frames of the finished video on one JPEG, plus measurements | **How faults get found** |
@@ -395,15 +395,39 @@ and STEP beats are list items now (§4.11), and both test fixtures — which had
 the same fault, written by this project's own author — are corrected, with
 runway deliberately left on the CLOSE as the regression test.
 
-*Still open:* nothing checks that a **CATEGORY scene the model wrote** is
-genuinely a member of the category. If the writer invents a fourth type of
-expense and labels it CATEGORY, it goes on the list. `topics.py` gates the
-*topic*; `redteam.py` attacks the *script*; neither of them holds the
-verified membership list from research and diffs the scenes against it.
-`brain.py` has a `VERIFIED_MEMBERS` global for exactly this and it is still
-an empty list. **That is the remaining work, and it is the highest-value
-thing left in the whole project** — a viewer who looks it up and finds the
-video is wrong is worse than a video that looks cheap.
+*Still open, and the description here was WRONG until now.* `VERIFIED_MEMBERS`
+was described as "still an empty list". It is not — `choose_topic()` fills it
+from `topics.assess()`, `redteam.check()` holds every scene to it, and a
+not-a-member finding is HARD and blocks the revision loop. All of that was
+built and wired.
+
+The real hole was narrower and worse: **`choose_topic()` returned early when a
+topic was supplied**, so `VERIFIED_MEMBERS` stayed empty and the entire
+apparatus silently did nothing — on exactly the path the owner uses when they
+pick a topic themselves, which is the path the runway video was made on. A
+given topic now gets its membership established too. It is **not** rejected if
+the sources disagree — the owner's choice is theirs — but the run says so
+loudly instead of quietly skipping.
+
+Second fault, found while fixing the first: the check flagged **every** scene's
+`key_term`, so a CLOSE beat naming "runway" produced a HARD finding the writer
+could only satisfy by deleting a legitimate ending. Only member beats are
+checked now (§4.11), with the beat rules moved to `modes.py` so the engine, the
+red team and brain cannot drift apart. If a script carries no beats at all the
+check falls back to testing every scene — a missing field must never silently
+disable a safety check.
+
+`python3 redteam.py` is the regression, in both directions: runway as a CLOSE
+must pass, runway as a CATEGORY must be blocked, and a script with no beats
+must still be checked. 3/3.
+
+*What is genuinely left:* the members come from `topics.assess()`, which needs
+model calls and sources. When that cannot run — quota, no sources — the list is
+empty and the check no-ops. It now prints when that happens, so it is visible
+rather than silent, but a run with an exhausted quota still has no membership
+guarantee. **Nothing has yet been observed catching a real invented member on a
+live run**, because every run since has been engine-only. That is the next
+thing to confirm.
 
 ---
 

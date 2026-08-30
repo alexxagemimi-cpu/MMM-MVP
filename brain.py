@@ -1096,7 +1096,44 @@ def choose_topic():
     """
     global TOPIC, MODE, VERIFIED_MEMBERS
     if TOPIC:
+        # A GIVEN TOPIC STILL GETS ITS MEMBERSHIP ESTABLISHED.
+        #
+        # This branch used to return here, and that is the whole reason the
+        # membership check has never once fired in anger. Everything
+        # downstream - redteam's not-a-member finding, the writer being told
+        # what the real members are, the revision loop refusing to ship -
+        # is gated on VERIFIED_MEMBERS being non-empty, and it was only ever
+        # filled in on the scout path. Hand a topic in, which is what
+        # happens whenever the owner picks one, and the entire apparatus
+        # silently did nothing. That is the path the runway video was made on.
+        #
+        # The topic is NOT rejected if the check fails. The owner chose it,
+        # and their choice is theirs; the check exists to find out what the
+        # real members ARE, not to veto. A failed check is reported loudly
+        # and the run continues with no verified list - exactly as before,
+        # but now visibly rather than silently.
         print(f"[0/6] topic given: {TOPIC}")
+        MODE = MODE or modes.detect_mode(TOPIC)
+        try:
+            import topics
+            v = topics.assess(TOPIC, call, web.gather)
+            if v.get("checked"):
+                VERIFIED_MEMBERS = v.get("members") or []
+                if VERIFIED_MEMBERS:
+                    print(f"      members  : {', '.join(VERIFIED_MEMBERS)}")
+                    print(f"      agreement: {v.get('agreement')}")
+                if not v.get("build"):
+                    print("      !! sources do NOT agree this topic has one "
+                          "settled answer:")
+                    for r in v.get("reasons", [])[:3]:
+                        print(f"         - {r}")
+                    print("      building it anyway because it was asked for "
+                          "- but the script is more likely to invent a list.")
+            else:
+                print("      !! could not check membership (not a rejection): "
+                      f"{'; '.join(v.get('reasons', []))[:150]}")
+        except Exception as e:
+            print(f"      !! membership check failed to run - {str(e)[:120]}")
         return
 
     import scout

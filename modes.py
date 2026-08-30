@@ -49,6 +49,37 @@ _STORY = re.compile(
     r'the story of|scandal|disaster|mystery|untold)\b', re.I)
 
 
+# WHICH BEATS ARE ITEMS IN THE LIST THE VIDEO IS LISTING.
+#
+# This lives here because this file is where the beats are defined, and
+# because three separate modules were about to answer the question for
+# themselves: the engine (which scenes go on the on-screen checklist), the
+# red team (which scenes have to be members of the verified category), and
+# brain (which scenes the writer must justify). Three copies of a rule this
+# load-bearing would drift, and the drift would be silent.
+#
+# CATEGORY is "one scene per type" in an explainer; STEP is "one scene per
+# step" in a guide. Nothing else is an item. RUNWAY reached the screen as a
+# type of business expense because it was the CLOSE - a scene that sums up
+# and sends the viewer off is not a member of the taxonomy, and neither is
+# the opening ANSWER, the FRAME, the EDGE case or the APPLY.
+MEMBER_BEATS  = {"CATEGORY", "STEP"}
+CLOSING_BEATS = {"CLOSE", "RESONANCE"}
+
+
+def beat_of(scene):
+    return (scene.get("beat") or "").strip().upper()
+
+
+def is_member(scene):
+    """Does this scene claim to BE one of the things being listed?"""
+    return beat_of(scene) in MEMBER_BEATS
+
+
+def is_closing(scene):
+    return beat_of(scene) in CLOSING_BEATS
+
+
 def detect_mode(topic):
     """
     Topic string -> "story" | "explainer" | "guide".
