@@ -363,15 +363,25 @@ def point_clip(index, total, name, heading, bullets, out_mp4, frames,
     os.makedirs(tmp, exist_ok=True)
     boxes = []
     full_p = os.path.join(tmp, "_full.png")
-    base_p = os.path.join(tmp, "_base.png")
     point_card(index, total, name, heading, bullets, note, full_p,
                boxes_out=boxes)
-    # the same card with nothing under the rule yet
-    point_card(index, total, name, heading, None, None, base_p)
     with Image.open(full_p) as im:
         full = im.convert("RGB").copy()
-    with Image.open(base_p) as im:
-        base = im.convert("RGB").copy()
+
+    # The "nothing has arrived yet" card is the finished card with the bullet
+    # rows PAINTED OUT, not a second render with bullets=None.
+    #
+    # A second render is a different card: point_card gives the heading one
+    # line when bullets follow it and two when they do not, so the base came
+    # back with a two-line heading and the composite showed its second line -
+    # "PLANNING" - sitting behind the first bullet on a real CI frame.
+    # Deriving the base from the full image makes the two layouts identical
+    # by construction, which removes the failure rather than correcting its
+    # arithmetic.
+    base = full.copy()
+    bd = ImageDraw.Draw(base)
+    for box in boxes:
+        bd.rectangle(box, fill=PAPER)
 
     if not boxes:
         # nothing to animate - a still is the honest answer
