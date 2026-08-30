@@ -281,6 +281,24 @@ jobs:
           python contact.py final_video.mp4 contact_sheet.jpg \
             ${{ github.event.inputs.log_frames == 'true' && '--b64' || '' }}
 
+      # A MODEL WATCHES THE FINISHED VIDEO.
+      #
+      # Every other gate in this pipeline reads text. Once pixels exist
+      # nothing looked at them, and this project has shipped a missing
+      # header, a five-second frozen card and animations composited at the
+      # wrong coordinates - all invisible in a green log.
+      #
+      # Gemini takes real video on the free tier; Groq's vision is images
+      # only, so it cannot do this job. Allowed to fail: a check that could
+      # not run is not a verdict, and is certainly not worth failing a
+      # fifteen-minute render over.
+      - name: Watch the finished video
+        continue-on-error: true
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          VERIFY_MODEL: ${{ vars.VERIFY_MODEL || 'gemini-3.6-flash' }}
+        run: python verify.py final_video.mp4 script.json
+
       - name: Disk report
         if: always()
         run: df -h / | tail -1
@@ -294,6 +312,7 @@ jobs:
             final_video.mp4
             thumbnail.png
             contact_sheet.jpg
+            verify.json
             subtitles.srt
             captions.ass
           if-no-files-found: warn

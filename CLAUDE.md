@@ -47,6 +47,7 @@ content**. That is why term cards exist (§4).
 | `redteam.py` | Attacks the finished script; "not-a-member" is a hard finding | 3/3 runway regression |
 | `scriptbits.py` | Pulls real lists and figures back out of narration | 17/17 on good + bad samples |
 | `test_relevance.py` | Stock-relevance check vs tags from REAL runs | 12/12, incl. the retriever |
+| `verify.py` | A model WATCHES the finished video and reports edit faults | 9/9 offline; unproven live |
 | `contact.py` | 12 frames of the finished video on one JPEG, plus measurements | **How faults get found** |
 | `test_engine_local.py` | Runs the REAL engine against REAL ffmpeg locally, ~50s | Passing |
 | `.github/workflows/factory.yml` | The workflow. Has a no-AI engine-only test mode | Stable |
@@ -313,6 +314,7 @@ until July 2026), which is why every model id is an env var.
     python3 scriptbits.py            # list extractor vs known-good/known-bad
     python3 test_relevance.py        # stock relevance vs real logged tags
     python3 redteam.py               # runway regression, both directions
+    python3 test_verify.py           # video-verifier logic, no network
     python3 contact.py final_video.mp4   # LOOK at what was just built
 
 Workflow test mode: run with `skip_brain_test_fixture=true` to render a
@@ -337,6 +339,8 @@ artifact host is unreachable, which it is from some sandboxes.
 - Music still does not fit or vary; one bed for the whole video.
 - Still no **diagrams**. The owner asked for them explicitly. Cards carry
   words and lists; nothing yet draws a *relationship* between two things.
+- `verify.py` has never run against a real video - it needs a live run with
+  Gemini quota. Its parsing is tested; its usefulness is not.
 - Nothing yet judged by the owner as publishable. That is the real bar.
 
 ---
