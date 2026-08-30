@@ -2,7 +2,7 @@
 """
 engine.py — MMM Factory video assembler.
 
-Reads script.json, produces final_video.mp4 (720p / 25fps).
+Reads script.json, produces final_video.mp4 (540p by default, 25fps).
 
 Pipeline:
   per scene : Edge-TTS voice (+ word timings) -> up to SHOTS_MAX visuals,
@@ -74,14 +74,30 @@ except Exception as _e:                       # pragma: no cover
 # ----------------------------------------------------------------------------
 VOICE       = os.environ.get("VOICE", "en-US-GuyNeural")
 PIXABAY_API_KEY = os.environ.get("PIXABAY_API_KEY", "").strip()
-W, H, FPS   = 1280, 720, 25
+# OUTPUT SIZE. One env var, because graphics.py has to agree with it - the
+# cards are drawn at exactly this size and handed to ffmpeg without a scale
+# filter, so a mismatch would letterbox or crop every card in the video.
+#
+# 540p is 960x540: exactly half of 1080p and three quarters of 720p, which
+# keeps every layout number in this project a clean multiple. "520p" is not
+# a real format - there is no such standard - and picking a non-standard
+# height would make ffmpeg pad to an even number anyway.
+_RES = {"1080": (1920, 1080), "720": (1280, 720),
+        "540": (960, 540), "480": (854, 480)}
+W, H = _RES.get(os.environ.get("RESOLUTION", "540").strip(), (960, 540))
+FPS  = int(os.environ.get("FPS", "25"))
 SS          = 1.5                     # supersample factor for Ken Burns
-KB_W, KB_H  = int(W * SS), int(H * SS)   # 1920x1080
+KB_W, KB_H  = int(W * SS), int(H * SS)
 FETCH_W     = 1920                    # what we ask Pollinations for
 FETCH_H     = 1080
 
 CRF_SCENE, PRESET_SCENE = "18", "superfast"
-CRF_FINAL, PRESET_FINAL = "20", "medium"
+# CRF is the second size lever after resolution, and the one with the better
+# ratio: dropping 720p to 540p removes ~25% of the bytes, +2 CRF removes a
+# similar amount again without changing the frame. Env-overridable so the
+# trade can be measured on a real run rather than argued about.
+CRF_FINAL  = os.environ.get("CRF_FINAL", "20")
+PRESET_FINAL = "medium"
 
 MUSIC_FILE  = "assets/music.mp3"      # optional; a bed is synthesised if absent
 MUSIC_GAIN  = 0.20
@@ -404,14 +420,26 @@ def ass_ts(t):
 # unreadable on a phone, which is where most of this audience watches. 40 is
 # ~5.5% of height, in line with what explainer channels actually run, and it
 # is raised off the bottom edge so it does not fight the player's own chrome.
-CAP_SIZE      = 40
-CAP_MARGIN_V  = 64            # bottom of the caption block to frame bottom
-TERM_SIZE     = 34
-TERM_PAD      = 10            # BorderStyle=3: "Outline" is box padding
-TERM_Y        = 496           # ABSOLUTE baseline y - see the \\move note below
-TERMSUB_SIZE  = 20
-TERMSUB_PAD   = 8
-TERMSUB_MRG_V = 178
+# Written in 1280x720 units like graphics.py and scaled to the output size,
+# so a caption stays the same PROPORTION of the frame at any resolution. The
+# numbers were chosen against frame height - 40 is ~5.5% of 720 - and that
+# ratio is what matters, not the pixel count. Left unscaled at 540p a
+# caption would be 7.4% of the frame: not a smaller video, a shoutier one.
+_S = H / 720.0
+
+
+def _s(v):
+    return max(1, int(round(v * _S)))
+
+
+CAP_SIZE      = _s(40)
+CAP_MARGIN_V  = _s(64)        # bottom of the caption block to frame bottom
+TERM_SIZE     = _s(34)
+TERM_PAD      = _s(10)        # BorderStyle=3: "Outline" is box padding
+TERM_Y        = _s(496)       # ABSOLUTE position - see the move note below
+TERMSUB_SIZE  = _s(20)
+TERMSUB_PAD   = _s(8)
+TERMSUB_MRG_V = _s(178)
 
 ASS_HEADER = """[Script Info]
 ScriptType: v4.00+
@@ -1904,7 +1932,14 @@ async def build():
     print("\n" + "=" * 62, flush=True)
     print(f"DONE  final_video.mp4", flush=True)
     print(f"   duration : {final_dur/60:.1f} min", flush=True)
-    print(f"   size     : {size:.1f} MB", flush=True)
+    # MB per minute is the number that actually decides whether a long video
+    # fits: GitHub Free gives 500 MB of artifact storage in total, so a
+    # 16-minute cut at 13 MB/min fills a fifth of it on its own. Printing the
+    # rate means the next resolution or CRF change can be judged against a
+    # measurement instead of a guess.
+    print(f"   size     : {size:.1f} MB  ({size / max(final_dur/60, 0.01):.1f} "
+          f"MB/min -> a 16 min cut would be "
+          f"~{size / max(final_dur/60, 0.01) * 16:.0f} MB)", flush=True)
     print(f"   subtitles: {len(cues)} cues", flush=True)
     if PIXABAY_API_KEY:
         print(f"   visuals  : {real_footage}/{total_shots} real Pixabay footage",

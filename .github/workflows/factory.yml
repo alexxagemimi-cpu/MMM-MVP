@@ -37,6 +37,12 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
+      resolution:
+        description: 'Output height. 540 is the default - half of 1080p, and a long video stays a sane file size. The thumbnail is always 1280x720 whatever this says.'
+        required: false
+        default: '540'
+        type: choice
+        options: ['540', '720', '480', '1080']
       log_frames:
         description: 'Also print the contact sheet into the log as base64 (for reviewing a run without downloading the artifact)'
         required: false
@@ -256,6 +262,7 @@ jobs:
       - name: Run Engine (video assembler)
         env:
           VOICE: ${{ github.event.inputs.voice || github.event.client_payload.voice || 'en-US-GuyNeural' }}
+          RESOLUTION: ${{ github.event.inputs.resolution || vars.RESOLUTION || '540' }}
           # optional: real Pixabay stock footage/photos instead of AI images.
           # unset -> engine falls back to AI images only, same as before.
           PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
@@ -290,10 +297,11 @@ jobs:
             subtitles.srt
             captions.ass
           if-no-files-found: warn
-          # GitHub Free includes 500 MB of artifact storage in total. A 12-min
-          # 720p file is ~100-150 MB, so 30-day retention fills the quota after
-          # three or four videos and uploads then start failing. Download it,
-          # then let it expire.
+          # GitHub Free includes 500 MB of artifact storage in total, which is
+          # the real reason output size matters here - not bandwidth. At 540p
+          # a long video is roughly three quarters the size of the same cut at
+          # 720p; the measured MB/min for a run is printed by the engine.
+          # Download it, then let it expire.
           retention-days: 3
 
   # A SEPARATE JOB, purely so the build above keeps read-only access.

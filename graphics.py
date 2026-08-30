@@ -43,7 +43,33 @@ import subprocess
 
 from PIL import Image, ImageDraw, ImageFont
 
-W, H = 1280, 720
+# ONE DESIGN SPACE, SCALED AT THE BOUNDARY.
+#
+# Everything in this file - margins, the header band, font sizes, the safe
+# line, every padding - is written in 1280x720 units, and the finished image
+# is resized to the output size on its way out. The alternative was to scale
+# forty scattered literals by a factor, and the first thing that showed was
+# SAFE_BOTTOM = 548 on a 540-tall frame: a safe line below the bottom of the
+# picture. Design coordinates stay fixed, one resize happens at the end, and
+# a card looks identical at every resolution.
+#
+# The downscale is also free quality: drawing text at 1280 and landing it at
+# 960 is supersampling, which is why the type stays crisp instead of getting
+# the ragged edges you get from rendering small.
+W, H = 1280, 720                      # DESIGN size - do not change
+
+_RES = {"1080": (1920, 1080), "720": (1280, 720),
+        "540": (960, 540), "480": (854, 480)}
+OUT_W, OUT_H = _RES.get(os.environ.get("RESOLUTION", "540").strip(),
+                        (960, 540))
+
+
+def _out(img, path):
+    """Save at the output size. The only place the two spaces meet."""
+    if (OUT_W, OUT_H) != (W, H):
+        img = img.resize((OUT_W, OUT_H), Image.Resampling.LANCZOS)
+    img.save(path)
+    return path
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 F_DISPLAY = os.path.join(HERE, "assets", "fonts", "Anton-Regular.ttf")
@@ -181,8 +207,7 @@ def section_overlay(index, total, name, out_png):
     img.paste(plate, (0, 0))
     d = ImageDraw.Draw(img)
     draw_header(d, index, total, name)
-    img.save(out_png, "PNG")
-    return out_png
+    return _out(img, out_png)
 
 
 # ---------------------------------------------------------------------------
@@ -257,8 +282,7 @@ def overview_card(items, current=None, eyebrow=None, out_png="card.png"):
                    fill=INK if strong else MUTED)
             ly += f.size * 1.08
 
-    img.save(out_png, "PNG")
-    return out_png
+    return _out(img, out_png)
 
 
 def point_card(index, total, name, heading, bullets=None, note=None,
@@ -335,8 +359,7 @@ def point_card(index, total, name, heading, bullets=None, note=None,
         for ln in nl:
             d.text((MARGIN, ny), ln, font=nf, fill=MUTED)
             ny += int(nf.size * 1.3)
-    img.save(out_png, "PNG")
-    return out_png
+    return _out(img, out_png)
 
 
 def stat_clip(index, total, name, value, label, out_mp4, frames, fps=25,
@@ -484,8 +507,7 @@ def stat_card(index, total, name, value, label, out_png="card.png"):
     for ln in ll:
         d.text(((W - _w(d, ln, lf)) / 2, y), ln.upper(), font=lf, fill=INK)
         y += lf.size * 1.12
-    img.save(out_png, "PNG")
-    return out_png
+    return _out(img, out_png)
 
 
 # ---------------------------------------------------------------------------
@@ -541,7 +563,11 @@ def _encode(tmp, pattern, fps, out_mp4):
     subprocess.run(["ffmpeg", "-y", "-v", "error", "-framerate", str(fps),
                     "-i", os.path.join(tmp, pattern), "-c:v", "libx264",
                     "-preset", "superfast", "-crf", "18", "-pix_fmt",
-                    "yuv420p", "-r", str(fps), out_mp4],
+                    "yuv420p", "-r", str(fps),
+                    # frames are drawn in design space; the clip leaves at
+                    # the output size, same as the still cards
+                    "-vf", f"scale={OUT_W}:{OUT_H}:flags=lanczos",
+                    out_mp4],
                    check=True, timeout=180)
     for f in os.listdir(tmp):
         os.remove(os.path.join(tmp, f))
