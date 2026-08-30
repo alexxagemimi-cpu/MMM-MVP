@@ -167,3 +167,76 @@ if __name__ == "__main__":
               f"{os.path.getsize(path)/1024:.0f} KB")
     print("\nPeaks are all well under 0 dB on purpose: these sit UNDER "
           "narration.\nAn effect you consciously notice is already too loud.")
+
+
+# ---------------------------------------------------------------------------
+# building one track for a whole video
+# ---------------------------------------------------------------------------
+def build_track(duration, events, out_wav, dest=KIT):
+    """
+    One silent track of `duration` seconds with every effect pasted in at its
+    exact time. `events` is [(seconds, name), ...].
+
+    Mixed in Python rather than with a filter graph on purpose. Sixteen hits
+    would mean sixteen inputs, sixteen adelay filters and one enormous amix -
+    hard to read, hard to change, and impossible to check without rendering
+    the whole video. Summing samples into a buffer is deterministic, and the
+    result can be verified by measuring the level at the times a sound was
+    supposed to land (see _rms_at below), which is the only proof that
+    actually matters.
+
+    Samples are summed and then clipped at the very end. Two effects landing
+    together should add up, not replace each other.
+    """
+    import wave
+    import struct
+    kit = build_kit(dest)
+    n_total = int(duration * SR) + SR
+    buf = [0] * n_total
+
+    cache = {}
+    for name in {n for _, n in events}:
+        path = kit.get(name)
+        if not path:
+            continue
+        with wave.open(path) as w:
+            raw = w.readframes(w.getnframes())
+        cache[name] = struct.unpack(f"<{len(raw)//2}h", raw)
+
+    placed = 0
+    for at, name in events:
+        s = cache.get(name)
+        if not s or at < 0:
+            continue
+        off = int(at * SR)
+        if off >= n_total:
+            continue
+        for i, v in enumerate(s):
+            j = off + i
+            if j >= n_total:
+                break
+            buf[j] += v
+        placed += 1
+
+    out = struct.pack(f"<{n_total}h",
+                      *(max(-32768, min(32767, v)) for v in buf))
+    with wave.open(out_wav, "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(2)
+        w.setframerate(SR)
+        w.writeframes(out)
+    return out_wav, placed
+
+
+def _rms_at(path, t, window=0.25):
+    """Level in a window around t. Used to PROVE a sound actually landed
+    where it was asked to, rather than trusting that the code ran."""
+    import wave
+    import struct
+    import math
+    with wave.open(path) as w:
+        sr = w.getframerate()
+        w.setpos(max(0, int(t * sr)))
+        raw = w.readframes(int(window * sr))
+    s = struct.unpack(f"<{len(raw)//2}h", raw) or (0,)
+    return math.sqrt(sum(x * x for x in s) / len(s)) / 32768

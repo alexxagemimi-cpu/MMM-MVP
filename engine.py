@@ -48,6 +48,20 @@ import urllib.error
 from PIL import Image
 import edge_tts
 
+# Both are optional. A missing drawing or sound module must cost the polish
+# it provides, never the whole video - the engine has to keep working on a
+# machine where only ffmpeg and Pillow are present.
+try:
+    import graphics
+except Exception as _e:                       # pragma: no cover
+    graphics = None
+    print(f"!! graphics unavailable ({_e}) - no section cards or headers")
+try:
+    import sfx
+except Exception as _e:                       # pragma: no cover
+    sfx = None
+    print(f"!! sfx unavailable ({_e}) - no sound effects")
+
 # ----------------------------------------------------------------------------
 # CONFIG
 # ----------------------------------------------------------------------------
@@ -64,6 +78,9 @@ CRF_FINAL, PRESET_FINAL = "20", "medium"
 
 MUSIC_FILE  = "assets/music.mp3"      # optional; a bed is synthesised if absent
 MUSIC_GAIN  = 0.20
+# The kit is already levelled well under 0 dB (see sfx.py), so this is a trim
+# rather than a fader. An effect the viewer consciously notices is too loud.
+SFX_GAIN    = 0.9
 WORDS_PER_CUE = 6
 MAX_CUE_GAP   = 0.65
 
@@ -365,8 +382,8 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Caption,DejaVu Sans,20,&H0000D7FF,&H00FFFFFF,&HD0000000,&H00000000,-1,0,0,0,100,100,0.3,0,1,2.4,0.8,2,20,20,46,1
-Style: Term,DejaVu Sans,30,&H00FFFFFF,&H00FFFFFF,&H14101010,&H14101010,-1,0,0,0,100,100,0.6,0,3,16,0,7,54,54,54,1
-Style: TermSub,DejaVu Sans,17,&H00D8D8D8,&H00D8D8D8,&H28101010,&H28101010,0,0,0,0,100,100,0.3,0,3,13,0,7,54,54,100,1
+Style: Term,DejaVu Sans,30,&H00FFFFFF,&H00FFFFFF,&H14101010,&H14101010,-1,0,0,0,100,100,0.6,0,3,16,0,1,54,54,120,1
+Style: TermSub,DejaVu Sans,17,&H00D8D8D8,&H00D8D8D8,&H28101010,&H28101010,0,0,0,0,100,100,0.3,0,3,13,0,1,54,54,92,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -426,6 +443,25 @@ def write_ass(groups, path, term_cards=None):
     words on screen have to carry it: the concept is named, in large type,
     at the moment the narration says it, with one line of detail under it.
 
+    The card sits at the BOTTOM LEFT, just above the captions.
+
+    The top of the frame is no longer free: the persistent section header
+    owns the first 108px, and on a section card the whole upper area is the
+    list itself. Verified on rendered frames - at the old top-left position
+    the term printed through the header's numbered badge, and moving it down
+    only pushed its definition inside the red highlight box instead. Header
+    at the top, term card above the captions, captions at the very bottom:
+    three bands, no overlap.
+
+    Note the \\move override sets an ABSOLUTE position and therefore beats
+    the style's MarginV entirely - changing the margin alone did nothing,
+    which is why the first attempt at this appeared not to work. It
+    used to start at y=54, which is inside the 108px the persistent header
+    now owns - verified on a rendered frame, where "COMPOUND INTEREST" and
+    its definition were printed straight through the header's own numbered
+    badge. The header names the section; the card names the term and defines
+    it; they are different jobs and must not share a row.
+
     The card uses ASS BorderStyle=3 (opaque box), which sizes its own
     background to the text. An earlier attempt at this drew the box with a
     hardcoded 560px width and long definitions ran straight off the edge of
@@ -449,7 +485,7 @@ def write_ass(groups, path, term_cards=None):
         # layer 1 so a card always sits above the caption layer
         lines.append(
             f"Dialogue: 1,{ass_ts(a)},{ass_ts(b)},Term,,0,0,0,,"
-            f"{{\\fad(180,260)\\move({-260},{54},{54},{54},0,220)}}"
+            f"{{\\fad(180,260)\\move({-260},{H-120},{54},{H-120},0,220)}}"
             f"{ass_escape(term).upper()}\n")
         if fact:
             lines.append(
@@ -652,19 +688,39 @@ def ken_burns(idx, frames):
     )
 
 
-def render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames, fade_in, fade_out):
+def render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames, fade_in,
+                fade_out, overlay_png=None):
     """
     One visual -> one silent clip, `frames` frames long.
 
-    Real footage ("video") already has motion, so it's scaled/cropped to
-    fill the frame and trimmed (looped if too short) rather than
-    Ken-Burns'd. An AI still ("image") gets the usual Ken Burns move. Both
-    share the same colour grade so cuts between the two never look jarring.
+    Three kinds now:
+      "video"  real footage - already has motion, so scaled/cropped to fill
+               and trimmed (looped if too short) rather than Ken-Burns'd
+      "image"  a still - gets the Ken Burns move
+      "card"   a DRAWN card from graphics.py - held perfectly still, with no
+               grade and no motion. Both would be wrong: the card was
+               designed at exactly this size with its own colours, so a
+               colour grade fights the design and a Ken Burns move drifts
+               the type and makes it unreadable.
+
+    `overlay_png` is the persistent section header, composited over footage
+    shots so they carry the same orientation as the cards. This is the single
+    device the reference explainer uses most - the section name never leaves
+    the screen, and it works precisely BECAUSE it does not move.
     """
     dur = frames / FPS
     grade = f"{GRADE},{VIGNETTE}format=yuv420p"
 
-    if asset_kind == "video":
+    if asset_kind == "card":
+        # zoompan with the zoom pinned at 1.0 expands ONE input frame into
+        # `frames` output frames, holding the card perfectly still. This is
+        # the same mechanism ken_burns uses, and it is deliberately not
+        # `-loop 1`: the module note at the top of this file is about
+        # unbounded inputs, and there is no reason to introduce one when a
+        # bounded expansion already exists and is proven.
+        vf = (f"scale={W}:{H}:flags=lanczos,"
+              f"zoompan=z=1:d={frames}:s={W}x{H}:fps={FPS},format=yuv420p")
+    elif asset_kind == "video":
         # fps= FIRST, before anything else. Stock clips arrive at whatever
         # frame rate and timebase they were shot at - a slow-motion clip can
         # be 120/240fps or variable - and those timestamps otherwise survive
@@ -708,8 +764,17 @@ def render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames, fade_in, fa
     else:
         cmd += ["-i", asset_path]
 
+    # The persistent header rides on top of footage shots. A card already
+    # draws its own, so it never gets one composited over it.
+    if overlay_png and asset_kind != "card" and os.path.exists(overlay_png):
+        cmd += ["-i", overlay_png]
+        cmd += ["-filter_complex",
+                f"[0:v]{vf}[b];[b][1:v]overlay=0:0:format=auto[v]",
+                "-map", "[v]"]
+    else:
+        cmd += ["-vf", vf]
+
     cmd += [
-        "-vf", vf,
         "-an",
         "-c:v", "libx264", "-preset", PRESET_SCENE, "-crf", CRF_SCENE,
         "-pix_fmt", "yuv420p", "-r", str(FPS), "-g", str(FPS * 2),
@@ -720,7 +785,7 @@ def render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames, fade_in, fa
 
 
 def render_shot_safe(motion_idx, asset_kind, asset_path, out_mp4, frames,
-                      fade_in, fade_out):
+                      fade_in, fade_out, overlay_png=None):
     """
     render_shot, but one unusable clip costs that shot and nothing more.
 
@@ -730,7 +795,7 @@ def render_shot_safe(motion_idx, asset_kind, asset_path, out_mp4, frames,
     """
     try:
         render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames,
-                    fade_in, fade_out)
+                    fade_in, fade_out, overlay_png)
         return True
     except Exception as e:
         print(f"      !! shot failed ({str(e)[:80]}) - substituting slate",
@@ -738,8 +803,10 @@ def render_shot_safe(motion_idx, asset_kind, asset_path, out_mp4, frames,
         slate = out_mp4 + ".slate.png"
         Image.new("RGB", (KB_W, KB_H), (11, 12, 16)).save(slate, "PNG")
         try:
+            # the slate still carries the header - losing a picture should
+            # not also lose the viewer's place in the video
             render_shot(motion_idx, "image", slate, out_mp4, frames,
-                        fade_in, fade_out)
+                        fade_in, fade_out, overlay_png)
             return False
         finally:
             if os.path.exists(slate):
@@ -832,7 +899,7 @@ def assemble_scene(shot_mp4s, mp3, out_mp4, listfile, target_dur):
 
 
 def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
-                  first_scene, last_scene, frames_total):
+                  first_scene, last_scene, frames_total, overlay_png=None):
     """
     Render one scene: N visuals (each ("video"|"image", path)) -> N silent
     shots -> one assemble pass that concatenates them and lays the narration
@@ -854,7 +921,8 @@ def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
         shot_mp4 = os.path.join(work_dir, f"s{scene_idx:03d}_{j:02d}.mp4")
         if not render_shot_safe(motion_start + j, kind, path, shot_mp4, frames,
                                 fade_in=(first_scene and j == 0),
-                                fade_out=(last_scene and j == n - 1)):
+                                fade_out=(last_scene and j == n - 1),
+                                overlay_png=overlay_png):
             failed += 1
         shots.append(shot_mp4)
 
@@ -911,7 +979,7 @@ def music_bed(duration, out_mp3):
 # ----------------------------------------------------------------------------
 # 6. FINAL PASS — burn subtitles + duck music under narration
 # ----------------------------------------------------------------------------
-def finish(body, ass, has_subs, music, out_mp4):
+def finish(body, ass, has_subs, music, out_mp4, sfx_wav=None):
     """
     Burn word-synced karaoke captions and mix in the ducked music bed.
 
@@ -931,16 +999,27 @@ def finish(body, ass, has_subs, music, out_mp4):
     # makes narration sound edited. I=-14 is YouTube's own target; below it
     # the platform leaves the file alone and it simply plays quieter than
     # everything beside it.
+    # The sound-effect track is mixed in as a THIRD source, and deliberately
+    # NOT side-chained. Music ducks under the voice because it is competing
+    # for the same space for minutes at a time; an effect is a 0.4-second
+    # accent ON a transition and ducking it would remove the very moment it
+    # exists to mark.
+    has_sfx = bool(sfx_wav and os.path.exists(sfx_wav))
     afilt = (
         f"[1:a]volume={MUSIC_GAIN},aresample=48000,"
         f"aformat=channel_layouts=stereo[m];"
         # main = music, sidechain = narration -> music dips under the voice
         f"[m][0:a]sidechaincompress="
         f"threshold=0.030:ratio=9:attack=12:release=380:makeup=1[duck];"
-        f"[0:a][duck]amix=inputs=2:duration=first:normalize=0,"
-        f"loudnorm=I=-14:TP=-1.5:LRA=11,"
-        f"alimiter=limit=0.95[a]"
     )
+    if has_sfx:
+        afilt += (f"[2:a]aresample=48000,aformat=channel_layouts=stereo,"
+                  f"volume={SFX_GAIN}[fx];"
+                  f"[0:a][duck][fx]amix=inputs=3:duration=first:normalize=0,")
+    else:
+        afilt += f"[0:a][duck]amix=inputs=2:duration=first:normalize=0,"
+    afilt += (f"loudnorm=I=-14:TP=-1.5:LRA=11,"
+              f"alimiter=limit=0.95[a]")
 
     # Loop the music a finite number of times, computed from both real
     # durations. `-stream_loop -1` is nominally bounded here by
@@ -957,6 +1036,8 @@ def finish(body, ass, has_subs, music, out_mp4):
         "-i", body,
         "-stream_loop", str(loops), "-i", music,
     ]
+    if has_sfx:
+        cmd += ["-i", sfx_wav]
 
     if has_subs:
         ass_arg = ass.replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
@@ -1061,17 +1142,56 @@ async def build():
     failed_images = sum(1 for _, ok in results if not ok)
 
     # ---------------- phase 3: render ----------------------------------------
+    #
+    # THE STRUCTURE THE REFERENCE EXPLAINER USES, and the thing that most
+    # separates it from what this engine used to make.
+    #
+    # Every scene now OPENS on a drawn card showing the whole list with the
+    # current item lit and the finished ones ticked, then continues over
+    # footage that carries a section header which never moves. Before, a
+    # scene was an unbroken run of unrelated stock clips with nothing at all
+    # telling the viewer where they were.
+    #
+    # Both are built from data the script already carries - one key_term per
+    # scene - so this costs no extra model call and no extra quota.
+    members = [(s.get("key_term") or "").strip() for s in scenes]
+    members = [m for m in members if m]
+    use_cards = graphics is not None and len(members) >= 2
+    if use_cards:
+        print(f"      drawing {total} section cards + headers "
+              f"({len(members)} items)", flush=True)
+
     print(f"\n[3/3] render x{total} scenes ({total_shots} shots) ...", flush=True)
     cues, parts, timeline, motion_cursor = [], [], 0.0, 0
-    term_cards = []
+    term_cards, sfx_events = [], []
 
     for i, sc in enumerate(scenes):
         mp4 = os.path.join(WORK, f"s{i:03d}.mp4")
         frames_total = math.ceil(durs[i] * FPS) + 3
-        render_scene(i, asset_paths[i], mp3s[i], mp4, WORK, motion_cursor,
+
+        assets, overlay = list(asset_paths[i]), None
+        if use_cards:
+            try:
+                card = os.path.join(WORK, f"card{i:03d}.png")
+                graphics.overview_card(members, min(i, len(members) - 1),
+                                       f"Section {i+1} of {total}", card)
+                overlay = os.path.join(WORK, f"head{i:03d}.png")
+                graphics.section_overlay(i + 1, total,
+                                         members[min(i, len(members) - 1)],
+                                         overlay)
+                # the card REPLACES the first stock shot rather than being
+                # added, so the scene still fits its narration exactly
+                assets = [("card", card)] + assets[1:] if len(assets) > 1 \
+                    else [("card", card)]
+            except Exception as e:
+                print(f"      !! card for scene {i+1} failed ({str(e)[:70]}) "
+                      f"- falling back to footage only", flush=True)
+                assets, overlay = list(asset_paths[i]), None
+
+        render_scene(i, assets, mp3s[i], mp4, WORK, motion_cursor,
                      first_scene=(i == 0), last_scene=(i == total - 1),
-                     frames_total=frames_total)
-        motion_cursor += len(asset_paths[i])
+                     frames_total=frames_total, overlay_png=overlay)
+        motion_cursor += len(assets)
 
         words = word_lists[i] or estimate_word_times(
             scenes[i]["narration"].strip(), durs[i])
@@ -1087,8 +1207,15 @@ async def build():
             if at is not None:
                 term_cards.append((at + timeline, term,
                                    (sc.get("key_fact") or "").strip()))
+                # a card appearing silently is half an edit
+                sfx_events.append((at + timeline - TERM_LEAD, "pop"))
             else:
                 print(f"        (no term-card anchor for {term!r})", flush=True)
+
+        # Sound ON the cut, which is the thing editors name first when asked
+        # what separates a cheap video from an edited one. Weight under the
+        # opening, air on every section change.
+        sfx_events.append((timeline, "thud" if i == 0 else "whoosh"))
 
         timeline += actual
         parts.append(mp4)
@@ -1128,8 +1255,20 @@ async def build():
         music = os.path.join(WORK, "bed.mp3")
         music_bed(timeline, music)
 
+    sfx_wav = None
+    if sfx is not None and sfx_events:
+        try:
+            sfx_wav = os.path.join(WORK, "sfx.wav")
+            _, placed = sfx.build_track(timeline + 2, sfx_events, sfx_wav)
+            print(f"> sound: {placed} effects across {timeline/60:.1f} min",
+                  flush=True)
+        except Exception as e:
+            print(f"> sound: failed ({str(e)[:80]}) - continuing silent",
+                  flush=True)
+            sfx_wav = None
+
     print("> final composite...", flush=True)
-    finish(body, ass, len(cues) > 0, music, "final_video.mp4")
+    finish(body, ass, len(cues) > 0, music, "final_video.mp4", sfx_wav)
 
     for p in parts:
         os.remove(p)

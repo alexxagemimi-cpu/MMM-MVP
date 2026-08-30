@@ -7,8 +7,8 @@ ScaledBorderAndShadow: yes
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Caption,DejaVu Sans,20,&H0000D7FF,&H00FFFFFF,&HD0000000,&H00000000,-1,0,0,0,100,100,0.3,0,1,2.4,0.8,2,20,20,46,1
-Style: Term,DejaVu Sans,30,&H00FFFFFF,&H00FFFFFF,&H14101010,&H14101010,-1,0,0,0,100,100,0.6,0,3,16,0,7,54,54,54,1
-Style: TermSub,DejaVu Sans,17,&H00D8D8D8,&H00D8D8D8,&H28101010,&H28101010,0,0,0,0,100,100,0.3,0,3,13,0,7,54,54,100,1
+Style: Term,DejaVu Sans,30,&H00FFFFFF,&H00FFFFFF,&H14101010,&H14101010,-1,0,0,0,100,100,0.6,0,3,16,0,1,54,54,120,1
+Style: TermSub,DejaVu Sans,17,&H00D8D8D8,&H00D8D8D8,&H28101010,&H28101010,0,0,0,0,100,100,0.3,0,3,13,0,1,54,54,92,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -31,11 +31,11 @@ Dialogue: 0,0:00:30.44,0:00:32.12,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t
 Dialogue: 0,0:00:32.12,0:00:33.80,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}that {\kf28}ends {\kf28}the {\kf28}story, {\kf28}counted {\kf28}in
 Dialogue: 0,0:00:33.80,0:00:35.48,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf28}months {\kf28}rather {\kf28}than {\kf28}in {\kf28}rupees {\kf28}or
 Dialogue: 0,0:00:35.48,0:00:35.93,Caption,,0,0,0,,{\fad(60,60)\fscx118\fscy118\t(0,150,\fscx100\fscy100)}{\kf45}dollars.
-Dialogue: 1,0:00:00.97,0:00:04.37,Term,,0,0,0,,{\fad(180,260)\move(-260,54,54,54,0,220)}COMPOUND INTEREST
+Dialogue: 1,0:00:00.97,0:00:04.37,Term,,0,0,0,,{\fad(180,260)\move(-260,600,54,600,0,220)}COMPOUND INTEREST
 Dialogue: 1,0:00:01.09,0:00:04.37,TermSub,,0,0,0,,{\fad(220,260)}Interest that earns interest on itself
-Dialogue: 1,0:00:10.73,0:00:14.13,Term,,0,0,0,,{\fad(180,260)\move(-260,54,54,54,0,220)}FIXED COSTS
+Dialogue: 1,0:00:10.73,0:00:14.13,Term,,0,0,0,,{\fad(180,260)\move(-260,600,54,600,0,220)}FIXED COSTS
 Dialogue: 1,0:00:10.85,0:00:14.13,TermSub,,0,0,0,,{\fad(220,260)}Costs that do not move when sales move
-Dialogue: 1,0:00:21.49,0:00:24.89,Term,,0,0,0,,{\fad(180,260)\move(-260,54,54,54,0,220)}GROSS MARGIN
+Dialogue: 1,0:00:21.49,0:00:24.89,Term,,0,0,0,,{\fad(180,260)\move(-260,600,54,600,0,220)}GROSS MARGIN
 Dialogue: 1,0:00:21.61,0:00:24.89,TermSub,,0,0,0,,{\fad(220,260)}What is left after the cost of the product
-Dialogue: 1,0:00:30.85,0:00:34.25,Term,,0,0,0,,{\fad(180,260)\move(-260,54,54,54,0,220)}RUNWAY
+Dialogue: 1,0:00:30.85,0:00:34.25,Term,,0,0,0,,{\fad(180,260)\move(-260,600,54,600,0,220)}RUNWAY
 Dialogue: 1,0:00:30.97,0:00:34.25,TermSub,,0,0,0,,{\fad(220,260)}Months of cash left at current burn
