@@ -645,47 +645,50 @@ _COUNTING = {"one", "two", "three", "four", "five", "six", "seven", "eight",
              "kinds", "kind", "type", "types", "explained", "means"}
 
 
-def subject_terms(scenes, limit=2):
+def subject_terms(scenes, title="", limit=2):
     """
-    What the WHOLE video is about, taken from the narration itself.
+    What the WHOLE video is about. From the TITLE first, narration second.
 
     A shot keyword describes one moment; it does not say what the film is.
     Asked for "man wearing high rise jeans", Pixabay returned an Osaka
     skyline tagged `high rise building, urban, osaka` - a perfect match on
-    "high" and "rise" and nothing whatever to do with jeans. Same run:
-    "ruler measuring front rise" got a chemistry lab, "hand holding denim
-    fabric" got a subway train, and "close up of slim fit denim knee" got a
-    tarantula, because "knee" appears in "red knee poisonous".
+    "high" and "rise" and nothing to do with jeans.
 
-    Every one of those has NO `jeans` and NO `denim` tag. Every clip that
-    was actually right has one or both. So the rule is: a clip has to be
-    about the subject of the film, not merely about the words of one query.
+    THE FIRST VERSION OF THIS TOOK THE MOST FREQUENT WORDS IN THE NARRATION,
+    AND THAT WAS WRONG IN A WAY WORTH RECORDING. On a real jeans script it
+    chose "pattern" and "straight", because a video about leg cuts says
+    "straight" constantly and a section on fabric says "pattern". Those two
+    words then actively SELECTED FOR JUNK: Pixabay tags its abstract
+    wallpaper clips "pattern, texture, abstract", so the anchor admitted
+    coloured smoke and a particle field, admitted a highway on "straight",
+    admitted a bird on "straight gourd" - and rejected the genuinely
+    denim-tagged clips, because they are not tagged "pattern". 15 of 66
+    shots kept footage and the ones that survived were the worst ones. An
+    anchor that picks the wrong word is worse than no anchor at all.
 
-    The TWO most frequent such words, not the top six. In a jeans script the
-    frequency order comes out jeans, denim, rise, leg, waist - and "rise" is
-    an ATTRIBUTE, not the subject. Allowing it as an anchor is precisely how
-    `high rise building` gets in. The one or two things a film is actually
-    about are what a clip has to be about too.
-
-    Words that appear in at least half the scenes, which is what a subject
-    does and what a passing detail does not. No model call, no config, and
-    it adapts per video: on the business-expenses script the surviving term
-    is "expenses", so almost nothing in a stock library qualifies and the
-    drawn cards carry the film - which is what section 1 of CLAUDE.md says
-    should happen in that niche anyway.
+    The title is what the film is about, by definition and by construction -
+    it is written to say so. "Every Type of Men's Jeans Explained: Fits,
+    Rises, and Fabrics" gives `jeans`, which is exactly the word every good
+    clip carried and no bad one did. Narration frequency is kept only as a
+    fallback for a script with no usable title.
     """
     from collections import Counter
+
+    def _clean(text):
+        return [w for w in re.sub(r"[^a-z0-9 ]", " ", (text or "").lower()).split()
+                if len(w) >= 4 and w not in STOP_WORDS
+                and w not in GENERIC_TAGS and w not in _COUNTING]
+
+    picked = _clean(title)[:limit]
+    if picked:
+        return set(picked)
+
     n = max(1, len(scenes))
     seen = Counter()
     for sc in scenes:
-        text = re.sub(r"[^a-z0-9 ]", " ",
-                      (sc.get("narration") or "").lower())
-        seen.update({w for w in text.split()
-                     if len(w) >= 4 and w not in STOP_WORDS
-                     and w not in GENERIC_TAGS and w not in _COUNTING})
+        seen.update(set(_clean(sc.get("narration"))))
     need = max(2, round(n * 0.5))
-    ranked = [w for w, c in seen.most_common() if c >= need]
-    return set(ranked[:limit])
+    return set([w for w, c in seen.most_common() if c >= need][:limit])
 
 
 def _tag_set(hit):
@@ -1670,7 +1673,8 @@ async def build():
                              [ln for ln in lines if ln][:3]))
             comparey[i] = tuple(cols)
 
-    subject = subject_terms(scenes) if scriptbits else set()
+    subject = subject_terms(
+        scenes, (data.get("title") if isinstance(data, dict) else "") or "")
     if subject:
         print(f"      subject anchor: {', '.join(sorted(subject))} - a clip "
               f"has to be about this, not just match the query", flush=True)

@@ -136,6 +136,53 @@ JEANS = [
 ]
 
 
+# Run 35, where the anchor itself was WRONG. subject_terms took the two most
+# frequent narration words and got "pattern" and "straight" - which then
+# selected FOR abstract wallpaper, a highway and a bird, and rejected the
+# denim-tagged clips. The anchor now comes from the title, which gives
+# "jeans". These pairs are the proof that the new source fixes it.
+TITLE_SUBJECT = {"jeans", "fits"}
+
+RUN35 = [
+    ("classic straight leg denim jeans",
+     "highway, road, cars, traffic, line, straight, drone",
+     False, "a highway - the old anchor let it in on 'straight'"),
+    ("side profile of straight thigh",
+     "new, animal, nature, straight gourd, birds, winter",
+     False, "a bird - 'straight gourd'"),
+    ("close up of low rise jeans belt",
+     "ink, bubbles, drops, abstract, colours, pattern, food colouring, macro",
+     False, "coloured ink in water - let in on 'pattern'"),
+    ("unwashed dark blue raw denim fabric",
+     "abstract, blue, wave, background, design, backdrop, space, light",
+     False, "an abstract wave - no denim tag at all"),
+    ("high rise jeans button fly detail",
+     "colours, pattern, texture, abstract, macro, close-up",
+     False, "abstract macro"),
+
+    ("tailor measuring crotch seam of denim",
+     "denim, full hd wallpaper, wallpaper 4k, fabric, jeans, free",
+     True, "really is denim and jeans"),
+]
+
+
+def run35_check():
+    width = max(len(k) for k, *_ in RUN35)
+    bad = 0
+    print(f"\nANCHOR FROM THE TITLE - run 35's actual clips")
+    print(f"subject terms: {', '.join(sorted(TITLE_SUBJECT))}\n")
+    print(f"{'keyword':<{width}}  want  got   note")
+    print("-" * (width + 44))
+    for keyword, tags, want, why in RUN35:
+        got = E._relevant({"tags": tags}, keyword, subject=TITLE_SUBJECT)
+        ok = got == want
+        bad += not ok
+        print(f"{keyword:<{width}}  {'pass' if want else 'drop'}  "
+              f"{'pass' if got else 'drop'}  {'' if ok else '<< WRONG '}{why}")
+    print(f"\n{len(RUN35) - bad}/{len(RUN35)} correct")
+    return bad
+
+
 def jeans_check():
     width = max(len(k) for k, *_ in JEANS)
     bad = 0
@@ -166,7 +213,8 @@ def main():
               f"{'pass' if got else 'drop'}  {'' if ok else '<< WRONG '}{why}")
 
     bad += jeans_check()
-    print(f"\n{len(CASES) + len(JEANS) - bad}/{len(CASES) + len(JEANS)} correct overall")
+    bad += run35_check()
+    print(f"\n{len(CASES) + len(JEANS) + len(RUN35) - bad}/{len(CASES) + len(JEANS) + len(RUN35)} correct overall")
     if bad:
         print("A wrong 'pass' puts an unrelated picture on screen.\n"
               "A wrong 'drop' costs a usable clip and draws a card instead - "
