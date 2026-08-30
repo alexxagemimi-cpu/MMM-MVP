@@ -343,7 +343,8 @@ def _gemini(prompt, schema, drop_schema):
     return (resp.text or "").strip()
 
 
-def _openai_compatible(prompt, schema, base_url, key, model, label):
+def _openai_compatible(prompt, schema, base_url, key, model, label,
+                       drop_schema=False):
     """
     Cerebras / Groq / anything speaking the OpenAI chat-completions shape.
 
@@ -351,11 +352,37 @@ def _openai_compatible(prompt, schema, base_url, key, model, label):
     free tiers with no card (Cerebras ~1M tokens/day, Groq ~30 req/min),
     which is the whole point: the Gemini 429 that blocked every run so far
     should degrade to "slower and on another model", not "dead".
+
+    TWO THINGS HERE ARE NOT COSMETIC.
+
+    `drop_schema` was accepted by _call_sweep, printed about, and never
+    passed down. `response_format` went on being sent regardless, so the
+    "retrying plain JSON" retry was byte-identical to the request that had
+    just failed - the same fault as the 413 in §5.11, on a different line.
+
+    And Groq refuses `json_object` mode unless the literal string "json"
+    appears somewhere in the messages:
+
+        HTTP 400: 'messages' must contain the word 'json' in some form,
+                  to use 'response_format' of type 'json_object'
+
+    That is a real Groq rule, not a bug on our side. Most prompts here say
+    "Reply with JSON", but not all of them do, and the ones that do not
+    could never be answered by this provider. Say the word.
     """
+    text = prompt
+    if schema and not drop_schema and "json" not in text.lower():
+        text += "\n\nReply with a single JSON object and nothing else."
+    elif schema and drop_schema:
+        # No structured-output mode at all: ask in words instead, and let
+        # strip_fences() dig the object out of whatever comes back.
+        text += ("\n\nReply with a single valid JSON object and nothing "
+                 "else. No prose, no explanation, no code fences.")
+
     body = {"model": model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": [{"role": "user", "content": text}],
             "temperature": 0.8}
-    if schema:
+    if schema and not drop_schema:
         body["response_format"] = {"type": "json_object"}
     req = urllib.request.Request(
         base_url, data=json.dumps(body).encode(),
@@ -528,7 +555,12 @@ def _call_sweep(prompt, schema, retries, provs):
         # Fit the prompt to THIS provider before spending a request finding
         # out it does not fit. Gemini gets the full text; Groq gets as much of
         # it as its per-minute token budget can hold.
-        body = shrink(prompt, PROVIDER_CHAR_CAP.get(name, 10 ** 9))
+        # Reserve room for the JSON instruction _openai_compatible may append
+        # AFTER this trim. Without it a prompt cut to exactly the cap comes
+        # back over the cap - the trim would be defeated by the fix that
+        # follows it.
+        cap = PROVIDER_CHAR_CAP.get(name, 10 ** 9)
+        body = shrink(prompt, cap - 160 if cap < 10 ** 9 else cap)
         if len(body) < len(prompt):
             print(f"   .. {name} caps requests at ~"
                   f"{PROVIDER_CHAR_CAP[name]:,} chars; trimmed the prompt from "
@@ -541,7 +573,7 @@ def _call_sweep(prompt, schema, retries, provs):
                 else:
                     base_url, key, _ = conf
                     text = _openai_compatible(body, schema, base_url, key,
-                                              model, name)
+                                              model, name, drop_schema)
                 if not text:
                     raise RuntimeError("empty response")
                 return json.loads(strip_fences(text)) if schema else text

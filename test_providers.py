@@ -29,6 +29,7 @@ which the real one cannot.
 """
 
 import os
+import json
 import sys
 import types
 
@@ -51,6 +52,12 @@ except Exception:
     sys.modules.setdefault("google.genai.types", gt)
 
 import brain as B  # noqa: E402
+
+# Tests below monkeypatch this to fake a provider. Keep the REAL one: the
+# json-mode test must exercise the actual request-building code, not a stand-in
+# for it - an earlier version of that test called the leftover fake and failed
+# against a fix that was working.
+REAL_OAI = B._openai_compatible
 
 
 def line(t):
@@ -110,7 +117,8 @@ class FakeProvider:
         self.accepts = accepts
         self.sizes = []
 
-    def __call__(self, prompt, schema, base_url, key, model, name):
+    def __call__(self, prompt, schema, base_url, key, model, name,
+                 drop_schema=False):
         self.sizes.append(len(prompt))
         # Groq's real 413 body: it says "rate limit" and carries both numbers.
         if len(prompt) > self.accepts:
@@ -152,6 +160,101 @@ def test_413_shrinks_and_succeeds():
     print(f"  {'FAIL' if repeated else 'ok  '}  it did not re-send the same "
           f"bytes after a refusal")
     bad += repeated
+    return bad
+
+
+def capture_requests():
+    """
+    Fake the HTTP layer, NOT _openai_compatible.
+
+    The first version of this test replaced _openai_compatible with a fake -
+    and the fix under test lives INSIDE that function, so the fake meant the
+    fixed code never ran and the test failed against a working fix. Testing
+    one layer above the change proves nothing about the change. This stubs
+    urlopen instead, so the real request-building code runs and every body it
+    produces is captured exactly as Groq would receive it.
+    """
+    import urllib.request as U
+    sent = []
+    real = U.urlopen
+
+    class Reply:
+        def __init__(self, text):
+            self._t = json.dumps(
+                {"choices": [{"message": {"content": text}}]}).encode()
+
+        def read(self):
+            return self._t
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake(req, timeout=None):
+        body = json.loads(req.data.decode())
+        sent.append(body)
+        content = body["messages"][0]["content"]
+        # Groq's real rule, verbatim from run 37's log.
+        if (body.get("response_format", {}).get("type") == "json_object"
+                and "json" not in content.lower()):
+            raise RuntimeError(
+                "HTTP 400: 'messages' must contain the word 'json' in some "
+                "form, to use 'response_format' of type 'json_object'.")
+        return Reply('{"ok": true}')
+
+    U.urlopen = fake
+    return sent, (lambda: setattr(U, "urlopen", real))
+
+
+def test_json_mode_400():
+    line("Groq's 'must contain the word json' 400 (run 37's actual failure)")
+    bad = 0
+    sent, restore = capture_requests()
+    B._openai_compatible = REAL_OAI
+    try:
+        # A prompt that never says "json" - exactly what stage 2 sends.
+        out = REAL_OAI(
+            "Write eight scenes about denim. Keep each under 130 words.",
+            {"x": 1}, "https://api.groq.com/openai/v1/chat/completions",
+            "k", "openai/gpt-oss-120b", "groq")
+        content = sent[0]["messages"][0]["content"]
+        checks = [
+            ("the request was accepted", json.loads(out) == {"ok": True}),
+            ("the word 'json' reached the provider", "json" in content.lower()),
+            ("json_object mode was still used",
+             sent[0].get("response_format", {}).get("type") == "json_object"),
+            ("it took ONE request, not a failed round trip", len(sent) == 1),
+        ]
+        for what, ok in checks:
+            print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+            bad += not ok
+
+        # THE REGRESSION. drop_schema was accepted by _call_sweep, printed
+        # about, and never passed down, so "retrying plain JSON" re-sent
+        # identical bytes and the provider refused identically.
+        line("dropping the schema actually changes the request")
+        sent.clear()
+        REAL_OAI(
+            "Write eight scenes about denim.", {"x": 1},
+            "https://api.groq.com/openai/v1/chat/completions", "k",
+            "openai/gpt-oss-120b", "groq", drop_schema=True)
+        body = sent[0]
+        text = body["messages"][0]["content"]
+        checks2 = [
+            ("response_format is genuinely gone",
+             "response_format" not in body),
+            ("the prompt still asks for JSON, in words",
+             "json" in text.lower()),
+            ("it is not the bare original prompt",
+             text != "Write eight scenes about denim."),
+        ]
+        for what, ok in checks2:
+            print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+            bad += not ok
+    finally:
+        restore()
     return bad
 
 
@@ -200,6 +303,7 @@ def main():
     real_cap = dict(B.PROVIDER_CHAR_CAP)
     bad = test_shrink()
     bad += test_413_shrinks_and_succeeds()
+    bad += test_json_mode_400()
     bad += test_precap_avoids_the_round_trip()
     B.PROVIDER_CHAR_CAP = real_cap
     bad += test_real_cap_against_run36()
