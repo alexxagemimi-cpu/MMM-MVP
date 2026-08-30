@@ -131,6 +131,15 @@ def main():
         return words
     fake_synth.n = 0
 
+    # Three shots per scene, not two.
+    #
+    # At the default pace a 10-second fixture scene gets two shots, one of
+    # which becomes the section card - so the scene never has room for a
+    # drawn LIST shot and that path went untested locally while running in
+    # production. A tighter target gives card + list + picture, which is the
+    # shape a real scene has.
+    E.TARGET_SHOT_SEC = 3.4
+
     E.fetch_pixabay_video = fake_video
     E.fetch_pixabay_photo = lambda k, o, s: False
     E.fetch_image = lambda k, sd, o: False

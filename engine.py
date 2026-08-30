@@ -751,7 +751,7 @@ def fetch_pixabay_video(keyword, out_mp4, seen_ids):
         # printed, the tags it supposedly matched were not. Two lines of
         # logging turns "the footage is wrong again" into evidence.
         print(f"        pixabay video {keyword[:30]!r} <- "
-              f"{(hit.get('tags') or '?')[:60]}", flush=True)
+              f"{(hit.get('tags') or '?')[:110]}", flush=True)
         seen_ids.add(hit["id"])
         vids = hit.get("videos", {})
         url = (vids.get("medium") or vids.get("small")
@@ -783,7 +783,7 @@ def fetch_pixabay_photo(keyword, out_png, seen_ids):
             return False
         hit = _pick(hits, keyword)
         print(f"        pixabay photo {keyword[:30]!r} <- "
-              f"{(hit.get('tags') or '?')[:60]}", flush=True)
+              f"{(hit.get('tags') or '?')[:110]}", flush=True)
         seen_ids.add(hit["id"])
         url = hit.get("largeImageURL") or hit.get("webformatURL")
         if not url:
@@ -1468,8 +1468,46 @@ async def build():
     # then slate) is still the only thing available.
     prefer_card = graphics is not None
 
+    # WHERE THE SCRIPT ALREADY CONTAINS THE PICTURE.
+    #
+    # When the narration says "Rent, salaries, insurance, software", those
+    # four words ARE the visual for that moment, and no stock library has
+    # anything better. Two real runs in a row proved the point negatively:
+    # the photo step always finds something, so it found something every
+    # time and not one drawn card was ever reached - the video kept showing
+    # a retro desk fan while the narration listed the four things that
+    # actually matter.
+    #
+    # So a scene whose narration contains a genuine list spends ONE shot
+    # showing it, and that shot is index 1: immediately after the section
+    # card, which is where the list is spoken. The rest of the scene still
+    # uses footage. This is the one place the engine stops asking Pixabay a
+    # question it cannot answer.
+    listy = {i for i, s in enumerate(scenes)
+             if scriptbits and scriptbits.list_items(s.get("narration") or "")}
+
     async def do_asset(item):
         i, j, kw, seed, out_stub = item
+        # Only when the scene has room for footage as well. With two shots,
+        # shot 0 becomes the section card and forcing shot 1 to a list card
+        # would make the whole scene two drawn stills - and the second one
+        # would hold for seven seconds without moving, which is the exact
+        # failure 4.9 exists to prevent. Three shots means card, list,
+        # picture.
+        if j == 1 and i in listy and graphics is not None \
+                and len(shots_per_scene[i]) >= 3:
+            sec = section_of.get(i)
+            kind, path, ok = _draw_shot_card(
+                scenes[i], out_stub + ".png",
+                section=sec, n_sections=len(members),
+                section_name=(members[sec] if sec is not None else ""))
+            if kind == "card":
+                asset_paths[i][j] = (kind, path)
+                print(f"      shot scene {i+1} #{j+1} [LIST] | "
+                      f"{', '.join(scriptbits.list_items(scenes[i]['narration']))[:44]}",
+                      flush=True)
+                return False, True
+
         kind, path, ok = await asyncio.to_thread(
             fetch_shot_asset, kw, seed, out_stub, seen_pixabay_ids,
             prefer_card)
