@@ -46,6 +46,7 @@ content**. That is why term cards exist (§4).
 | `youtube.py` | Demand gate: does anyone actually search for this? | Free API, gated on kill rules |
 | `redteam.py` | Attacks the finished script; "not-a-member" is a hard finding | Wired into brain.py |
 | `scriptbits.py` | Pulls the real lists back out of narration, for drawn cards | 9/9 on good + bad samples |
+| `test_relevance.py` | Stock-relevance check vs tags from REAL runs | 12/12, incl. the retriever |
 | `contact.py` | 12 frames of the finished video on one JPEG, plus measurements | **How faults get found** |
 | `test_engine_local.py` | Runs the REAL engine against REAL ffmpeg locally, ~50s | Passing |
 | `.github/workflows/factory.yml` | The workflow. Has a no-AI engine-only test mode | Stable |
@@ -132,6 +133,21 @@ The checklist used to be built from every scene's `key_term`, which is exactly
 how RUNWAY reached the screen as a type of business expense — it was the CLOSE
 beat. A story has neither beat and correctly gets no checklist at all. A CLOSE
 also inherits no section header, or the wrap-up gets labelled "3 OF 3".
+
+**4.15 The cards are a designed system, not four greys and a grid.** Owner's
+words: "organised and good but not so much well designed and elegant like best
+channels." Pure #FFF on #111 is what a first draft looks like — print has never
+used pure white or pure black. PAPER is warmed, INK pulled off black. Every
+list row is a *surface* with a hairline edge and a state tint (green done, red
+live with a solid keyline, flat tint to come); before, only the live row had a
+box so the others read as absences. Short lists are ONE column of full-width
+rows, centred in the usable band — a 2-column grid left a three-item list with
+a quarter of the frame empty and the items floating in it.
+
+**4.16 `_layout()` is the single definition of where rows go.** The still card
+and both animations measure from it. They each had their own copy, and the
+moment the card's layout changed the animations went on cropping the old
+rectangles and rendered rows chopped off half-way across the frame.
 
 **4.13 When the stock library has nothing relevant, DRAW the shot.** Not an
 AI image, not a slate. Measured on a real run: with the old check, 15 of 15
@@ -268,6 +284,7 @@ until July 2026), which is why every model id is an env var.
     python3 graphics.py              # renders one of each card to graphics_demo/
     python3 sfx.py                   # builds the kit and measures every level
     python3 scriptbits.py            # list extractor vs known-good/known-bad
+    python3 test_relevance.py        # stock relevance vs real logged tags
     python3 contact.py final_video.mp4   # LOOK at what was just built
 
 Workflow test mode: run with `skip_brain_test_fixture=true` to render a

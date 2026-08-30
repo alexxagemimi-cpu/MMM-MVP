@@ -50,22 +50,43 @@ F_DISPLAY = os.path.join(HERE, "assets", "fonts", "Anton-Regular.ttf")
 F_BODY    = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 F_TEXT    = "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"
 
-PAPER   = (255, 255, 255)
-INK     = (17, 17, 17)
+# A PALETTE, not four greys picked one at a time.
+#
+# Pure #FFF on #111 is what a first draft looks like: it is technically the
+# white-paper-black-ink design the reference uses, and it still reads as
+# harsh and unfinished next to a real channel's work. Print has never used
+# pure white or pure black. PAPER is warmed a little and INK is pulled off
+# black toward blue, which is what makes type look set rather than typed.
+#
+# TINT and LINE exist so a row can be a surface with an edge instead of text
+# floating in space - the single biggest reason the earlier cards looked
+# sparse rather than designed.
+PAPER   = (250, 250, 247)
+INK     = (20, 22, 26)
 MUTED   = (122, 128, 132)
 FAINT   = (214, 219, 222)
-ACCENT  = (225, 27, 21)      # the single red, as the reference thumbnails use
-DONE    = (34, 148, 90)
+LINE    = (228, 228, 223)    # hairline borders
+TINT    = (243, 243, 239)    # a row that is a surface, not a gap
+ACCENT  = (214, 40, 34)      # the single red, as the reference thumbnails use
+ACC_BG  = (252, 240, 239)    # the same red at paper weight, for the live row
+DONE    = (28, 138, 82)
+DONE_BG = (238, 247, 241)
 
 MARGIN  = 56
 HEAD_H  = 108               # the band the section header owns, on every frame
 
-# The lowest line anything drawn here may reach. Below it belongs to the two
-# things engine.py burns ON TOP of these cards afterwards: the term card
-# (its box reaches ~554) and the caption block (~564 down). A card that draws
-# into that region looks fine on its own and is a pile-up in the finished
-# video - which is exactly how it was found.
-SAFE_BOTTOM = 436
+# The lowest line anything drawn here may reach: the caption block starts
+# about 564 down (engine.py CAP_SIZE/CAP_MARGIN_V) and is burned ON TOP of
+# these cards afterwards.
+#
+# It was 436, leaving room for the term card as well, and that turned out to
+# be room reserved for something that never arrives: the engine now
+# suppresses a term card over a drawn card and clips one that would run into
+# it, precisely because they say the same thing twice. So the only thing
+# below is the captions, and holding 130px clear for a card that cannot
+# appear pushed every list into the top third of the frame with a third of
+# the picture empty under it.
+SAFE_BOTTOM = 548
 
 
 def _f(p, s):
@@ -97,6 +118,17 @@ def _fit(d, text, path, mw, hi, lo=16, max_lines=1):
             return f, ls
     f = _f(path, lo)
     return f, _wrap(d, text, f, mw)[:max_lines]
+
+
+def _track(text, px):
+    """Letter-spacing, which PIL has no setting for.
+
+    A short label set in caps with no tracking looks cramped; every design
+    system spaces small caps out. Done by inserting thin spaces because the
+    alternative - drawing each glyph and advancing by hand - would have to
+    reimplement kerning to get the same result.
+    """
+    return (" " * max(1, px // 3)).join(text)
 
 
 def _ease(t):
@@ -173,43 +205,46 @@ def overview_card(items, current=None, eyebrow=None, out_png="card.png"):
     img = Image.new("RGB", (W, H), PAPER)
     d = ImageDraw.Draw(img)
 
-    n = len(items)
-    cols = 2 if n <= 8 else 3
-    rows = -(-n // cols)
-    top = MARGIN + (54 if eyebrow else 8)
-
     if eyebrow:
-        ef = _f(F_BODY, 20)
-        d.text((MARGIN, MARGIN - 12), eyebrow.upper(), font=ef, fill=ACCENT)
+        ef = _f(F_BODY, 19)
+        d.text((MARGIN, MARGIN - 14), _track(eyebrow.upper(), 2),
+               font=ef, fill=ACCENT)
 
-    cw = (W - MARGIN * 2) / cols
-    ch = (H - top - MARGIN) / rows
-    lab_size = int(min(ch * 0.30, cw * 0.11, 40))
+    boxes, cw, lab_size = _layout(items, eyebrow)
 
     for i, label in enumerate(items):
-        r, c = divmod(i, cols)
-        x = MARGIN + c * cw
-        y = top + r * ch
+        x, y, cw, h = boxes[i]
         done = current is not None and i < current
         live = current is not None and i == current
 
+        # Every row is a surface with an edge. The finished ones go quiet in
+        # green, the live one carries the red and a solid keyline down its
+        # left side, and the ones still to come sit in a flat tint. Before,
+        # only the live row had a box, so the other rows read as absences.
+        fill = DONE_BG if done else (ACC_BG if live else TINT)
+        d.rounded_rectangle((x, y, x + cw, y + h), radius=12, fill=fill,
+                            outline=(ACCENT if live else LINE),
+                            width=2 if live else 1)
         if live:
-            d.rounded_rectangle((x - 6, y - 4, x + cw - 18, y + ch - 14),
-                                radius=10, outline=ACCENT, width=3)
+            d.rounded_rectangle((x, y + 6, x + 7, y + h - 6), radius=3,
+                                fill=ACCENT)
 
-        bs = int(lab_size * 1.15)
-        by = y + (ch - 22 - bs) / 2
-        col = DONE if done else (ACCENT if live else FAINT)
-        d.ellipse((x + 10, by, x + 10 + bs, by + bs), fill=col)
-        nf = _f(F_DISPLAY, int(bs * 0.56))
+        bs = int(min(h * 0.52, lab_size * 1.12))
+        by = y + (h - bs) / 2
+        bx = x + 26
+        col = DONE if done else (ACCENT if live else (198, 202, 205))
+        d.ellipse((bx, by, bx + bs, by + bs), fill=col)
         nt = "✓" if done else f"{i+1}"
-        tf = _f(F_BODY, int(bs * 0.62)) if done else nf
-        d.text((x + 10 + (bs - _w(d, nt, tf)) / 2, by + bs * 0.20), nt,
+        tf = _f(F_BODY, int(bs * 0.58)) if done else _f(F_DISPLAY,
+                                                        int(bs * 0.56))
+        tb = d.textbbox((0, 0), nt, font=tf)
+        d.text((bx + (bs - (tb[2] - tb[0])) / 2 - tb[0],
+                by + (bs - (tb[3] - tb[1])) / 2 - tb[1]), nt,
                font=tf, fill=PAPER)
 
-        f, lines = _fit(d, label.upper(), F_DISPLAY, cw - bs - 46,
+        f, lines = _fit(d, label.upper(), F_DISPLAY, cw - bs - 78,
                         lab_size, 15, max_lines=2)
-        ly = y + (ch - 22 - len(lines) * f.size * 1.08) / 2
+        ly = y + (h - len(lines) * f.size * 1.08) / 2
         # current=None means "no section yet" - the opening frame, where the
         # whole list is being shown before anything has started. There every
         # item is live-to-come, so every item is set in ink. Greying them all
@@ -218,7 +253,7 @@ def overview_card(items, current=None, eyebrow=None, out_png="card.png"):
         # like a list of things already dismissed.
         strong = live or done or current is None
         for ln in lines:
-            d.text((x + 10 + bs + 20, ly), ln, font=f,
+            d.text((bx + bs + 24, ly), ln, font=f,
                    fill=INK if strong else MUTED)
             ly += f.size * 1.08
 
@@ -260,7 +295,7 @@ def point_card(index, total, name, heading, bullets=None, note=None,
     y += 40
 
     for b in (bullets or [])[:4]:
-        bf = _f(F_TEXT, 28)
+        bf = _f(F_TEXT, 33)
         lines = _wrap(d, b, bf, W - MARGIN * 2 - 44)[:2]
         # Stop before SAFE_BOTTOM rather than running past it. A two-line
         # heading pushes the bullets down, and with four of them the last
@@ -268,14 +303,14 @@ def point_card(index, total, name, heading, bullets=None, note=None,
         # where "Deposit" was hidden behind an opaque black box. Dropping a
         # bullet is a loss; printing one where it cannot be read is a loss
         # AND a mess.
-        if y + len(lines) * 38 > SAFE_BOTTOM:
+        if y + len(lines) * 44 > SAFE_BOTTOM:
             break
         for k, ln in enumerate(lines):
             if k == 0:
-                d.ellipse((MARGIN + 4, y + 12, MARGIN + 14, y + 22), fill=ACCENT)
-            d.text((MARGIN + 34, y), ln, font=bf, fill=INK if k == 0 else MUTED)
-            y += 38
-        y += 10
+                d.ellipse((MARGIN + 3, y + 14, MARGIN + 15, y + 26), fill=ACCENT)
+            d.text((MARGIN + 38, y), ln, font=bf, fill=INK if k == 0 else MUTED)
+            y += 44
+        y += 14
 
     if note:
         nf, nl = _fit(d, note, F_TEXT, W - MARGIN * 2, 25, 16, max_lines=2)
@@ -324,25 +359,50 @@ def stat_card(index, total, name, value, label, out_png="card.png"):
 # ---------------------------------------------------------------------------
 # animation
 # ---------------------------------------------------------------------------
-def _cells(items, eyebrow):
-    """Where each row sits on the card.
+def _layout(items, eyebrow):
+    """
+    Where every row sits, and how big its label may be. ONE definition.
 
-    Shared by both clip builders so an animation can never disagree with the
-    still card it is animating - the geometry is computed once, here, from
-    the same numbers overview_card lays out with.
+    Both the still card and the two animations measure from this. They used
+    to each compute it, and the moment overview_card's layout changed - one
+    column for short lists, centred, a different top margin - the animations
+    went on cropping the old rectangles and rendered rows chopped off
+    half-way across the frame. That is the entire reason this is a function
+    and not three copies of the same arithmetic.
+
+    ONE COLUMN up to four items: a 2-column grid left a three-item list with
+    a quarter of the frame empty and the items floating in it. A contents
+    page in a book does not do that.
     """
     n = len(items)
-    cols = 2 if n <= 8 else 3
+    cols = 1 if n <= 4 else (2 if n <= 8 else 3)
     rows = -(-n // cols)
-    top = MARGIN + (54 if eyebrow else 8)
-    ch = (H - top - MARGIN) / rows
-    cw = (W - MARGIN * 2) / cols
+    top = MARGIN + (56 if eyebrow else 8)
+    gap = 14
+    cw = (W - MARGIN * 2 - gap * (cols - 1)) / cols
+    # Fill the usable band, then CENTRE the remainder. The cap stops two
+    # items becoming two enormous slabs.
+    usable = SAFE_BOTTOM - top
+    ch = min(usable / rows, 168)
+    y0 = top + (usable - ch * rows) / 2
+    lab_size = int(min(ch * 0.40, cw * 0.10, 46))
+
     boxes = []
     for i in range(n):
         r, c = divmod(i, cols)
-        boxes.append((int(MARGIN + c * cw) - 8, int(top + r * ch) - 6,
-                      int(MARGIN + (c + 1) * cw), int(top + (r + 1) * ch)))
-    return boxes
+        boxes.append((MARGIN + c * (cw + gap), y0 + r * ch, cw, ch - gap))
+    return boxes, cw, lab_size
+
+
+def _cells(items, eyebrow):
+    """The crop rectangles an animation composites, padded a little around
+    each row so a border or keyline is never sliced down its edge."""
+    boxes, _, _ = _layout(items, eyebrow)
+    out = []
+    for x, y, w_, h in boxes:
+        out.append((int(x) - 4, int(y) - 4,
+                    int(x + w_) + 4, int(y + h) + 6))
+    return out
 
 
 def _encode(tmp, pattern, fps, out_mp4):

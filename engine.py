@@ -660,9 +660,20 @@ def _relevant(hit, keyword):
     strong = [w for w in matched if w not in GENERIC_TAGS]
     if not strong:
         return False                      # only generic words matched
-    # one meaningful word carries a short phrase; a longer one has to do
-    # better than a single hit out of four
-    return len(matched) >= (1 if len(words) <= 2 else 2)
+
+    # HOW MANY MATCHES A PHRASE NEEDS, counted from the phrase as written -
+    # not from the words left after the length filter.
+    #
+    # That distinction is a real bug, not a detail. "delivery van loading" is
+    # three words, but "van" is three letters and got dropped, which made it
+    # look like a two-word phrase and lowered the bar to a single match. It
+    # then matched "loading" in `barley, field, combine, harvest, farmer,
+    # loading, summer` and put a barley harvester under narration about
+    # payment processing - the same crop-sprayer shot that started all of
+    # this, surviving the fix that was supposed to remove it.
+    asked = [w for w in re.sub(r"[^a-z0-9 ]", " ", keyword.lower()).split()
+             if w not in STOP_WORDS]
+    return len(matched) >= (1 if len(asked) <= 2 else 2)
 
 
 def _pick(hits, keyword):
