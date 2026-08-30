@@ -72,7 +72,11 @@ def grab(path, t, out_png, width=TILE_W):
 def _stats(im):
     """bright / header / ink for one tile."""
     g = im.convert("L")
-    px = list(g.getdata())
+    # tobytes() rather than getdata(): one byte per pixel for an "L" image,
+    # it is faster, and getdata() is deprecated in Pillow 14 - which on CI
+    # meant a warning per frame, twelve lines of noise in a log that exists
+    # to be read.
+    px = g.tobytes()
     w, h = g.size
     mean = sum(px) / len(px)
     band = px[:w * max(1, h // 7)]                 # top ~14% = header band

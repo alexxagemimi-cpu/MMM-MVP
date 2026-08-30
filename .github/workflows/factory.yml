@@ -96,6 +96,40 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      # THE SCOUT'S MEMORY, CARRIED BETWEEN RUNS.
+      #
+      # The runner is destroyed after every job, so made.json used to start
+      # empty every time. That silently defeated the whole point of it: a
+      # topic already made was supposed to be blocked from ever being chosen
+      # again, and instead every run scouted from scratch and could re-propose
+      # something an earlier run had made or rejected.
+      #
+      # It lives on its own branch rather than this one so the memory can
+      # change without touching code history, and so the shortlist - the
+      # "suggested but not yet made" list - is a file anyone can open and
+      # read on github.com. Missing branch on the first ever run is normal
+      # and not an error.
+      - name: Restore scout memory
+        if: ${{ github.event.inputs.skip_brain_test_fixture != 'true' }}
+        run: |
+          if git fetch --depth=1 origin factory-state 2>/dev/null; then
+            git show FETCH_HEAD:made.json > made.json 2>/dev/null \
+              && echo "restored scout memory:" \
+              || echo "factory-state exists but carries no made.json yet"
+            python -c "
+          import json
+          try:
+              s = json.load(open('made.json'))
+              print(f\"  made {len(s.get('made', []))}, \"
+                    f\"shortlisted {len(s.get('backlog', []))}, \"
+                    f\"rejected {len(s.get('rejected', []))}\")
+          except Exception as e:
+              print('  (unreadable, starting fresh:', e, ')')
+          " || rm -f made.json
+          else
+            echo "no factory-state branch yet - first run, starting fresh"
+          fi
+
       - name: Run Brain (scriptwriter)
         if: ${{ github.event.inputs.skip_brain_test_fixture != 'true' }}
         env:
@@ -261,3 +295,55 @@ jobs:
           # three or four videos and uploads then start failing. Download it,
           # then let it expire.
           retention-days: 3
+
+  # A SEPARATE JOB, purely so the build above keeps read-only access.
+  #
+  # Writing the scout's memory back is the one thing in this workflow that
+  # needs write permission, and it is four lines of git. Handing the whole
+  # fifteen-minute build job - which runs model output and fetches from four
+  # third-party APIs - the ability to write to the repository, in order to
+  # save one small JSON file, is the wrong trade. It gets its own job with
+  # its own permission instead.
+  save-scout-memory:
+    needs: build-video
+    if: ${{ always() && github.event.inputs.skip_brain_test_fixture != 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get made.json from the build
+        uses: actions/download-artifact@v4
+        with:
+          name: script-json
+        continue-on-error: true
+
+      - name: Commit it to the factory-state branch
+        run: |
+          if [ ! -f made.json ]; then
+            echo "no made.json produced by this run - nothing to save"
+            exit 0
+          fi
+          git config user.name  "mmm-factory"
+          git config user.email "mmm-factory@users.noreply.github.com"
+          # Park the new memory OUTSIDE the work tree before switching
+          # branches. factory-state already tracks a made.json, and git
+          # refuses to check out over an untracked file of the same name -
+          # which would fail this step on every run after the first.
+          cp made.json /tmp/made.json
+          # An orphan branch: state only, sharing no history with the code.
+          git fetch --depth=1 origin factory-state 2>/dev/null \
+            && git checkout -B factory-state FETCH_HEAD \
+            || git checkout --orphan factory-state
+          git rm -rq --cached . 2>/dev/null || true
+          find . -maxdepth 1 ! -name . ! -name .git -exec rm -rf {} +
+          cp /tmp/made.json made.json
+          git add -f made.json
+          if git diff --cached --quiet; then
+            echo "scout memory unchanged - nothing to commit"
+            exit 0
+          fi
+          git commit -qm "scout memory after run ${{ github.run_number }}"
+          git push -f origin factory-state
+          echo "saved."
