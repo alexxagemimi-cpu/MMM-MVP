@@ -81,6 +81,17 @@ MUSIC_GAIN  = 0.20
 # The kit is already levelled well under 0 dB (see sfx.py), so this is a trim
 # rather than a fader. An effect the viewer consciously notices is too loud.
 SFX_GAIN    = 0.9
+
+# HOW LONG THE SECTION CARD HOLDS.
+#
+# Fixed, not a share of the scene. When it took an equal share, a measured
+# 40-second build was 51% one motionless card - and the card is the ONE shot
+# with no inherent motion, so it is the one that must not be long. The
+# opening card earns a little more because it has more to show: it is the
+# first sight of the whole list.
+CARD_SECONDS      = float(os.environ.get("CARD_SECONDS", "2.4"))
+OPEN_CARD_SECONDS = float(os.environ.get("OPEN_CARD_SECONDS", "3.6"))
+
 WORDS_PER_CUE = 6
 MAX_CUE_GAP   = 0.65
 
@@ -373,6 +384,28 @@ def ass_ts(t):
     return f"{h}:{m:02d}:{s:02d}.{cs:02d}"
 
 
+# THE THREE BANDS, as numbers instead of scattered literals.
+#
+# Everything on screen has to fit between the persistent header at the top
+# and the bottom edge, without any two things sharing a row. Keeping the
+# positions here means the layout can be reasoned about (and re-checked)
+# in one place instead of being spread across a style line and a \\move
+# override that silently outranks it.
+#
+# Caption size was 20 on a 720-high frame - 2.8% of frame height, about half
+# of what YouTube's own default burns in, and small enough that it is
+# unreadable on a phone, which is where most of this audience watches. 40 is
+# ~5.5% of height, in line with what explainer channels actually run, and it
+# is raised off the bottom edge so it does not fight the player's own chrome.
+CAP_SIZE      = 40
+CAP_MARGIN_V  = 64            # bottom of the caption block to frame bottom
+TERM_SIZE     = 34
+TERM_PAD      = 10            # BorderStyle=3: "Outline" is box padding
+TERM_Y        = 496           # ABSOLUTE baseline y - see the \\move note below
+TERMSUB_SIZE  = 20
+TERMSUB_PAD   = 8
+TERMSUB_MRG_V = 178
+
 ASS_HEADER = """[Script Info]
 ScriptType: v4.00+
 PlayResX: {w}
@@ -381,9 +414,9 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,DejaVu Sans,20,&H0000D7FF,&H00FFFFFF,&HD0000000,&H00000000,-1,0,0,0,100,100,0.3,0,1,2.4,0.8,2,20,20,46,1
-Style: Term,DejaVu Sans,30,&H00FFFFFF,&H00FFFFFF,&H14101010,&H14101010,-1,0,0,0,100,100,0.6,0,3,16,0,1,54,54,120,1
-Style: TermSub,DejaVu Sans,17,&H00D8D8D8,&H00D8D8D8,&H28101010,&H28101010,0,0,0,0,100,100,0.3,0,3,13,0,1,54,54,92,1
+Style: Caption,DejaVu Sans,{cap},&H0000D7FF,&H00FFFFFF,&HD0000000,&H00000000,-1,0,0,0,100,100,0.3,0,1,3.0,1.0,2,20,20,{capv},1
+Style: Term,DejaVu Sans,{term},&H00FFFFFF,&H00FFFFFF,&H14101010,&H14101010,-1,0,0,0,100,100,0.6,0,3,{termpad},0,1,54,54,120,1
+Style: TermSub,DejaVu Sans,{sub},&H00D8D8D8,&H00D8D8D8,&H28101010,&H28101010,0,0,0,0,100,100,0.3,0,3,{subpad},0,1,54,54,{subv},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -468,7 +501,10 @@ def write_ass(groups, path, term_cards=None):
     their own background; letting the renderer measure the glyphs removes
     that failure mode entirely rather than fixing it arithmetically.
     """
-    lines = [ASS_HEADER.format(w=W, h=H)]
+    lines = [ASS_HEADER.format(w=W, h=H, cap=CAP_SIZE, capv=CAP_MARGIN_V,
+                               term=TERM_SIZE, termpad=TERM_PAD,
+                               sub=TERMSUB_SIZE, subpad=TERMSUB_PAD,
+                               subv=TERMSUB_MRG_V)]
     for start, end, words in groups:
         parts = []
         for i, (ws, _we, wt) in enumerate(words):
@@ -485,7 +521,7 @@ def write_ass(groups, path, term_cards=None):
         # layer 1 so a card always sits above the caption layer
         lines.append(
             f"Dialogue: 1,{ass_ts(a)},{ass_ts(b)},Term,,0,0,0,,"
-            f"{{\\fad(180,260)\\move({-260},{H-120},{54},{H-120},0,220)}}"
+            f"{{\\fad(180,260)\\move({-260},{TERM_Y},{54},{TERM_Y},0,220)}}"
             f"{ass_escape(term).upper()}\n")
         if fact:
             lines.append(
@@ -791,7 +827,13 @@ def render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames, fade_in,
     dur = frames / FPS
     grade = f"{GRADE},{VIGNETTE}format=yuv420p"
 
-    if asset_kind == "card":
+    if asset_kind == "cardclip":
+        # An ANIMATED card, already rendered by graphics.py at exactly this
+        # frame count and exactly this size. Nothing to scale, nothing to
+        # crop, no grade and no motion - it only needs its timebase
+        # normalised so the stream-copy concat downstream stays legal.
+        vf = f"fps={FPS},format=yuv420p"
+    elif asset_kind == "card":
         # zoompan with the zoom pinned at 1.0 expands ONE input frame into
         # `frames` output frames, holding the card perfectly still. This is
         # the same mechanism ken_burns uses, and it is deliberately not
@@ -846,13 +888,20 @@ def render_shot(motion_idx, asset_kind, asset_path, out_mp4, frames, fade_in,
 
     # The persistent header rides on top of footage shots. A card already
     # draws its own, so it never gets one composited over it.
-    if overlay_png and asset_kind != "card" and os.path.exists(overlay_png):
+    if overlay_png and asset_kind not in ("card", "cardclip") \
+            and os.path.exists(overlay_png):
         cmd += ["-i", overlay_png]
         cmd += ["-filter_complex",
                 f"[0:v]{vf}[b];[b][1:v]overlay=0:0:format=auto[v]",
                 "-map", "[v]"]
     else:
         cmd += ["-vf", vf]
+
+    if asset_kind == "cardclip":
+        # belt and braces: graphics.py writes exactly this many frames, and
+        # this makes it impossible for a longer one to slip through and push
+        # the scene out of sync with its own narration
+        cmd += ["-frames:v", str(frames)]
 
     cmd += [
         "-an",
@@ -979,7 +1028,8 @@ def assemble_scene(shot_mp4s, mp3, out_mp4, listfile, target_dur):
 
 
 def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
-                  first_scene, last_scene, frames_total, overlay_png=None):
+                  first_scene, last_scene, frames_total, overlay_png=None,
+                  first_frames=None):
     """
     Render one scene: N visuals (each ("video"|"image", path)) -> N silent
     shots -> one assemble pass that concatenates them and lays the narration
@@ -992,9 +1042,28 @@ def render_scene(scene_idx, assets, mp3, out_mp4, work_dir, motion_start,
     out for itself.
     """
     n = len(assets)
-    base = frames_total // n
-    frame_counts = [base] * n
-    frame_counts[-1] += frames_total - base * n
+    if first_frames and n > 1:
+        # `first_frames` pins the FIRST shot and splits what is left across
+        # the others. The section card needs this, and the reason is
+        # measured, not stylistic: with an even split and two shots in a
+        # scene the card took half the scene, and sampling a finished
+        # 40-second video every half second showed 51% of it was one card
+        # that never changed. A still held for five seconds is the exact
+        # failure this project already wrote down as a rule - a block where
+        # nothing changes is a hole viewers leak out of. The card is a beat,
+        # not a shot; it gets a beat's worth of time, footage gets the rest.
+        #
+        # Clamped so the pin can never starve the remaining shots, however
+        # short the scene turns out to be.
+        head = max(1, min(int(first_frames), frames_total - (n - 1)))
+        rest = frames_total - head
+        base = rest // (n - 1)
+        frame_counts = [head] + [base] * (n - 1)
+        frame_counts[-1] += rest - base * (n - 1)
+    else:
+        base = frames_total // n
+        frame_counts = [base] * n
+        frame_counts[-1] += frames_total - base * n
 
     shots, failed = [], 0
     for j, ((kind, path), frames) in enumerate(zip(assets, frame_counts)):
@@ -1234,43 +1303,133 @@ async def build():
     #
     # Both are built from data the script already carries - one key_term per
     # scene - so this costs no extra model call and no extra quota.
-    members = [(s.get("key_term") or "").strip() for s in scenes]
-    members = [m for m in members if m]
+    # WHICH SCENES ARE ACTUALLY ITEMS IN THE LIST.
+    #
+    # This used to be "every scene's key_term", and that is how RUNWAY ended
+    # up on screen as a type of business expense. Runway is not an expense -
+    # it is months of cash left at the current burn - and it was the CLOSE
+    # beat, the scene that sums up and sends the viewer off. A closing scene
+    # is not a member of the taxonomy the video is listing, and neither is
+    # the opening ANSWER, the FRAME, the EDGE case or the APPLY.
+    #
+    # modes.py already says which beat carries a list item: CATEGORY in an
+    # explainer ("one scene per type") and STEP in a guide ("one scene per
+    # step"). Nothing else does. A story has neither, so it gets no
+    # checklist at all, which is correct - a story is not a list.
+    #
+    # This does not fix the taxonomy problem in section 11 of CLAUDE.md;
+    # nothing here checks that the CATEGORY scenes are genuinely members of
+    # the category. It fixes the narrower bug of putting scenes on the list
+    # that never claimed to be items in the first place.
+    MEMBER_BEATS = {"CATEGORY", "STEP"}
+    # scenes that belong to no section at all - the wrap-up, whatever the
+    # mode calls it
+    CLOSING_BEATS = {"CLOSE", "RESONANCE"}
+    member_idx = [i for i, s in enumerate(scenes)
+                  if (s.get("beat") or "").strip().upper() in MEMBER_BEATS
+                  and (s.get("key_term") or "").strip()]
+    members = [scenes[i]["key_term"].strip() for i in member_idx]
+    # where each scene sits in the list, or None if it is not an item
+    member_of = {si: k for k, si in enumerate(member_idx)}
     use_cards = graphics is not None and len(members) >= 2
     if use_cards:
-        print(f"      drawing {total} section cards + headers "
-              f"({len(members)} items)", flush=True)
+        n_cards = len(members) + (0 if 0 in member_of else 1)
+        print(f"      drawing {n_cards} cards + headers, list of "
+              f"{len(members)}: {', '.join(members)}", flush=True)
+    elif graphics is not None:
+        print("      no list beats (CATEGORY/STEP) in this script "
+              "- footage only, no checklist", flush=True)
 
     print(f"\n[3/3] render x{total} scenes ({total_shots} shots) ...", flush=True)
     cues, parts, timeline, motion_cursor = [], [], 0.0, 0
     term_cards, sfx_events = [], []
+    last_member = None
+    # the opening card's eyebrow: the video's own title, which is what the
+    # list is a list OF. Falls back to a neutral line when there isn't one.
+    title_eyebrow = ((data.get("title") if isinstance(data, dict) else "")
+                     or "In this video").strip()[:60]
 
     for i, sc in enumerate(scenes):
         mp4 = os.path.join(WORK, f"s{i:03d}.mp4")
         frames_total = math.ceil(durs[i] * FPS) + 3
 
-        assets, overlay = list(asset_paths[i]), None
-        if use_cards:
+        assets, overlay, card_frames = list(asset_paths[i]), None, None
+        # A card is drawn on the opening scene (the whole list, before
+        # anything starts - what the reference explainer does with its first
+        # frame) and on every scene that IS an item. The scenes in between -
+        # a FRAME, an EDGE case, the CLOSE - carry the header of the section
+        # they belong to and no card, because nothing on the list changed.
+        here = member_of.get(i)
+        show_card = use_cards and (here is not None or i == 0)
+        if show_card:
             try:
-                card = os.path.join(WORK, f"card{i:03d}.png")
-                graphics.overview_card(members, min(i, len(members) - 1),
-                                       f"Section {i+1} of {total}", card)
-                overlay = os.path.join(WORK, f"head{i:03d}.png")
-                graphics.section_overlay(i + 1, total,
-                                         members[min(i, len(members) - 1)],
-                                         overlay)
+                # The card is a BEAT, so it gets a fixed short length rather
+                # than an equal share of the scene. Capped at 40% of the
+                # scene as well, so a very short scene cannot become mostly
+                # card.
+                want = OPEN_CARD_SECONDS if i == 0 else CARD_SECONDS
+                card_frames = min(int(want * FPS), int(frames_total * 0.40))
+                card_frames = max(card_frames, FPS)   # never below one second
+
+                card = os.path.join(WORK, f"card{i:03d}.mp4")
+                if here is None:
+                    # the opening: rows arrive one after another, so the
+                    # viewer watches the whole list being built before a
+                    # single section has started
+                    graphics.overview_clip(
+                        members, None, card, frames=card_frames, fps=FPS,
+                        eyebrow=title_eyebrow,
+                        tmp=os.path.join(WORK, f"ovw{i:03d}"))
+                else:
+                    # tick the one just finished, move the box to this one.
+                    # Only what changed moves.
+                    graphics.advance_clip(
+                        members, here, card, frames=card_frames, fps=FPS,
+                        eyebrow=f"{here+1} of {len(members)}",
+                        previous=(here - 1) if here else last_member,
+                        tmp=os.path.join(WORK, f"adv{i:03d}"))
+                    # the tick lands about a third of the way in (see the
+                    # stagger in advance_clip); mark it with a sound
+                    if here or last_member is not None:
+                        sfx_events.append(
+                            (timeline + card_frames / FPS * 0.30, "tick"))
+
                 # the card REPLACES the first stock shot rather than being
                 # added, so the scene still fits its narration exactly
-                assets = [("card", card)] + assets[1:] if len(assets) > 1 \
-                    else [("card", card)]
+                assets = [("cardclip", card)] + assets[1:] if len(assets) > 1 \
+                    else [("cardclip", card)]
             except Exception as e:
                 print(f"      !! card for scene {i+1} failed ({str(e)[:70]}) "
                       f"- falling back to footage only", flush=True)
-                assets, overlay = list(asset_paths[i]), None
+                assets, card_frames = list(asset_paths[i]), None
+
+        # The header names the SECTION, so a non-item scene keeps the header
+        # of the section it sits inside rather than losing its orientation.
+        #
+        # Except the closing scene, which sits inside no section - it is the
+        # wrap-up. Carrying the last section's header through it labelled the
+        # summary "ONE-OFF COSTS 3 OF 3" while the narration had moved on to
+        # something else entirely, which is worse than no orientation: it is
+        # wrong orientation. Seen on a rendered frame.
+        closing = (sc.get("beat") or "").strip().upper() in CLOSING_BEATS
+        if use_cards and not closing \
+                and (here is not None or last_member is not None):
+            at = here if here is not None else last_member
+            try:
+                overlay = os.path.join(WORK, f"head{i:03d}.png")
+                graphics.section_overlay(at + 1, len(members),
+                                         members[at], overlay)
+            except Exception as e:
+                print(f"      !! header for scene {i+1} failed "
+                      f"({str(e)[:60]})", flush=True)
+                overlay = None
+        if here is not None:
+            last_member = here
 
         render_scene(i, assets, mp3s[i], mp4, WORK, motion_cursor,
                      first_scene=(i == 0), last_scene=(i == total - 1),
-                     frames_total=frames_total, overlay_png=overlay)
+                     frames_total=frames_total, overlay_png=overlay,
+                     first_frames=card_frames)
         motion_cursor += len(assets)
 
         words = word_lists[i] or estimate_word_times(
@@ -1285,10 +1444,37 @@ async def build():
         if term:
             at = find_term_time(words, term)
             if at is not None:
-                term_cards.append((at + timeline, term,
-                                   (sc.get("key_fact") or "").strip()))
-                # a card appearing silently is half an edit
-                sfx_events.append((at + timeline - TERM_LEAD, "pop"))
+                at += timeline
+                # NOT while the section card is up.
+                #
+                # Found on a rendered frame: the term card slid in over the
+                # section card and printed "GROSS MARGIN" across the
+                # checklist's own GROSS MARGIN row - the same two words
+                # twice, on top of each other. The three-band layout
+                # (header / term / captions) assumes the middle of the frame
+                # is a picture; on a section card the middle of the frame is
+                # the list.
+                #
+                # It is redundant there anyway: the boxed row already names
+                # the term. What the term card adds that the list does not
+                # is the one-line definition, and that is worth keeping - so
+                # it is pushed to the moment the card ends rather than
+                # dropped. The term is the subject of the whole scene, so
+                # landing a beat later still lands on its own subject; what
+                # 4.3 forbids is a card at a moment the narration never
+                # says the word at all.
+                if card_frames:
+                    card_end = timeline + card_frames / FPS
+                    if at < card_end:
+                        at = card_end + 0.15
+                if at < timeline + actual - 0.6:
+                    term_cards.append((at, term,
+                                       (sc.get("key_fact") or "").strip()))
+                    # a card appearing silently is half an edit
+                    sfx_events.append((at - TERM_LEAD, "pop"))
+                else:
+                    print(f"        (no room for term card {term!r})",
+                          flush=True)
             else:
                 print(f"        (no term-card anchor for {term!r})", flush=True)
 
@@ -1306,6 +1492,9 @@ async def build():
         for _, p in asset_paths[i]:
             os.remove(p)
         os.remove(mp3s[i])
+        for _, p in assets:
+            if p not in [q for _, q in asset_paths[i]] and os.path.exists(p):
+                os.remove(p)   # the rendered card clip
 
     if not parts:
         raise RuntimeError("no scenes rendered")

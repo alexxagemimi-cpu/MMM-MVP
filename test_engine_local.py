@@ -125,35 +125,57 @@ def main():
     E.fetch_image = lambda k, sd, o: False
     E.synth = fake_synth
 
+    # THE FIXTURE IS A REAL TAXONOMY, and that is not decoration.
+    #
+    # The version before this one listed compound interest, fixed costs,
+    # gross margin and runway as if they were one list. They are not a list
+    # of anything - they are four unrelated finance words - and the last of
+    # them, runway, went on screen as an item because it was the CLOSE beat.
+    # The owner caught exactly that in a rendered video and was right.
+    #
+    # A test fixture that is itself wrong cannot show that the pipeline
+    # handles right. These three ARE the standard split of business costs,
+    # every one of them is a cost, and the CLOSE deliberately names
+    # something that is NOT a cost (runway) so the test proves a closing
+    # scene never reaches the checklist.
     scenes = [
-        {"scene": 1, "beat": "ANSWER", "key_term": "compound interest",
-         "key_fact": "Interest that earns interest on itself",
-         "narration": "Almost nobody plans for compound interest, and it quietly "
-                      "decides how much money you end up with after thirty years "
-                      "of doing nothing clever at all.",
+        {"scene": 1, "beat": "ANSWER", "key_term": "fixed costs",
+         "key_fact": "Every business cost is one of three kinds",
+         "narration": "Every cost a business has falls into one of three "
+                      "kinds, and knowing which is which is the whole job: "
+                      "fixed costs, variable costs, and one-off costs.",
          "image_keywords": ["a", "b", "c", "d"]},
         {"scene": 2, "beat": "CATEGORY", "key_term": "fixed costs",
-         "key_fact": "Costs that do not move when sales move",
-         "narration": "Your fixed costs are the ones that do not care how much you "
-                      "sell in a month, and they are the first thing to cut when "
-                      "the revenue stops arriving.",
+         "key_fact": "They do not move when your sales move",
+         "narration": "Your fixed costs are the ones that do not care how "
+                      "much you sell in a month. Rent, salaries, insurance: "
+                      "a quiet month costs exactly what a busy one does.",
          "image_keywords": ["e", "f", "g"]},
-        {"scene": 3, "beat": "CATEGORY", "key_term": "gross margin",
-         "key_fact": "What is left after the cost of the product",
-         "narration": "Your gross margin is the number that decides everything else, "
-                      "because a thin one means every extra sale barely pays for "
-                      "the effort of making it.",
+        {"scene": 3, "beat": "CATEGORY", "key_term": "variable costs",
+         "key_fact": "They rise and fall with every sale",
+         "narration": "Variable costs do the opposite. Materials, packaging, "
+                      "delivery, card fees. They rise and fall with every "
+                      "sale, so selling nothing genuinely costs you less.",
          "image_keywords": ["h", "i"]},
-        {"scene": 4, "beat": "CLOSE", "key_term": "runway",
-         "key_fact": "Months of cash left at current burn",
-         "narration": "Which leaves runway, the only number that ends the story, "
-                      "counted in months rather than in rupees or dollars.",
+        {"scene": 4, "beat": "CATEGORY", "key_term": "one-off costs",
+         "key_fact": "Rare, large, and easy to forget when planning",
+         "narration": "Then there are one-off costs, the ones nobody plans "
+                      "for. A replaced laptop, a legal fee, a deposit. Rare, "
+                      "large, and usually what turns a good month into a "
+                      "loss.",
          "image_keywords": ["j", "k", "l"]},
+        {"scene": 5, "beat": "CLOSE", "key_term": "runway",
+         "key_fact": "Months of cash left at current burn",
+         "narration": "Add all three up against your cash and you get "
+                      "runway, counted in months rather than in rupees, "
+                      "which is the only number that ends the story.",
+         "image_keywords": ["m", "n"]},
     ]
 
     shutil.rmtree(os.path.join(WORK, "concat.txt"), ignore_errors=True)
     with open("script.json", "w") as f:
-        json.dump({"title": "local test", "scenes": scenes}, f)
+        json.dump({"title": "The 3 Types of Business Cost",
+                   "scenes": scenes}, f)
 
     print("running the real build() with real ffmpeg ...\n")
     asyncio.run(E.build())

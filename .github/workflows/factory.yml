@@ -37,6 +37,12 @@ on:
         default: 'false'
         type: choice
         options: ['false', 'true']
+      log_frames:
+        description: 'Also print the contact sheet into the log as base64 (for reviewing a run without downloading the artifact)'
+        required: false
+        default: 'false'
+        type: choice
+        options: ['false', 'true']
   repository_dispatch:
     types: [start-render]
 
@@ -132,12 +138,20 @@ jobs:
                 "scene": 1,
                 "beat": "ANSWER",
                 "key_term": "fixed costs",
-                "key_fact": "They do not move when your sales move",
-                "narration": "Business expenses fall into three groups, and the first is the one that quietly kills companies: fixed costs. Rent, salaries, insurance, software. They do not move when your sales move, which means a slow month costs exactly the same as a good one.",
+                "key_fact": "Every business expense is one of three kinds",
+                "narration": "Every expense a business has falls into one of three kinds, and telling them apart is most of the job. Fixed costs, variable costs, and one-off costs. Get these three straight and a set of accounts stops being a wall of numbers.",
                 "image_keywords": ["empty office desk morning", "person reviewing paperwork", "small business storefront", "calculator and invoices"]
               },
               {
                 "scene": 2,
+                "beat": "CATEGORY",
+                "key_term": "fixed costs",
+                "key_fact": "They do not move when your sales move",
+                "narration": "Fixed costs are the ones that quietly kill companies. Rent, salaries, insurance, software. They do not move when your sales move, which means a slow month costs exactly the same as a good one.",
+                "image_keywords": ["office building exterior", "empty desk chairs", "signing rental agreement"]
+              },
+              {
+                "scene": 3,
                 "beat": "CATEGORY",
                 "key_term": "variable costs",
                 "key_fact": "They rise and fall with every sale",
@@ -145,7 +159,7 @@ jobs:
                 "image_keywords": ["packing boxes warehouse", "delivery van loading", "hands counting stock"]
               },
               {
-                "scene": 3,
+                "scene": 4,
                 "beat": "CATEGORY",
                 "key_term": "one-off costs",
                 "key_fact": "Rare, large, and easy to forget when planning",
@@ -153,7 +167,7 @@ jobs:
                 "image_keywords": ["broken laptop repair", "signing legal documents", "workshop tools bench"]
               },
               {
-                "scene": 4,
+                "scene": 5,
                 "beat": "CLOSE",
                 "key_term": "runway",
                 "key_fact": "Months of cash left at your current burn",
@@ -163,6 +177,13 @@ jobs:
             ]
           }
           JSON
+          # Runway is deliberately the CLOSE beat and deliberately NOT a
+          # type of expense - it is months of cash left at the current burn.
+          # It used to reach the on-screen checklist as if it were a fourth
+          # kind of expense, which the owner caught in a rendered video and
+          # was right about. Only CATEGORY and STEP beats are list items now,
+          # so this fixture doubles as the regression test for that: the
+          # engine must print a list of three here, never four.
           python -c "import json; json.load(open('script.json'))" && echo "script.json is valid JSON"
 
       - name: Upload script for QA
@@ -208,6 +229,17 @@ jobs:
           STYLE: ${{ vars.STYLE || 'explainer' }}
         run: python engine.py
 
+      # Twelve frames from the finished video on one small JPEG. The video is
+      # 13MB in a zipped artifact; this is ~60KB and opens on a phone, which
+      # is the difference between a run being LOOKED at and a run being judged
+      # by its log. Every real fault this project has shipped was visible in a
+      # frame and invisible in a log.
+      - name: Contact sheet
+        continue-on-error: true
+        run: |
+          python contact.py final_video.mp4 contact_sheet.jpg \
+            ${{ github.event.inputs.log_frames == 'true' && '--b64' || '' }}
+
       - name: Disk report
         if: always()
         run: df -h / | tail -1
@@ -220,6 +252,7 @@ jobs:
           path: |
             final_video.mp4
             thumbnail.png
+            contact_sheet.jpg
             subtitles.srt
             captions.ass
           if-no-files-found: warn

@@ -127,9 +127,18 @@ def section_overlay(index, total, name, out_png):
     The header alone on transparency, for compositing over stock footage or a
     photograph so those shots carry the same orientation as the drawn cards.
     A white plate sits behind it so black type stays legible over any picture.
+
+    The plate is FULLY opaque, and that is deliberate. It was 232/255 first,
+    which looks like a reasonable "barely there" choice and is not: measured
+    on a rendered frame over a saturated clip, the footage read straight
+    through the band, so the section name sat on whatever colour happened to
+    be behind it and the header stopped being a stable white strip. The whole
+    point of this design is that it reads as a document (see note 4 at the top
+    of this file); a see-through header is a tinted header, and a tinted
+    header changes every time the shot behind it does.
     """
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
-    plate = Image.new("RGBA", (W, HEAD_H + 4), (255, 255, 255, 232))
+    plate = Image.new("RGBA", (W, HEAD_H + 4), (255, 255, 255, 255))
     img.paste(plate, (0, 0))
     d = ImageDraw.Draw(img)
     draw_header(d, index, total, name)
@@ -194,9 +203,16 @@ def overview_card(items, current=None, eyebrow=None, out_png="card.png"):
         f, lines = _fit(d, label.upper(), F_DISPLAY, cw - bs - 46,
                         lab_size, 15, max_lines=2)
         ly = y + (ch - 22 - len(lines) * f.size * 1.08) / 2
+        # current=None means "no section yet" - the opening frame, where the
+        # whole list is being shown before anything has started. There every
+        # item is live-to-come, so every item is set in ink. Greying them all
+        # (what falling through to MUTED did) made the one frame that is
+        # supposed to say "here is everything you are about to learn" look
+        # like a list of things already dismissed.
+        strong = live or done or current is None
         for ln in lines:
             d.text((x + 10 + bs + 20, ly), ln, font=f,
-                   fill=INK if (live or done) else MUTED)
+                   fill=INK if strong else MUTED)
             ly += f.size * 1.08
 
     img.save(out_png, "PNG")
@@ -272,14 +288,52 @@ def stat_card(index, total, name, value, label, out_png="card.png"):
 # ---------------------------------------------------------------------------
 # animation
 # ---------------------------------------------------------------------------
-def overview_clip(items, current, out_mp4, seconds=4.0, fps=25, eyebrow=None,
-                  tmp="_ovtmp"):
+def _cells(items, eyebrow):
+    """Where each row sits on the card.
+
+    Shared by both clip builders so an animation can never disagree with the
+    still card it is animating - the geometry is computed once, here, from
+    the same numbers overview_card lays out with.
     """
-    The overview card, with rows arriving one after another.
+    n = len(items)
+    cols = 2 if n <= 8 else 3
+    rows = -(-n // cols)
+    top = MARGIN + (54 if eyebrow else 8)
+    ch = (H - top - MARGIN) / rows
+    cw = (W - MARGIN * 2) / cols
+    boxes = []
+    for i in range(n):
+        r, c = divmod(i, cols)
+        boxes.append((int(MARGIN + c * cw) - 8, int(top + r * ch) - 6,
+                      int(MARGIN + (c + 1) * cw), int(top + (r + 1) * ch)))
+    return boxes
+
+
+def _encode(tmp, pattern, fps, out_mp4):
+    subprocess.run(["ffmpeg", "-y", "-v", "error", "-framerate", str(fps),
+                    "-i", os.path.join(tmp, pattern), "-c:v", "libx264",
+                    "-preset", "superfast", "-crf", "18", "-pix_fmt",
+                    "yuv420p", "-r", str(fps), out_mp4],
+                   check=True, timeout=180)
+    for f in os.listdir(tmp):
+        os.remove(os.path.join(tmp, f))
+    os.rmdir(tmp)
+    return out_mp4
+
+
+def overview_clip(items, current, out_mp4, seconds=4.0, fps=25, eyebrow=None,
+                  tmp="_ovtmp", frames=None):
+    """
+    The overview card, with rows arriving one after another. This is the
+    OPENING card only - the first time the viewer sees the list.
 
     Composites PRE-DRAWN STRIPS rather than redrawing the card each frame.
     Redrawing text 100 times costs about 30s a card, which across a dozen
     scenes would eat the job budget on its own.
+
+    `frames` overrides `seconds` when the caller needs an exact count. The
+    engine splits a scene into whole frames and the shot has to match that
+    budget exactly, so "4.0 seconds" is not a number it can use.
     """
     items = [i.strip() for i in items if i and i.strip()]
     os.makedirs(tmp, exist_ok=True)
@@ -294,21 +348,9 @@ def overview_clip(items, current, out_mp4, seconds=4.0, fps=25, eyebrow=None,
         d.text((MARGIN, MARGIN - 12), eyebrow.upper(), font=_f(F_BODY, 20),
                fill=ACCENT)
 
-    n = len(items)
-    cols = 2 if n <= 8 else 3
-    rows = -(-n // cols)
-    top = MARGIN + (54 if eyebrow else 8)
-    ch = (H - top - MARGIN) / rows
-    cw = (W - MARGIN * 2) / cols
+    cells = [(full.crop(b), b) for b in _cells(items, eyebrow)]
 
-    cells = []
-    for i in range(n):
-        r, c = divmod(i, cols)
-        box = (int(MARGIN + c * cw) - 8, int(top + r * ch) - 6,
-               int(MARGIN + (c + 1) * cw), int(top + (r + 1) * ch))
-        cells.append((full.crop(box), box))
-
-    total_f = int(seconds * fps)
+    total_f = int(frames) if frames else int(seconds * fps)
     for fi in range(total_f):
         t = fi / max(total_f - 1, 1)
         fr = blank.copy()
@@ -322,15 +364,72 @@ def overview_clip(items, current, out_mp4, seconds=4.0, fps=25, eyebrow=None,
             fr.paste(Image.blend(fr.crop(box), lay, p), (box[0], box[1]))
         fr.save(os.path.join(tmp, f"f{fi:04d}.png"))
 
-    subprocess.run(["ffmpeg", "-y", "-v", "error", "-framerate", str(fps),
-                    "-i", os.path.join(tmp, "f%04d.png"), "-c:v", "libx264",
-                    "-preset", "superfast", "-crf", "18", "-pix_fmt",
-                    "yuv420p", "-r", str(fps), out_mp4],
-                   check=True, timeout=180)
-    for f in os.listdir(tmp):
-        os.remove(os.path.join(tmp, f))
-    os.rmdir(tmp)
-    return out_mp4
+    return _encode(tmp, "f%04d.png", fps, out_mp4)
+
+
+def advance_clip(items, current, out_mp4, frames, fps=25, eyebrow=None,
+                 tmp="_advtmp", previous=None):
+    """
+    The between-sections beat: the item just finished gets its tick, then the
+    red box moves down to the next one.
+
+    This is the thing the owner asked for in so many words - "show main
+    screen to make user know they completed one section then explain next
+    thing" - and it is a DIFFERENT animation from the opening card on
+    purpose. Replaying the rows-arriving animation at every section would
+    contradict the one structural finding from the reference video: elements
+    ACCUMULATE on a stable canvas. By section three the list is furniture the
+    viewer already knows; the only thing that should move is what changed.
+
+    So the whole card is held still and exactly two rows are cross-faded -
+    the finished one and the new one - and they are staggered, tick first,
+    box second, because that is the order the sentence goes in: that one is
+    done, this one is next.
+
+    Cost is two drawn cards and `frames` composites of two small crops, which
+    is a fraction of what redrawing the card per frame would take.
+    """
+    items = [i.strip() for i in items if i and i.strip()]
+    if not 0 <= current < len(items):
+        raise ValueError(f"advance_clip: current {current} outside the list")
+    # `previous` is normally the item before, but the FIRST section advances
+    # from "nothing selected yet" - the opening list - which is current=None,
+    # not -1. Passing it explicitly keeps that case from having to be encoded
+    # as an out-of-range index.
+    if previous is None and current > 0:
+        previous = current - 1
+    os.makedirs(tmp, exist_ok=True)
+
+    before_p = os.path.join(tmp, "_a.png")
+    after_p = os.path.join(tmp, "_b.png")
+    overview_card(items, previous, eyebrow, before_p)
+    overview_card(items, current, eyebrow, after_p)
+    with Image.open(before_p) as im:
+        before = im.convert("RGB").copy()
+    with Image.open(after_p) as im:
+        after = im.convert("RGB").copy()
+
+    boxes = _cells(items, eyebrow)
+    cur_box = boxes[current]
+    prev_box = boxes[previous] if previous is not None else None
+
+    total_f = int(frames)
+    for fi in range(total_f):
+        t = fi / max(total_f - 1, 1)
+        fr = before.copy()
+        # tick lands over the first 45%, box arrives over the last 65%,
+        # overlapping in the middle so it reads as one movement rather than
+        # two separate events
+        p_tick = _ease(max(0.0, min(1.0, (t - 0.12) / 0.33)))
+        p_box = _ease(max(0.0, min(1.0, (t - 0.35) / 0.45)))
+        for box, p in ((prev_box, p_tick), (cur_box, p_box)):
+            if box is None or p <= 0:
+                continue
+            fr.paste(Image.blend(fr.crop(box), after.crop(box), p),
+                     (box[0], box[1]))
+        fr.save(os.path.join(tmp, f"f{fi:04d}.png"))
+
+    return _encode(tmp, "f%04d.png", fps, out_mp4)
 
 
 if __name__ == "__main__":
