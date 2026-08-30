@@ -542,10 +542,85 @@ def fetch_image(keyword, seed, out_png):
     return False
 
 
+STOP_WORDS = {"a", "an", "the", "of", "on", "in", "at", "to", "and", "or",
+              "with", "for", "from", "by", "up", "out", "over", "into"}
+
+
+def _relevant(hit, keyword, need=1):
+    """
+    Does this clip have anything to do with what was asked for?
+
+    NOTHING USED TO ASK THIS, and the result was a giant 3D "FRIDAY"
+    animation appearing under narration about "total expenditures across
+    reporting periods". Pixabay returned it for some keyword, the engine took
+    hit number one, and no step between the search and the screen ever
+    considered whether it matched.
+
+    Pixabay labels every hit with its own tags, so the check is cheap: at
+    least one meaningful word from the search must appear in them. Words
+    shorter than four characters and common joining words are ignored, since
+    "of" or "on" matching proves nothing.
+
+    Deliberately lenient - one word is enough. The job is to throw out the
+    clip that is about a different subject entirely, not to insist on a
+    perfect match and end up with a video of blank slates.
+    """
+    tags = " " + (hit.get("tags") or "").lower() + " "
+    words = [w for w in re.sub(r"[^a-z0-9 ]", " ", keyword.lower()).split()
+             if len(w) >= 4 and w not in STOP_WORDS]
+    if not words:
+        return True                      # nothing to check against
+    hits = sum(1 for w in words
+               if w in tags or (w.endswith("s") and w[:-1] in tags)
+               or (not w.endswith("s") and w + "s" in tags))
+    return hits >= need
+
+
+def _pick(hits, keyword):
+    """
+    Choose from the relevant hits instead of always taking number one.
+
+    Pixabay ranks by popularity, so hit #1 for a phrase is the single
+    most-downloaded clip for it - the one every other automated channel using
+    that phrase also gets. Across a channel that is a visible fingerprint.
+
+    The choice is DETERMINISTIC, derived from the keyword, so a rebuild of
+    the same script produces the same video. A random pick would make every
+    render differ and every bug impossible to reproduce.
+    """
+    best = hits[:8]
+    idx = sum(ord(c) for c in keyword) % len(best)
+    return best[idx]
+
+
+def _crop_to_fill(im, w=None, h=None):
+    """
+    Centre-crop to the target shape, then scale. Never distort.
+
+    The previous version called resize((1920,1080)) on whatever arrived. A
+    3:2 photograph - which is what most cameras produce - came out 18% wider
+    than reality, so faces were visibly stretched. It only ever showed on the
+    photo path, which is why a run that got real video for every shot never
+    revealed it.
+    """
+    w = w or KB_W
+    h = h or KB_H
+    im = im.convert("RGB")
+    sw, sh = im.size
+    scale = max(w / sw, h / sh)
+    nw, nh = max(w, int(round(sw * scale))), max(h, int(round(sh * scale)))
+    im = im.resize((nw, nh), Image.Resampling.LANCZOS)
+    left, top = (nw - w) // 2, (nh - h) // 2
+    return im.crop((left, top, left + w, top + h))
+
+
 def _pixabay_get(endpoint, keyword, extra):
+    # 20 results, not 6. Taking hit #1 of 6 every time means every channel
+    # searching the same phrase gets the same clip - a wider pool leaves room
+    # to discard the irrelevant ones and still have something to choose from.
     q = urllib.parse.quote(keyword.strip())
     url = (f"https://pixabay.com/api/{endpoint}?key={PIXABAY_API_KEY}"
-           f"&q={q}&safesearch=true&per_page=6{extra}")
+           f"&q={q}&safesearch=true&per_page=20{extra}")
     req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
     with urllib.request.urlopen(req, timeout=20) as r:
         return json.loads(r.read()).get("hits", [])
@@ -560,11 +635,16 @@ def fetch_pixabay_video(keyword, out_mp4, seen_ids):
     if not PIXABAY_API_KEY:
         return False
     try:
-        hits = [h for h in _pixabay_get("videos/", keyword, "&orientation=horizontal")
-                if h.get("id") not in seen_ids]
+        raw = [h for h in _pixabay_get("videos/", keyword, "&orientation=horizontal")
+               if h.get("id") not in seen_ids]
+        hits = [h for h in raw if _relevant(h, keyword)]
+        if raw and not hits:
+            print(f"      !! {len(raw)} clips for {keyword[:34]!r}, none "
+                  f"relevant - skipping rather than showing the wrong thing",
+                  flush=True)
         if not hits:
             return False
-        hit = hits[0]
+        hit = _pick(hits, keyword)
         seen_ids.add(hit["id"])
         vids = hit.get("videos", {})
         url = (vids.get("medium") or vids.get("small")
@@ -589,11 +669,12 @@ def fetch_pixabay_photo(keyword, out_png, seen_ids):
     if not PIXABAY_API_KEY:
         return False
     try:
-        hits = [h for h in _pixabay_get("", keyword, "&image_type=photo&orientation=horizontal")
-                if h.get("id") not in seen_ids]
+        raw = [h for h in _pixabay_get("", keyword, "&image_type=photo&orientation=horizontal")
+               if h.get("id") not in seen_ids]
+        hits = [h for h in raw if _relevant(h, keyword)]
         if not hits:
             return False
-        hit = hits[0]
+        hit = _pick(hits, keyword)
         seen_ids.add(hit["id"])
         url = hit.get("largeImageURL") or hit.get("webformatURL")
         if not url:
@@ -604,8 +685,7 @@ def fetch_pixabay_photo(keyword, out_png, seen_ids):
         if len(data) < 4096:
             return False
         with Image.open(io.BytesIO(data)) as im:
-            im = im.convert("RGB").resize((KB_W, KB_H), Image.Resampling.LANCZOS)
-            im.save(out_png, "PNG")
+            _crop_to_fill(im).save(out_png, "PNG")
         return True
     except Exception as e:
         print(f"      pixabay photo error - {e}", flush=True)
