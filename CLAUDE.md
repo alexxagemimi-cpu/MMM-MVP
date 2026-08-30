@@ -161,6 +161,13 @@ bullets: already written, already fact-checked, already spoken aloud, so it
 cannot be off-topic. It finds nothing in prose, on purpose — a wrong bullet is
 worse than no bullet.
 
+**4.18 Every drawn card MOVES.** The section card animates its tick; the
+content cards animate their bullets arriving, one at a time, over the first
+70% of the shot. A card held still for five seconds is the same hole as §4.9
+and it reopened once already on a different code path. `contact.py` now runs
+ffmpeg `freezedetect` on every build and prints any motionless stretch ≥3.5s,
+so the third time is caught by a machine instead of by eye.
+
 **4.17 A scene with a real list SPENDS a shot showing it.** Not as a fallback
 — as the plan. Two runs in a row drew zero cards: the video filter rejected
 clip after clip and the photo step then found something every single time, so
@@ -296,6 +303,7 @@ until July 2026), which is why every model id is an env var.
     python3 sfx.py                   # builds the kit and measures every level
     python3 scriptbits.py            # list extractor vs known-good/known-bad
     python3 test_relevance.py        # stock relevance vs real logged tags
+    python3 redteam.py               # runway regression, both directions
     python3 contact.py final_video.mp4   # LOOK at what was just built
 
 Workflow test mode: run with `skip_brain_test_fixture=true` to render a

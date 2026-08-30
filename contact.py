@@ -131,6 +131,32 @@ def sheet(video, out_jpg="contact_sheet.jpg", tmp="_contact"):
     return out_jpg, rows, dur
 
 
+FREEZE_SECONDS = 3.5
+
+
+def freezes(path, seconds=FREEZE_SECONDS):
+    """
+    Stretches where the picture does not change at all, in one ffmpeg pass.
+
+    The retention research this project's sound kit was built from states it
+    as a rule: a block of about five seconds with no cut, no motion and no
+    change is a hole viewers leave through. This engine has now produced that
+    hole twice from different causes - a section card taking half its scene,
+    and drawn content cards held as stills - and both times it was invisible
+    until someone sampled the finished file frame by frame.
+
+    freezedetect does it properly and costs one pass, so there is no reason
+    to find out the slow way a third time. Verified to fire: a 6-second flat
+    colour clip reports a freeze at 0.
+    """
+    out = subprocess.run(
+        ["ffmpeg", "-v", "info", "-i", path,
+         "-vf", f"freezedetect=n=0.002:d={seconds}", "-map", "0:v",
+         "-f", "null", "-"], capture_output=True, text=True).stderr
+    return [l.split("freeze_start:")[1].strip()
+            for l in out.splitlines() if "freeze_start" in l]
+
+
 def report(rows, dur, video, out_jpg):
     print(f"\ncontact sheet | {video} | {dur:.1f}s | {os.path.getsize(out_jpg)/1024:.0f} KB")
     print(f"{'#':>2} {'at':>7}  {'bright':>6} {'header':>6} {'ink':>5}   note")
@@ -148,6 +174,15 @@ def report(rows, dur, video, out_jpg):
     black = sum(1 for _, m, _, _ in rows if m < 8)
     if black:
         print(f"\n!! {black} of {len(rows)} sampled frames are effectively black.")
+
+    fz = freezes(video)
+    if fz:
+        print(f"\n!! {len(fz)} motionless stretch(es) of {FREEZE_SECONDS}s or "
+              f"more, starting at: {', '.join(fz[:6])}s")
+        print("   A block where nothing changes is a block viewers leave "
+              "during. Usually a card holding too long.")
+    else:
+        print(f"\nno motionless stretch of {FREEZE_SECONDS}s or more.")
 
 
 def dump_b64(path, chunk=180):

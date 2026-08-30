@@ -846,9 +846,14 @@ def _draw_shot_card(scene, out_png, section=None, n_sections=0,
     it falls back to the term and its one-line definition, which is still the
     subject of the scene rather than a stranger's dog.
 
-    Returns the same ("kind", path, ok) shape as fetch_shot_asset. On any
-    failure it returns ("image", None, False) so the caller's existing
-    slate path still catches it - a missing picture must never fail a build.
+    Returns ("kind", path, ok, recipe). `recipe` is what the card was drawn
+    FROM, so phase 3 can re-render it as an animated clip once it knows how
+    many frames the shot actually gets - the bullets then arrive one at a
+    time instead of the card being a still held for five seconds.
+
+    On any failure it returns ("image", None, False, None) so the caller's
+    existing slate path still catches it - a missing picture must never fail
+    a build.
     """
     try:
         term = (scene.get("key_term") or "").strip()
@@ -856,7 +861,7 @@ def _draw_shot_card(scene, out_png, section=None, n_sections=0,
         bullets = scriptbits.list_items(scene.get("narration") or "") \
             if scriptbits else []
         if not bullets and not (term or fact):
-            return "image", None, False
+            return "image", None, False, None
 
         headed = section is not None and section_name
         # Don't print the same words twice on one frame. When the section
@@ -870,18 +875,19 @@ def _draw_shot_card(scene, out_png, section=None, n_sections=0,
         if not bullets and not note and heading != fact and fact:
             note = fact
 
-        graphics.point_card(
-            (section + 1) if headed else 0,
-            n_sections if headed else 0,
-            section_name if headed else "",
-            heading=heading,
-            bullets=bullets or None,
-            note=note or None,
-            out_png=out_png)
-        return "card", out_png, True
+        recipe = {
+            "index": (section + 1) if headed else 0,
+            "total": n_sections if headed else 0,
+            "name": section_name if headed else "",
+            "heading": heading,
+            "bullets": bullets or None,
+            "note": note or None,
+        }
+        graphics.point_card(out_png=out_png, **recipe)
+        return "card", out_png, True, recipe
     except Exception as e:
         print(f"      !! could not draw a card ({str(e)[:60]})", flush=True)
-        return "image", None, False
+        return "image", None, False, None
 
 
 def plan_shots(keywords, audio_dur):
@@ -1463,6 +1469,7 @@ async def build():
         asset_paths.append(stubs)
 
     seen_pixabay_ids = set()
+    card_recipes = {}
 
     # Drawing a card needs graphics.py; without it the old chain (AI image,
     # then slate) is still the only thing available.
@@ -1497,11 +1504,12 @@ async def build():
         if j == 1 and i in listy and graphics is not None \
                 and len(shots_per_scene[i]) >= 3:
             sec = section_of.get(i)
-            kind, path, ok = _draw_shot_card(
+            kind, path, ok, recipe = _draw_shot_card(
                 scenes[i], out_stub + ".png",
                 section=sec, n_sections=len(members),
                 section_name=(members[sec] if sec is not None else ""))
             if kind == "card":
+                card_recipes[(i, j)] = recipe
                 asset_paths[i][j] = (kind, path)
                 print(f"      shot scene {i+1} #{j+1} [LIST] | "
                       f"{', '.join(scriptbits.list_items(scenes[i]['narration']))[:44]}",
@@ -1519,10 +1527,12 @@ async def build():
             # be said for the golden retriever Pixabay offered for "fixed
             # costs, variable costs and one-off costs".
             sec = section_of.get(i)
-            kind, path, ok = _draw_shot_card(
+            kind, path, ok, recipe = _draw_shot_card(
                 scenes[i], out_stub + ".png",
                 section=sec, n_sections=len(members),
                 section_name=(members[sec] if sec is not None else ""))
+            if kind == "card":
+                card_recipes[(i, j)] = recipe
         asset_paths[i][j] = (kind, path)
         tag = {"video": "video", "card": "CARD"}.get(
             kind, "image" if ok else "SLATE")
@@ -1643,6 +1653,30 @@ async def build():
                 overlay = None
         if here is not None:
             last_member = here
+
+        # DRAWN CARDS BECOME CLIPS, with their bullets arriving.
+        #
+        # This has to happen here rather than in phase 2 because it needs the
+        # shot's exact frame count, and that is only known once the section
+        # card has claimed its fixed dwell. A still held for five seconds is
+        # the hole 4.9 exists to close, and it was reopening on every drawn
+        # shot while the section card beside it animated.
+        counts = split_frames(frames_total, len(assets), card_frames)
+        for j, (kind, path) in enumerate(assets):
+            recipe = card_recipes.get((i, j))
+            if kind != "card" or not recipe or not recipe.get("bullets"):
+                continue
+            try:
+                clip = os.path.join(WORK, f"pt{i:03d}_{j:02d}.mp4")
+                graphics.point_clip(out_mp4=clip, frames=counts[j], fps=FPS,
+                                    tmp=os.path.join(WORK, f"pt{i:03d}{j:02d}"),
+                                    **recipe)
+                assets[j] = ("cardclip", clip)
+            except Exception as e:
+                # the still is already drawn and correct; losing the
+                # animation is not worth losing the shot
+                print(f"      !! could not animate card {i+1}.{j+1} "
+                      f"({str(e)[:60]}) - using the still", flush=True)
 
         render_scene(i, assets, mp3s[i], mp4, WORK, motion_cursor,
                      first_scene=(i == 0), last_scene=(i == total - 1),

@@ -262,13 +262,19 @@ def overview_card(items, current=None, eyebrow=None, out_png="card.png"):
 
 
 def point_card(index, total, name, heading, bullets=None, note=None,
-               out_png="card.png"):
+               out_png="card.png", boxes_out=None):
     """A section's own page: the persistent header, one heading, a few short
     lines. This is what carries an explanation when no real artifact exists.
 
     `total` of 0 (or no name) draws it WITHOUT the section header, for the
     scenes that belong to no section - the opening before the first item, and
     the closing summary. Drawing the header anyway printed "00 OF 00" there.
+
+    Pass a list as `boxes_out` and it is filled with the rectangle each
+    bullet actually occupies. point_clip animates from those rather than
+    recomputing where the bullets went - note 4.16 is the whole reason: the
+    moment two places work out the same geometry, one of them goes stale and
+    the animation crops rows that are no longer there.
     """
     img = Image.new("RGB", (W, H), PAPER)
     d = ImageDraw.Draw(img)
@@ -297,6 +303,7 @@ def point_card(index, total, name, heading, bullets=None, note=None,
     for b in (bullets or [])[:4]:
         bf = _f(F_TEXT, 33)
         lines = _wrap(d, b, bf, W - MARGIN * 2 - 44)[:2]
+        row_top = y
         # Stop before SAFE_BOTTOM rather than running past it. A two-line
         # heading pushes the bullets down, and with four of them the last
         # ones were landing under the term card - seen on a rendered frame,
@@ -310,6 +317,8 @@ def point_card(index, total, name, heading, bullets=None, note=None,
                 d.ellipse((MARGIN + 3, y + 14, MARGIN + 15, y + 26), fill=ACCENT)
             d.text((MARGIN + 38, y), ln, font=bf, fill=INK if k == 0 else MUTED)
             y += 44
+        if boxes_out is not None:
+            boxes_out.append((MARGIN - 8, row_top - 6, W - MARGIN, y + 4))
         y += 14
 
     if note:
@@ -328,6 +337,72 @@ def point_card(index, total, name, heading, bullets=None, note=None,
             ny += int(nf.size * 1.3)
     img.save(out_png, "PNG")
     return out_png
+
+
+def point_clip(index, total, name, heading, bullets, out_mp4, frames,
+               fps=25, note=None, tmp="_ptmp"):
+    """
+    The point card with its bullets ARRIVING one after another.
+
+    The card was a still held for about five seconds, which is the same hole
+    4.9 exists to close: a block where nothing changes is a block viewers
+    leave during. The section card was animated and these were not, so the
+    video alternated between a beat that moved and a slide that did not.
+
+    It also happens to be what the reference explainer does - elements
+    accumulate on a stable canvas - and it means the bullets land at roughly
+    the rate the narrator says them instead of the whole list being given
+    away at once.
+
+    Same pre-drawn-strip technique as overview_clip: the finished card and a
+    heading-only version are each drawn ONCE, and every frame is a few small
+    crops composited between them. Redrawing text per frame costs about 30
+    seconds a card, which across a dozen scenes would eat the job budget.
+    """
+    bullets = [b for b in (bullets or []) if b and b.strip()]
+    os.makedirs(tmp, exist_ok=True)
+    boxes = []
+    full_p = os.path.join(tmp, "_full.png")
+    base_p = os.path.join(tmp, "_base.png")
+    point_card(index, total, name, heading, bullets, note, full_p,
+               boxes_out=boxes)
+    # the same card with nothing under the rule yet
+    point_card(index, total, name, heading, None, None, base_p)
+    with Image.open(full_p) as im:
+        full = im.convert("RGB").copy()
+    with Image.open(base_p) as im:
+        base = im.convert("RGB").copy()
+
+    if not boxes:
+        # nothing to animate - a still is the honest answer
+        full.save(os.path.join(tmp, "f0000.png"))
+        for i in range(1, int(frames)):
+            os.link(os.path.join(tmp, "f0000.png"),
+                    os.path.join(tmp, f"f{i:04d}.png"))
+        return _encode(tmp, "f%04d.png", fps, out_mp4)
+
+    total_f = int(frames)
+    # Spread the arrivals across the FIRST 70% and hold the finished card for
+    # the rest. Landing the last bullet on the final frame would cut away the
+    # instant the list completed, which reads as a mistake.
+    span = 0.70
+    for fi in range(total_f):
+        t = fi / max(total_f - 1, 1)
+        fr = base.copy()
+        for i, box in enumerate(boxes):
+            start = span * i / max(len(boxes), 1)
+            p = _ease(max(0.0, min(1.0, (t - start) / (span / max(len(boxes), 1)))))
+            if p <= 0:
+                continue
+            dy = int((1 - p) * 18)
+            w_, h_ = box[2] - box[0], box[3] - box[1]
+            lay = Image.new("RGB", (w_, h_), PAPER)
+            src = full.crop(box)
+            lay.paste(src, (0, dy))
+            fr.paste(Image.blend(fr.crop(box), lay, p), (box[0], box[1]))
+        fr.save(os.path.join(tmp, f"f{fi:04d}.png"))
+
+    return _encode(tmp, "f%04d.png", fps, out_mp4)
 
 
 def stat_card(index, total, name, value, label, out_png="card.png"):
