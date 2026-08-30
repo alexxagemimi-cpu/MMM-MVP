@@ -216,7 +216,13 @@ def section_overlay(index, total, name, out_png):
     img.paste(plate, (0, 0))
     d = ImageDraw.Draw(img)
     draw_header(d, index, total, name)
-    return _out(img, out_png, design)
+    # No `design` switch here, deliberately: this overlay is composited by
+    # ffmpeg straight onto output-size frames, so it is only ever wanted at
+    # the output size. A blanket edit gave it a `design` argument it does not
+    # take, every header in a real 8-scene video failed with a NameError, and
+    # the try/except around it turned the most important orientation device
+    # in the design into a silent absence on a green build.
+    return _out(img, out_png)
 
 
 # ---------------------------------------------------------------------------

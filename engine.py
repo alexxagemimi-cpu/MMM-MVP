@@ -1652,6 +1652,7 @@ async def build():
     cues, parts, timeline, motion_cursor = [], [], 0.0, 0
     term_cards, sfx_events = [], []
     last_member = None
+    header_fails = []
     # the opening card's eyebrow: the video's own title, which is what the
     # list is a list OF. Falls back to a neutral line when there isn't one.
     title_eyebrow = ((data.get("title") if isinstance(data, dict) else "")
@@ -1731,6 +1732,7 @@ async def build():
                 print(f"      !! header for scene {i+1} failed "
                       f"({str(e)[:60]})", flush=True)
                 overlay = None
+                header_fails.append(i + 1)
         if here is not None:
             last_member = here
 
@@ -1950,6 +1952,13 @@ async def build():
         # single most useful number for judging a run in this niche.
         print(f"   drawn    : {drawn}/{total_shots} shots drawn from the "
               f"script (no relevant footage existed)", flush=True)
+    if header_fails:
+        # LOUD, because a missing section header is invisible in a green log
+        # and is the one device the whole layout is built around. It went
+        # missing from an entire 8-scene video behind a caught exception.
+        print(f"   !! NO SECTION HEADER on {len(header_fails)} scene(s): "
+              f"{header_fails} - the video has lost its orientation device",
+              flush=True)
     if failed_images:
         print(f"   !! {failed_images} shot(s) used a fallback slate",
               flush=True)

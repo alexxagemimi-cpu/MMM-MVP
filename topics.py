@@ -208,9 +208,20 @@ def verdict(topic, agreement, consensus, contested, detail):
     reasons, ok = [], True
 
     if detail.get("sources", 0) < 3:
+        # NOT A REJECTION - and the extra dict has to say so, because the
+        # caller cannot tell the difference from `False` alone.
+        #
+        # Seen on a live run: Gemini answered one extraction call with a 503,
+        # the retry came back with nothing usable, and a topic with EIGHT
+        # sources behind it was printed as "[REJECT] ... 0 members". The
+        # wording here already said "a failure to check, not a verdict", and
+        # assess() stamped checked=True on it anyway - so the scout would
+        # have filed a perfectly good topic under `rejected` and, now that
+        # the memory survives between runs, blocked it forever on the
+        # strength of one transient 503.
         return False, ["fewer than 3 sources named any members - could not "
                        "judge this topic (this is a failure to check, not a "
-                       "verdict on the topic)"], {}
+                       "verdict on the topic)"], {"unchecked": True}
 
     if agreement < MIN_AGREEMENT:
         ok = False
@@ -285,13 +296,17 @@ def assess(topic, call, gather, per_query=5, verbose=True):
                                     detail)
     # checked=True means the gate genuinely ran and reached a verdict, so a
     # False build here is a real rejection rather than a failure to look.
-    out = {"topic": topic, "build": build, "checked": True,
+    # verdict() sets `unchecked` when it could not judge at all.
+    out = {"topic": topic, "build": build,
+           "checked": not extra.get("unchecked"),
            "agreement": agreement,
            "members": extra.get("members", consensus[:MAX_MEMBERS]),
            "contested": contested[:8], "sources": len(sources),
            "reasons": reasons, "detail": detail}
     if verbose:
-        mark = "BUILD" if build else "REJECT"
+        mark = ("BUILD" if build
+                else ("COULD NOT CHECK" if extra.get("unchecked")
+                      else "REJECT"))
         print(f"  [{mark}] {topic}  (agreement {agreement}, "
               f"{len(out['members'])} members, {len(sources)} sources)")
         for r in reasons:
