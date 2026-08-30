@@ -485,6 +485,43 @@ TRIMMED_CALLS = [0, 0]  # [calls whose prompt was cut, calls total]
 PROVIDER_COOLDOWN = {}     # provider -> unix time it may be tried again
 COOLDOWN_SECONDS = 420
 
+# The workflow kills the job at 45 minutes. Brain stops revising at 24 so the
+# engine still gets its ~20 - see the note at the deadline check in main().
+_started = time.time()
+BRAIN_BUDGET_SEC = float(_env("BRAIN_BUDGET_MIN", "24")) * 60
+TIME_CUT = []              # caveats about work skipped to make the deadline
+
+
+def _snapshot(data, sources, why):
+    """
+    Write script.json NOW, so a timeout cannot cost the draft as well.
+
+    Run 38 was killed at 45 minutes inside brain with nothing on disk: no
+    script, no video, and no way to see how close it had got. Every stage
+    after the draft only improves a script that already exists, so a kill
+    should cost the improvement, never the script.
+    """
+    try:
+        out = dict(data)
+        out["sources"] = sources
+        out["incomplete"] = why      # absent from the real save at the end
+        # Write, THEN swap. json.dump streams, so a value it cannot serialise
+        # leaves a half-written file behind - and that half-written file would
+        # be sitting where a perfectly good earlier snapshot used to be. A
+        # safety net that can destroy the thing it is protecting is worse than
+        # none. Build it beside the target and rename only once it is whole.
+        with open("script.json.tmp", "w", encoding="utf-8") as f:
+            json.dump(out, f, ensure_ascii=False, indent=2)
+        os.replace("script.json.tmp", "script.json")
+        print(f"      .. saved a usable script.json ({why})")
+    except Exception as ex:
+        # Never let the safety net be the thing that fails the run.
+        print(f"      .. could not snapshot script.json: {str(ex)[:110]}")
+        try:
+            os.remove("script.json.tmp")     # don't leave the half-written one
+        except OSError:
+            pass
+
 
 def shrink(prompt, cap):
     """
@@ -1517,8 +1554,31 @@ def main():
     brief, sources = research()
     data = draft(brief)
 
+    # SAVE A USABLE SCRIPT THE MOMENT THERE IS ONE.
+    #
+    # Run 38 spent 45 minutes in this stage on the fallback writer and was
+    # killed by the job's timeout with NOTHING on disk - no script, no video,
+    # no artifact to look at, and no way to tell how close it had got. Every
+    # later stage here is an improvement on a draft that already exists, so
+    # there is no reason for a kill to cost the draft as well.
+    #
+    # Overwritten by the real save at the end. This is a floor, not a result.
+    _snapshot(data, sources, "first draft")
+
     history = []
     fact_bad, report = [], ""
+
+    # BRAIN GETS ITS OWN DEADLINE, INSIDE THE JOB'S.
+    #
+    # The workflow kills the whole job at 45 minutes. Brain had no budget of
+    # its own, so an unusually slow stage did not cost a revision pass - it
+    # cost the entire video. The quality loop is optional refinement; the
+    # script is the deliverable. Stopping early with a slightly rougher
+    # script beats being killed with none.
+    #
+    # 24 minutes leaves ~20 for the engine, which is what a 6-minute build
+    # has actually taken.
+    deadline = _started + BRAIN_BUDGET_SEC
 
     # Iterate until the script clears both bars, or the budget runs out.
     # You said slow is fine - this is the part that spends that time.
@@ -1547,6 +1607,18 @@ def main():
             print(f"      budget exhausted with {len(q_bad)} craft and "
                   f"{len(fact_bad)} fact issues left")
             break
+        if time.time() > deadline:
+            left = MAX_PASSES - p
+            print(f"      OUT OF TIME after {(time.time()-_started)/60:.1f} min "
+                  f"- stopping with {left} pass(es) unused so the video still "
+                  f"gets built. {len(q_bad)} craft and {len(fact_bad)} fact "
+                  f"issues remain.")
+            TIME_CUT.append(f"script stopped early with {left} of "
+                            f"{MAX_PASSES} revision passes unused - the run "
+                            f"was going to exceed its time budget")
+            break
+
+        _snapshot(data, sources, f"after pass {p}")
 
         print("      revising...")
         try:
@@ -1647,7 +1719,7 @@ def main():
     # Who wrote it, and on how much of the research. NOT a blocker - see the
     # note on PROVIDER_USE. A caveat the owner reads is the whole point; a
     # gate that fires on it would be a gate nobody reads (§4.21).
-    caveats = []
+    caveats = list(TIME_CUT)
     cut, total = TRIMMED_CALLS
     if cut:
         caveats.append(f"{cut} of {total} model calls had their prompt "
