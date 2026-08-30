@@ -406,6 +406,53 @@ def _oai_available_models(base_url, key):
         return []
 
 
+# HOW BIG A PROMPT EACH PROVIDER WILL ACTUALLY ACCEPT, in characters.
+#
+# This is NOT the model's context window. Groq's free tier meters TOKENS PER
+# MINUTE, and gpt-oss-120b's on-demand limit is 8,000 - so a request the model
+# could easily hold is refused before it is ever read:
+#
+#     HTTP 413 ... Limit 8000, Requested 8373, please reduce your message size
+#
+# That is what killed run 36. Gemini's daily quota had run out, research had
+# gathered 34,832 characters of source text, and the fallback writer - the one
+# thing standing between a quota wall and a dead run - could not physically
+# accept the prompt. It failed, waited 20 seconds, re-sent THE SAME prompt,
+# and failed identically. The safety net has never once caught a run.
+#
+# 8,000 tokens is the whole budget, request plus reply, so the input cannot
+# have all of it: ~2,600 tokens are reserved for the answer, leaving ~5,400
+# in, and at a deliberately pessimistic 3 characters per token that is 16,000
+# characters. Pessimistic on purpose - source text is full of names, figures
+# and URLs, which tokenize far worse than prose, and being under the limit is
+# worth more than squeezing in two more paragraphs.
+PROVIDER_CHAR_CAP = {"groq": 16000}
+
+
+def shrink(prompt, cap):
+    """
+    Cut a prompt to `cap` characters by removing the MIDDLE, never the ends.
+
+    Which end matters is not a guess: every prompt in this file puts the
+    instructions first and the required output shape last ("Reply with JSON
+    ...", the schema, the word counts). Trimming from the tail would delete
+    the part that says what to produce, and the model would answer a question
+    nobody asked. The middle is the research context - losing some of it
+    costs coverage, which is recoverable; losing the instructions costs the
+    whole call.
+
+    The cut is marked, so the model is told text is missing rather than
+    reading two unrelated halves as one continuous document.
+    """
+    if len(prompt) <= cap:
+        return prompt
+    mark = "\n\n[... source material trimmed to fit this provider's limit ...]\n\n"
+    keep = cap - len(mark)
+    head = int(keep * 0.62)          # instructions + the start of the sources
+    tail = keep - head               # the output shape, which must survive
+    return prompt[:head] + mark + prompt[-tail:]
+
+
 def _providers():
     """Available LLM backends, best first. Only ones with a key configured."""
     out = []
@@ -465,13 +512,23 @@ def _call_sweep(prompt, schema, retries, provs):
         tried_discovery = False
         waited_out_a_limit = False
         model = conf[2] if conf else None
+
+        # Fit the prompt to THIS provider before spending a request finding
+        # out it does not fit. Gemini gets the full text; Groq gets as much of
+        # it as its per-minute token budget can hold.
+        body = shrink(prompt, PROVIDER_CHAR_CAP.get(name, 10 ** 9))
+        if len(body) < len(prompt):
+            print(f"   .. {name} caps requests at ~"
+                  f"{PROVIDER_CHAR_CAP[name]:,} chars; trimmed the prompt from "
+                  f"{len(prompt):,} to {len(body):,}")
+
         for attempt in range(retries):
             try:
                 if name == "gemini":
-                    text = _gemini(prompt, schema, drop_schema)
+                    text = _gemini(body, schema, drop_schema)
                 else:
                     base_url, key, _ = conf
-                    text = _openai_compatible(prompt, schema, base_url, key,
+                    text = _openai_compatible(body, schema, base_url, key,
                                               model, name)
                 if not text:
                     raise RuntimeError("empty response")
@@ -503,6 +560,41 @@ def _call_sweep(prompt, schema, retries, provs):
                                 or "rate limit" in msg.lower()
                                 or "quota" in msg.lower())
                 too_large = "413" in msg or "too large" in msg.lower()
+
+                # A REFUSED SIZE MUST CHANGE THE SIZE.
+                #
+                # This branch did not exist: `too_large` was computed and then
+                # never acted on. Groq's 413 carries the words "rate limit"
+                # and code `rate_limit_exceeded`, so it was read as a
+                # rate limit, waited out for 20 seconds, and re-sent BYTE FOR
+                # BYTE. A limit on how big a request may be does not clear by
+                # waiting - only by sending less - so that retry could not
+                # ever have worked, and the run died with a provider that was
+                # up, keyed and willing.
+                #
+                # The provider usually names both numbers ("Limit 8000,
+                # Requested 8373"), which is a real measurement of our own
+                # tokens-per-character on this exact prompt - far better than
+                # the estimate in PROVIDER_CHAR_CAP. Use it when it is there,
+                # and halve blindly when it is not.
+                if too_large:
+                    m = re.search(r"Limit (\d+), Requested (\d+)", msg)
+                    if m:
+                        limit, want = int(m.group(1)), int(m.group(2))
+                        # Aim at 60% of the limit: the reply is charged to the
+                        # same budget, and other calls in this minute share it.
+                        target = int(len(body) * (limit * 0.60) / want)
+                    else:
+                        target = len(body) // 2
+                    target = max(1500, min(target, len(body) - 500))
+                    if target < len(body):
+                        print(f"     -> too big for {name}: re-sending at "
+                              f"{target:,} chars instead of {len(body):,}")
+                        body = shrink(body, target)
+                        continue
+                    print(f"     -> {name} refuses even a minimal prompt, "
+                          f"switching provider")
+                    break
 
                 # A genuine 403/404 means THIS MODEL is not permitted on this
                 # account. A 429 does NOT - it means we are sending too fast.
