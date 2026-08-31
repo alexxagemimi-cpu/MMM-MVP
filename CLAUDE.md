@@ -49,7 +49,8 @@ content**. That is why term cards exist (§4).
 | `test_relevance.py` | Stock-relevance check vs tags from REAL runs | 12/12, incl. the retriever |
 | `verify.py` | A model WATCHES the finished video and reports edit faults | 9/9 offline; unproven live |
 | `contact.py` | 12 frames of the finished video on one JPEG, plus measurements | **How faults get found** |
-| `test_providers.py` | The fallback writer, against a provider that refuses on size | 12/12 |
+| `test_providers.py` | The fallback writer, against a provider that refuses on size | 19/19 |
+| `test_distrust.py` | A hard-flagged claim must never reach a card | 10/10 |
 | `test_engine_local.py` | Runs the REAL engine against REAL ffmpeg locally, ~50s | Passing |
 | `.github/workflows/factory.yml` | The workflow. Has a no-AI engine-only test mode | Stable |
 
@@ -207,6 +208,25 @@ held ~7s, which is §4.9 again.
 drawn card or the checklist already names the term, and clipped to the moment
 a drawn card takes the screen. Three separate rendered frames showed the same
 words printed twice on one screen, once literally on top of themselves.
+
+**4.22 A claim the red team flagged HARD never gets a card.** Run 38 wrote
+"top block" as one of three structural measurements of jeans. Not a standard
+term; in none of the run's 14 sources. The red team caught it HARD *twice*
+and the publish gate named it — then the repair could not run (every provider
+out of quota) and the engine, which never read the findings, printed TOP
+BLOCK in the largest type in the video with a made-up definition under it.
+**§11's failure in a new topic.** Rewriting narration needs a model and there
+may not be one; *not amplifying* needs nothing. A scene with an unfixed HARD
+finding now gets no term card, checklist row, diagram column, list card or
+stat card. **Soft findings gag nothing** — they are style notes, not "this is
+invented", and gagging on them would strip cards off a sound script. The
+narration still says the sentence: that is a script problem and it stays
+visible in the publish gate.
+
+**4.23 One comparison per pair.** EDGE and APPLY both follow the last
+CATEGORY, so both took the same "last two members" and drew the identical
+diagram twice, 28s apart in run 38. A diagram earns its place by saying
+something new.
 
 **4.12 The header plate is fully opaque.** At alpha 232 it looked like a
 reasonable "barely there" choice; over saturated footage the colour read
@@ -416,6 +436,25 @@ artifact host is unreachable, which it is from some sandboxes.
   ordering itself is verified: inventing an order is inventing a fact.
 - `verify.py` has never run against a real video - it needs a live run with
   Gemini quota. Its parsing is tested; its usefulness is not.
+- **Run 38 (jeans, 8 scenes, 338s, 540p, 59.4MB) is the first complete video
+  from a fully-fallback-written script.** Pictures: `subject anchor: jeans`
+  held, section headers persisted, checklist correct, `freezedetect` found no
+  motionless stretch ≥3.5s, 28/68 shots drawn. **Content: not genuine.** 9
+  unfixed HARD findings — "top block" invented, two rise thresholds
+  contradicting the sources, a fabricated GQ quote, a fabricated product
+  (Orslow 107 Ivy Fit). The gate correctly refused it. §4.22 stops the video
+  amplifying them; **nothing yet fixes the narration when the repair cannot
+  run**, and that is the open problem.
+- **The subject anchor asks "is there denim in this?", not "is this ABOUT
+  denim?"** Run 38 frame 6 is a man holding a camera who happens to be
+  wearing jeans, under narration about wide-leg jeans. Same weakness put a
+  shirtless portrait on frame 3. Real, unfixed.
+- The comparison card can pair things of different KINDS — run 38 drew
+  "Wrangler Classic Cowboy Cut vs Mid-rise jean", a leg cut against a rise
+  height. It checks that both are members, not that they are commensurable.
+- `verify.py` has now RUN live and correctly reported `COULD NOT WATCH (not a
+  verdict on the video)` on a 429. Its refusal path is proven; its actual
+  judgement is still unproven.
 - Nothing yet judged by the owner as publishable. That is the real bar.
 
 ---
