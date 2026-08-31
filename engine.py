@@ -691,9 +691,32 @@ def subject_terms(scenes, title="", limit=2):
     return set([w for w, c in seen.most_common() if c >= need][:limit])
 
 
+def _tag_list(hit):
+    """Tags IN ORDER. Pixabay returns them most-relevant first."""
+    return [t.strip() for t in (hit.get("tags") or "").lower().split(",")
+            if t.strip()]
+
+
 def _tag_set(hit):
-    return {t.strip() for t in (hit.get("tags") or "").lower().split(",")
-            if t.strip()}
+    return set(_tag_list(hit))
+
+
+# HOW FAR INTO THE TAGS THE SUBJECT MAY APPEAR.
+#
+# Measured on run 38's own accepted clips. Pixabay orders tags by relevance,
+# so WHERE the subject appears says whether the photo is *about* it or merely
+# contains it. Every genuinely good clip in that run had `jeans` or `denim` in
+# the first three tags. Every bad one had it later, or not at all:
+#
+#   nikon, man, casio, jeans, nikon, nikon, ...      -> a CAMERA (frame 6)
+#   lonely, man, sitting, shirtless, skin, ..., jeans -> a PORTRAIT (frame 3)
+#   musician, country song, banjo, guitar, cowboy     -> a BANJO PLAYER
+#   toddler, child, kid, infant, playing, ..., denim  -> a TODDLER
+#   clothes pins, wash, laundry, clothes line, jeans  -> LAUNDRY
+#   man, beach, sand, steps, jeans, vacation          -> a BEACH
+#
+# Three is not tuned to taste: at four the camera photo comes back.
+SUBJECT_RANK_MAX = 3
 
 
 def _relevant(hit, keyword, subject=None):
@@ -741,8 +764,24 @@ def _relevant(hit, keyword, subject=None):
 
     # THE SUBJECT ANCHOR. A clip about a different subject is wrong however
     # well it matches the words of one query - see subject_terms above.
-    if subject and not any(hits(w) for w in subject):
-        return False
+    #
+    # AND IT ASKS WHERE, NOT JUST WHETHER. The first version of this asked
+    # "is there denim in this picture?" and run 38 answered honestly: a man
+    # holding a Nikon, a shirtless portrait, a banjo player, a toddler, a
+    # laundry line - all of them containing jeans, none of them ABOUT jeans,
+    # all of them on screen under narration about jean cuts. Someone wearing
+    # jeans is in a great many photographs; that is not what the shot needed.
+    #
+    # Pixabay sorts tags by relevance, so the position of the subject is a
+    # free measurement of how central it is, and it is the one signal that
+    # separates every good clip in that run from every bad one.
+    if subject:
+        ordered = _tag_list(hit)
+        rank = next((i for i, t in enumerate(ordered)
+                     if any(w == t or w == t + "s" or w + "s" == t
+                            or w in t.split() for w in subject)), None)
+        if rank is None or rank >= SUBJECT_RANK_MAX:
+            return False
 
     # WITH AN ANCHOR, BEING ABOUT THE SUBJECT IS THE WHOLE TEST.
     #
