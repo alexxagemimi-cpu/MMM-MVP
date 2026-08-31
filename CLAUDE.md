@@ -46,8 +46,8 @@ content**. That is why term cards exist (§4).
 | `youtube.py` | Demand gate: does anyone actually search for this? | Free API, gated on kill rules |
 | `redteam.py` | Attacks the finished script; "not-a-member" is a hard finding | 3/3 runway regression |
 | `scriptbits.py` | Pulls real lists and figures back out of narration | 17/17 on good + bad samples |
-| `test_relevance.py` | Stock-relevance check vs tags from REAL runs | 12/12, incl. the retriever |
-| `verify.py` | A model WATCHES the finished video and reports edit faults | 9/9 offline; unproven live |
+| `test_relevance.py` | Stock-relevance check vs tags from REAL runs | 67/68, incl. the retriever and the Nikon |
+| `verify.py` | A model WATCHES the finished video and reports edit faults | 9/9 offline; refusal path proven live |
 | `contact.py` | 12 frames of the finished video on one JPEG, plus measurements | **How faults get found** |
 | `test_providers.py` | The fallback writer, against a provider that refuses on size | 19/19 |
 | `test_distrust.py` | A hard-flagged claim must never reach a card | 10/10 |
