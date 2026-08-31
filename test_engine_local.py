@@ -206,9 +206,30 @@ def main():
     ]
 
     shutil.rmtree(os.path.join(WORK, "concat.txt"), ignore_errors=True)
+    # A HARD RED-TEAM FINDING, so the suppression path actually RUNS here.
+    #
+    # Without this the fixture has no `red_team` key, `distrusted` is empty,
+    # and the code that withholds a card from an invented claim is never
+    # executed by the real engine - which is how modes.py, overview_clip,
+    # point_card and stat_card all shipped broken (CLAUDE.md 5.8). Scene 5
+    # is the EDGE beat, so gagging it also proves a gagged scene cannot
+    # supply a diagram column.
+    #
+    # Scene 5 is chosen deliberately over a CATEGORY scene: gagging a
+    # CATEGORY would drop it from the checklist and change the section
+    # numbering for every later scene, which is a second effect and would
+    # muddy what this fixture is showing.
+    red_team = [
+        {"severity": "hard", "kind": "unsupported", "scene": 5,
+         "quote": "A phone plan has a base you always pay",
+         "detail": "Not supported by the sources - fixture finding."},
+        {"severity": "soft", "kind": "vague", "scene": 3,
+         "quote": "They rise and fall with every sale",
+         "detail": "A soft finding must NOT gag a scene."},
+    ]
     with open("script.json", "w") as f:
         json.dump({"title": "The 3 Types of Business Cost",
-                   "scenes": scenes}, f)
+                   "scenes": scenes, "red_team": red_team}, f)
 
     print("running the real build() with real ffmpeg ...\n")
     asyncio.run(E.build())

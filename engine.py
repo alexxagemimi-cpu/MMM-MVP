@@ -1026,6 +1026,42 @@ def _draw_stat_card(value, label, out_png, section=None, n_sections=0,
         return "image", None, False, None
 
 
+def _distrusted_scenes(script):
+    """
+    Scene indices (0-based) carrying an unfixed HARD red-team finding.
+
+    Only findings that name a scene can be acted on here: a finding with
+    scene=None is about the script as a whole ("too-complex", "fluff") and
+    says nothing about which term is invented, so it cannot single one out.
+
+    Reads defensively. This runs on the engine side of a file written by
+    another stage, and every safety check in this project that quietly
+    no-opped on a missing field (CLAUDE.md 11) did so because it trusted the
+    shape of its input. An absent `red_team` key means the red team did not
+    run - not that the script is clean - so that case is reported by the
+    publish gate, not silently treated as a pass here.
+    """
+    out = set()
+    findings = script.get("red_team")
+    if not isinstance(findings, list):
+        return out
+    n = len(script.get("scenes") or [])
+    for f in findings:
+        if not isinstance(f, dict):
+            continue
+        if str(f.get("severity", "")).strip().lower() != "hard":
+            continue
+        s = f.get("scene")
+        # redteam.py numbers scenes from 1; a 0 or a None is "whole script".
+        try:
+            k = int(s) - 1
+        except (TypeError, ValueError):
+            continue
+        if 0 <= k < n:
+            out.add(k)
+    return out
+
+
 def _draw_compare_card(pair, out_png, eyebrow=None):
     """
     Two neighbouring members side by side, with what separates them.
@@ -1559,9 +1595,40 @@ async def build():
     # scenes that belong to no section at all - the wrap-up, whatever the
     # mode calls it
     CLOSING_BEATS = {"CLOSE", "RESONANCE"}
+
+    # NEVER PUT A KNOWN-BAD CLAIM ON A CARD.
+    #
+    # Run 38 wrote "top block" as a structural measurement of jeans. The red
+    # team caught it - HARD, twice, "not defined in any of the listed
+    # sources" - and the publish gate said so. Then the repair could not run
+    # because every provider was out of quota, and the engine, which never
+    # reads the findings, printed TOP BLOCK across the screen in the largest
+    # type in the video, with a definition under it.
+    #
+    # Rewriting the narration needs a model and there may not be one. Not
+    # AMPLIFYING it needs nothing. The narration still says the sentence -
+    # that is a script problem and it stays visible in the publish gate - but
+    # a term the red team has already called invented does not also get a
+    # card, a checklist row or a diagram column. That is 4.20's rule read the
+    # other way round: a made-up term on a card carries a card's authority,
+    # and the card is the part we can withhold for free.
+    # Map through the narration filter above. `scenes` drops any scene with
+    # empty narration, but the findings index the UNFILTERED list - so one
+    # dropped scene shifts every index after it and this would gag the wrong
+    # scene while leaving the invented one on screen. Match the objects, not
+    # their positions.
+    _raw = data["scenes"] if isinstance(data, dict) else data
+    _bad = {id(_raw[k]) for k in _distrusted_scenes(data) if 0 <= k < len(_raw)}
+    distrusted = {i for i, s in enumerate(scenes) if id(s) in _bad}
+    if distrusted:
+        print(f"   !! {len(distrusted)} scene(s) carry an unfixed HARD "
+              f"red-team finding - their terms get no card, no checklist "
+              f"row and no diagram column: "
+              f"{', '.join(sorted(str(i + 1) for i in distrusted))}")
     member_idx = [i for i, s in enumerate(scenes)
                   if (s.get("beat") or "").strip().upper() in MEMBER_BEATS
-                  and (s.get("key_term") or "").strip()]
+                  and (s.get("key_term") or "").strip()
+                  and i not in distrusted]
     members = [scenes[i]["key_term"].strip() for i in member_idx]
     # where each scene sits in the list, or None if it is not an item
     member_of = {si: k for k, si in enumerate(member_idx)}
@@ -1656,6 +1723,7 @@ async def build():
     # nothing to compare.
     COMPARE_BEATS = {"EDGE", "APPLY"}
     comparey = {}
+    _pairs_drawn = set()
     if graphics is not None:
         for i, sc_ in enumerate(scenes):
             if (sc_.get("beat") or "").strip().upper() not in COMPARE_BEATS:
@@ -1663,6 +1731,16 @@ async def build():
             prior = [k for k in member_idx if k < i]
             if len(prior) < 2:
                 continue
+            # ONE COMPARISON PER PAIR, and 4.14 is why.
+            #
+            # Run 38 has both EDGE and APPLY after the last CATEGORY, so both
+            # took the same "last two members" and drew the identical diagram
+            # twice, 28 seconds apart. A diagram earns its place by saying
+            # something new; the second one says exactly what the first did.
+            pair_key = tuple(prior[-2:])
+            if pair_key in _pairs_drawn:
+                continue
+            _pairs_drawn.add(pair_key)
             cols = []
             for k in prior[-2:]:
                 lines = [(scenes[k].get("key_fact") or "").strip()]
@@ -1679,15 +1757,20 @@ async def build():
         print(f"      subject anchor: {', '.join(sorted(subject))} - a clip "
               f"has to be about this, not just match the query", flush=True)
 
+    # A distrusted scene draws nothing from its own narration either: the
+    # list and the figure are pulled straight out of the sentences the red
+    # team called unsupported, so putting them on a card is the same act as
+    # putting the term on one.
     listy = {i for i, s in enumerate(scenes)
-             if scriptbits and scriptbits.list_items(s.get("narration") or "")}
+             if scriptbits and scriptbits.list_items(s.get("narration") or "")
+             and i not in distrusted}
     # A scene with no list but a real figure in it gets that number on
     # screen instead. The list wins where a scene has both: four things
     # named is more of the explanation than one number is.
     statty = {}
     if scriptbits:
         for i, sc_ in enumerate(scenes):
-            if i in listy or i in comparey:
+            if i in listy or i in comparey or i in distrusted:
                 continue
             n = scriptbits.headline_number(sc_.get("narration") or "")
             if n:
@@ -1915,6 +1998,14 @@ async def build():
         # actually spoken. No match -> no card; a card at the wrong moment
         # is worse than none.
         term = (sc.get("key_term") or "").strip()
+        # A term the red team called invented gets no definition card. This
+        # is the exact card that put TOP BLOCK on screen in run 38, in the
+        # largest type in the video, with a made-up definition under it,
+        # after the red team had already flagged it HARD twice.
+        if term and i in distrusted:
+            print(f"        (term card for {term!r} withheld - an unfixed "
+                  f"HARD red-team finding on this scene)")
+            term = ""
         if term:
             at = find_term_time(words, term)
             if at is not None:
