@@ -1856,7 +1856,37 @@ async def build():
         kind, path, ok = await asyncio.to_thread(
             fetch_shot_asset, kw, seed, out_stub, seen_pixabay_ids,
             prefer_card, subject)
-        if kind == "none":
+        if kind == "none" and i in distrusted:
+            # "ALREADY FACT-CHECKED" IS EXACTLY WHAT IS NOT TRUE HERE.
+            #
+            # The comment below is the whole justification for this card: the
+            # script's own words are safe to show because they have been
+            # checked. On a scene the red team flagged HARD, that premise is
+            # false - and this is the card that printed TOP BLOCK across four
+            # frames of run 39 in the largest type in the video.
+            #
+            # 4.22 was written for exactly this and gagged the term card, the
+            # checklist, the diagram, the list card and the stat card. It
+            # missed this one, which is the one that actually reached the
+            # screen. The log said "term card for 'top block' withheld" while
+            # TOP BLOCK was the headline. A suppression that reports success
+            # and leaves the words on screen is worse than none.
+            # WRITE A REAL SLATE, do not just hand back a null path.
+            #
+            # ("image", None) is the shape _draw_shot_card returns when it
+            # fails, and it survives only because render_shot_safe catches
+            # the resulting TypeError and substitutes a slate. That path is
+            # almost never taken on a real run - the term and fact are
+            # practically always present - so leaning on it here would turn a
+            # rare error handler into the normal route for every gagged shot,
+            # and fill the log with "shot failed ... NoneType" on a decision
+            # the engine made deliberately.
+            path = out_stub + ".png"
+            Image.new("RGB", (KB_W, KB_H), (11, 12, 16)).save(path, "PNG")
+            kind, ok = "image", False
+            print(f"      shot scene {i+1} #{j+1} [SLATE] | card withheld - "
+                  f"unfixed HARD red-team finding on this scene", flush=True)
+        elif kind == "none":
             # NOTHING RELEVANT EXISTS FOR THIS KEYWORD, so put the script's
             # own words on screen. They are already written, already
             # fact-checked and already spoken aloud a moment later, so a card

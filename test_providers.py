@@ -375,6 +375,54 @@ def test_real_cap_against_run36():
     return 0 if ok else 1
 
 
+
+def test_no_scene_loss():
+    """
+    A revision may not delete scenes. Run 39's actual failure.
+
+    It drafted 11 scenes and shipped 2 - an 8-minute video that came out at
+    78 seconds - because three separate stages accepted a candidate on a
+    COUNT OF PROBLEMS, and deleting a scene deletes its problems. A shorter
+    script wins every one of those comparisons, so the loop was rewarded for
+    throwing the video away.
+    """
+    line("a revision may not delete scenes (run 39's actual failure)")
+    bad = 0
+    eleven = {"scenes": [{"scene": i + 1, "narration": f"n{i}"}
+                         for i in range(11)]}
+    checks = [
+        ("11 scenes -> 2 is rejected",
+         not B.keeps_scenes(eleven, {"scenes": eleven["scenes"][:2]}, "x")),
+        ("losing a single scene is rejected",
+         not B.keeps_scenes(eleven, {"scenes": eleven["scenes"][:10]}, "x")),
+        ("the same count is fine",
+         B.keeps_scenes(eleven, {"scenes": eleven["scenes"]}, "x")),
+        ("adding a scene is fine",
+         B.keeps_scenes(eleven,
+                        {"scenes": eleven["scenes"] + [{"scene": 12}]}, "x")),
+        ("an empty candidate is rejected",
+         not B.keeps_scenes(eleven, {"scenes": []}, "x")),
+        ("a candidate with no scenes key is rejected",
+         not B.keeps_scenes(eleven, {}, "x")),
+    ]
+    for what, ok in checks:
+        print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+        bad += not ok
+
+    # All three stages must use it - one hole became three because each had
+    # its own acceptance test.
+    src = open("brain.py").read()
+    for stage in ('keeps_scenes(data, cand, "revision")',
+                  'keeps_scenes(data, cand, "red-team repair")',
+                  'keeps_scenes(\n                    data, fixed, "shape repair")'):
+        ok = stage.replace("\n", "").replace("  ", " ") in \
+            src.replace("\n", "").replace("  ", " ")
+        name = stage.split('"')[1]
+        print(f"  {'ok  ' if ok else 'FAIL'}  the {name} stage calls it")
+        bad += not ok
+    return bad
+
+
 def main():
     # PROVIDER_CHAR_CAP is monkeypatched by the tests above; keep the real one.
     real_cap = dict(B.PROVIDER_CHAR_CAP)
@@ -383,6 +431,7 @@ def main():
     bad += test_json_mode_400()
     bad += test_precap_avoids_the_round_trip()
     bad += test_cooldown()
+    bad += test_no_scene_loss()
     B.PROVIDER_CHAR_CAP = real_cap
     bad += test_real_cap_against_run36()
 

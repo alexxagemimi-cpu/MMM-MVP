@@ -492,6 +492,29 @@ BRAIN_BUDGET_SEC = float(_env("BRAIN_BUDGET_MIN", "24")) * 60
 TIME_CUT = []              # caveats about work skipped to make the deadline
 
 
+def keeps_scenes(old, cand, what):
+    """
+    True if `cand` has not thrown scenes away. ONE definition, used by every
+    stage that can replace the script.
+
+    Run 39 drafted 11 scenes and shipped 2, and the reason was the same in
+    three separate places: each stage accepted a candidate on a count of
+    PROBLEMS, and deleting a scene removes its problems. A shorter script
+    wins every one of those comparisons.
+
+    They each had their own acceptance test, which is how one hole became
+    three. This is the rule; call it from all of them.
+    """
+    before = len(old.get("scenes") or [])
+    after = len(cand.get("scenes") or [])
+    if after >= before:
+        return True
+    print(f"      {what} DROPPED {before - after} scene(s) "
+          f"({before} -> {after}) - rejected. A shorter script always scores "
+          f"better; that is not an improvement.")
+    return False
+
+
 def _snapshot(data, sources, why):
     """
     Write script.json NOW, so a timeout cannot cost the draft as well.
@@ -1531,7 +1554,10 @@ SCRIPT:
 ---
 Return the corrected script in the required JSON format.""",
                         schema=SCRIPT_SCHEMA)
-            if cand.get("scenes"):
+            # Was `if cand.get("scenes")` - which accepts a one-scene
+            # "repair" of an eleven-scene script. Same hole as the revision
+            # loop, and it is on the stage that runs LAST.
+            if cand.get("scenes") and keeps_scenes(data, cand, "red-team repair"):
                 data = cand
         except Exception as ex:
             print(f"      !! red-team repair failed ({str(ex)[:110]})")
@@ -1623,8 +1649,25 @@ def main():
         print("      revising...")
         try:
             cand = revise(data, fact_bad, q_bad, brief, m)
-            # only accept a revision that is not worse
-            if len(grade(measure(cand["scenes"]))) <= len(q_bad):
+
+            # A REVISION MAY NOT DELETE SCENES, AND THIS IS NOT A DETAIL.
+            #
+            # Run 39 drafted 11 scenes and shipped 2. An 8-minute video came
+            # out at 78 seconds, because the only thing this test measured was
+            # the NUMBER of failures - and the cheapest way to have fewer
+            # failing scenes is to have fewer scenes. Deleting the scene the
+            # fact-checker complained about scores perfectly every time.
+            #
+            # The loop was rewarded for throwing the video away. Each pass
+            # took the bait: 11 scenes, then findings on 1-3, then on 1-2,
+            # then a 222-word script. Nothing anywhere noticed that the
+            # deliverable had lost four fifths of itself.
+            #
+            # So: a revision fixes scenes, it does not remove them. Losing one
+            # is an automatic reject however well the remainder scores.
+            if not keeps_scenes(data, cand, "revision"):
+                pass
+            elif len(grade(measure(cand["scenes"]))) <= len(q_bad):
                 data = cand
             else:
                 print("      revision scored worse - keeping previous draft")
@@ -1639,7 +1682,10 @@ def main():
             print(f"   - {x}")
         try:
             fixed = repair_shape(data, shape, brief)
-            if len(validate(fixed)) < len(shape):
+            # Deleting a scene deletes its structural problems too, so this
+            # comparison is bait in exactly the way the revision loop's was.
+            if len(validate(fixed)) < len(shape) and keeps_scenes(
+                    data, fixed, "shape repair"):
                 data, shape = fixed, validate(fixed)
         except Exception as ex:
             print(f"   !! shape repair failed ({str(ex)[:110]})")
