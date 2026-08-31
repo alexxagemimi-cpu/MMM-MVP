@@ -228,6 +228,17 @@ CATEGORY, so both took the same "last two members" and drew the identical
 diagram twice, 28s apart in run 38. A diagram earns its place by saying
 something new.
 
+**4.24 The anchor asks WHERE the subject sits in the tags, not whether it
+is there at all.** Pixabay orders tags by relevance, so position measures how
+central the subject is — for free. Someone wearing jeans is in a great many
+photographs, which is why run 38 put a man holding a Nikon (`nikon, man,
+casio, jeans, nikon…`) on screen under narration about wide-leg jeans. The
+subject must appear in the **first three** tags. Three is measured, not
+taste: at four the camera photo comes back. Validated 39/40 on that run's own
+logged tags, with `subject={jeans}` because that is the anchor the engine
+really produced — an earlier version tested `{jeans, denim}`, scored better,
+and was testing easier input than the code gets.
+
 **4.12 The header plate is fully opaque.** At alpha 232 it looked like a
 reasonable "barely there" choice; over saturated footage the colour read
 straight through and the supposedly stable white band changed with every shot.
@@ -445,10 +456,15 @@ artifact host is unreachable, which it is from some sandboxes.
   (Orslow 107 Ivy Fit). The gate correctly refused it. §4.22 stops the video
   amplifying them; **nothing yet fixes the narration when the repair cannot
   run**, and that is the open problem.
-- **The subject anchor asks "is there denim in this?", not "is this ABOUT
-  denim?"** Run 38 frame 6 is a man holding a camera who happens to be
-  wearing jeans, under narration about wide-leg jeans. Same weakness put a
-  shirtless portrait on frame 3. Real, unfixed.
+- **The subject anchor asked "is there denim in this?", not "is this ABOUT
+  denim?"** Run 38: a man holding a Nikon, a shirtless portrait, a banjo
+  player, a toddler in dungarees, a laundry line, a beach — all containing
+  jeans, none about jeans. *Fixed* (§4.24), 39/40 on run 38's own logged
+  tags. **Still open:** the anchor is one word from the title, so a clip
+  whose tags LEAD with `denim` is dropped when the anchor is only `jeans`.
+  Widening it from the writer's `image_keywords` is the obvious next move
+  and is NOT done — on run 35's keywords a naive frequency threshold
+  readmits "straight" and "rise", which is the bug the anchor exists to end.
 - The comparison card can pair things of different KINDS — run 38 drew
   "Wrangler Classic Cowboy Cut vs Mid-rise jean", a leg cut against a rise
   height. It checks that both are members, not that they are commensurable.
