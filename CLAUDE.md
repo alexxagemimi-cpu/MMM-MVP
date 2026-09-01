@@ -572,13 +572,26 @@ disable a safety check.
 must pass, runway as a CATEGORY must be blocked, and a script with no beats
 must still be checked. 3/3.
 
-*What is genuinely left:* the members come from `topics.assess()`, which needs
-model calls and sources. When that cannot run — quota, no sources — the list is
-empty and the check no-ops. It now prints when that happens, so it is visible
-rather than silent, but a run with an exhausted quota still has no membership
-guarantee. **Nothing has yet been observed catching a real invented member on a
-live run**, because every run since has been engine-only. That is the next
-thing to confirm.
+*Why it never once produced a list — found on run 41's investigation, and it
+was not quota.* `assess()` truncated the pooled source text with
+`context[:11000]`. `research.gather()` concatenates whole pages as
+`[SOURCE 1] … [SOURCE 8]` and one page is easily 5,000 characters, so the model
+was shown the first two or three sources and then reported honestly on those.
+`score()` saw fewer than three lists and the gate printed *"fewer than 3
+sources named any members"* — true, and completely misleading. Measured on a
+context sized like a real gather (8 pages, 43,000 chars): the old slice left
+**3 of 8** sources still naming their members; `fair_share()` leaves **8 of 8**
+in 14,004 chars. The gate was starved, not broken, and that is why
+`VERIFIED_MEMBERS` was empty on every jeans run — so "top block" walked
+straight through the one check built to stop it.
+
+The budget deliberately fits inside `PROVIDER_CHAR_CAP`: `shrink()` cuts the
+MIDDLE, so a second trim on this prompt would delete the middle sources and
+recreate the same starvation in a new form.
+
+*What is genuinely left:* **nothing has yet been observed catching a real
+invented member on a live run.** The fix is measured offline; the gate has
+still never handed the writer a verified list on CI.
 
 ---
 
