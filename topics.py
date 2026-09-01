@@ -122,6 +122,44 @@ def _norm(s, topic=""):
     return " ".join(words) if words else " ".join(s.split())
 
 
+EXTRACT_BUDGET = 14000
+
+
+def fair_share(context, budget=EXTRACT_BUDGET):
+    """
+    Give EVERY source a slice of the budget, instead of the first few all of it.
+
+    This was `context[:11000]`, and that one line is why the membership gate
+    has never produced a list. research.gather() returns whole pages
+    concatenated as [SOURCE 1] ... [SOURCE 8], and a single page is easily
+    5,000 characters - so the first 11,000 characters reach source two or
+    three and stop. The model then honestly reports on the sources it was
+    shown, score() sees fewer than three lists, and the run prints:
+
+        [COULD NOT CHECK] every type of jeans for men explained
+                          (agreement 0.0, 0 members, 8 sources)
+
+    "8 sources" and "0 members" in the same line, because eight were fetched
+    and two were read. The gate was not wrong; it was starved. Every jeans
+    run so far had no verified member list for this reason, which is exactly
+    the hole CLAUDE.md section 11 says is the worst content bug in the
+    project.
+
+    A source names its members early - in the headings and the opening - so a
+    fair slice of each page is worth far more here than all of two pages.
+
+    The budget stays inside the fallback writer's per-request cap so this
+    prompt is never trimmed a second time: brain.shrink() cuts the MIDDLE,
+    which on this prompt would silently delete the middle sources and
+    recreate the same starvation in a new form.
+    """
+    parts = [p for p in re.split(r"(?=\[SOURCE \d+\])", context) if p.strip()]
+    if len(parts) <= 1:
+        return context[:budget]
+    share = max(500, budget // len(parts))
+    return "\n".join(p[:share].rstrip() for p in parts)
+
+
 def extract_prompt(topic, context):
     """
     Ask ONE model call to read every source and report, per source, which
@@ -271,11 +309,10 @@ def assess(topic, call, gather, per_query=5, verbose=True):
                             "topic, which is not the same as rejecting it"],
                 "agreement": 0.0, "members": [], "sources": 0}
 
-    # Sources are truncated HARD for this call. It only has to report which
-    # members each page names, which needs the first part of each page, not
-    # all of it. Sending everything produced "HTTP 413 Request too large" on
-    # Groq and burned a retry every time.
-    labelled = context[:11000]
+    # Every source gets a slice - see fair_share(). This was context[:11000],
+    # which showed the model the first two pages of eight and then reported
+    # "fewer than 3 sources named any members".
+    labelled = fair_share(context)
     try:
         data = call(extract_prompt(topic, labelled), schema={"type": "object"})
         per_source = data.get("sources", []) if isinstance(data, dict) else []
@@ -331,6 +368,35 @@ if __name__ == "__main__":
         {"n": 3, "members": ["direct costs", "indirect costs", "overheads", "COGS"]},
         {"n": 4, "members": ["fixed", "variable", "semi-variable", "runway", "burn rate"]},
     ]
+    # THE STARVATION REGRESSION, and it is the reason this gate never once
+    # produced a member list. Sized like a real gather(): eight pages, a few
+    # thousand characters each, each naming its members near the top.
+    _names = ["GQ Types of Jeans", "Levi's Fit Guide", "Lee Jeans Guide",
+              "7 For All Mankind", "Nordstrom Fit", "Esquire Denim",
+              "Wrangler Cuts", "Uniqlo Fit Chart"]
+    _ctx = "\n".join(
+        f"[SOURCE {i+1}] {n}\nURL: http://example/{i}\n"
+        "The main cuts are skinny, slim, straight, bootcut and relaxed. "
+        + ("filler text about denim history and washes. " * 120)
+        for i, n in enumerate(_names))
+
+    def _with_members(text):
+        return sum(1 for b in re.split(r"(?=\[SOURCE \d+\])", text)
+                   if "skinny, slim, straight" in b)
+
+    _old, _new = _ctx[:11000], fair_share(_ctx)
+    print(f"\nSOURCE STARVATION (why the gate reported 0 members from 8 sources)")
+    print(f"  context            : {len(_ctx):,} chars, {len(_names)} sources")
+    print(f"  old context[:11000]: {_with_members(_old)} of 8 sources still "
+          f"name their members")
+    print(f"  fair_share()       : {_with_members(_new)} of 8, "
+          f"{len(_new):,} chars")
+    _ok = _with_members(_new) == 8 and len(_new) <= EXTRACT_BUDGET + 200
+    print(f"  {'ok  ' if _ok else 'FAIL'}  every source survives, and the "
+          f"prompt still fits the fallback writer's cap")
+    if not _ok:
+        raise SystemExit("fair_share regression FAILED")
+
     for name, data in (("real taxonomy (operating systems)", REAL),
                        ("fuzzy category (business expenses)", FUZZY)):
         a, cons, cont, det = score(data, name)
