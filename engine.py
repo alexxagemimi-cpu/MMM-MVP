@@ -1673,6 +1673,18 @@ async def build():
     member_of = {si: k for k, si in enumerate(member_idx)}
     use_cards = graphics is not None and len(members) >= 2
 
+    # The opening card's eyebrow: the video's own title, which is what the
+    # list is a list OF. Falls back to a neutral line when there isn't one.
+    #
+    # Defined HERE, beside `members`, not down in the render phase. It used to
+    # live below and the asset phase - which runs first - reads it too, so
+    # every gagged shot hit "cannot access free variable 'title_eyebrow'".
+    # The try/except around that call swallowed it and fell back to a slate,
+    # so the build stayed green and the feature silently did nothing: 5.8's
+    # shape exactly.
+    title_eyebrow = ((data.get("title") if isinstance(data, dict) else "")
+                     or "In this video").strip()[:60]
+
     # Which section each scene BELONGS to, item or not, so a drawn shot card
     # can carry the same header the footage in that section carries. None
     # means no section: before the first item, or the closing scene.
@@ -1871,20 +1883,48 @@ async def build():
             # screen. The log said "term card for 'top block' withheld" while
             # TOP BLOCK was the headline. A suppression that reports success
             # and leaves the words on screen is worse than none.
-            # WRITE A REAL SLATE, do not just hand back a null path.
+            # WITHHOLD THE CLAIM, NOT THE PICTURE.
             #
-            # ("image", None) is the shape _draw_shot_card returns when it
-            # fails, and it survives only because render_shot_safe catches
-            # the resulting TypeError and substitutes a slate. That path is
-            # almost never taken on a real run - the term and fact are
-            # practically always present - so leaning on it here would turn a
-            # rare error handler into the normal route for every gagged shot,
-            # and fill the log with "shot failed ... NoneType" on a decision
-            # the engine made deliberately.
+            # The first version of this drew a black slate, and run 41 showed
+            # what that costs: scenes 5 and 8 became long stretches of black
+            # screen, 38 of 129 shots, three of the twelve contact-sheet
+            # frames pure black. Trading an invented term for a void is not a
+            # fix - 4.9 already says the worst thing in this video is a frame
+            # that carries nothing, and black carries less than a still card.
+            #
+            # The section header is SAFE to show even here: headers come from
+            # `members`, which is built only from scenes that are NOT gagged,
+            # so the header on a gagged scene was written by a different,
+            # trusted scene. It says where the viewer is without asserting
+            # anything the red team doubted.
             path = out_stub + ".png"
-            Image.new("RGB", (KB_W, KB_H), (11, 12, 16)).save(path, "PNG")
+            sec = section_of.get(i)
+            drew = False
+            if graphics is not None and sec is not None and len(members) >= 2:
+                try:
+                    # The CHECKLIST, not a bare header. A header-only card was
+                    # the first attempt and it rendered as a title over four
+                    # fifths of empty page - better than black and still a
+                    # frame carrying almost nothing. The checklist is built
+                    # entirely from ungagged scenes, so every word on it is
+                    # trusted, it fills the frame, and it tells the viewer
+                    # where they are in the video - which is the one useful
+                    # thing that can honestly be said during a scene whose own
+                    # claims are in doubt.
+                    graphics.overview_card(members, current=sec,
+                                           eyebrow=title_eyebrow,
+                                           out_png=path)
+                    drew = True
+                except Exception as e:
+                    print(f"      !! checklist card failed ({str(e)[:50]})",
+                          flush=True)
+            if not drew:
+                # No section to name - the opening or the close. Nothing
+                # trustworthy is left to draw, so a flat slate it is.
+                Image.new("RGB", (KB_W, KB_H), (11, 12, 16)).save(path, "PNG")
             kind, ok = "image", False
-            print(f"      shot scene {i+1} #{j+1} [SLATE] | card withheld - "
+            print(f"      shot scene {i+1} #{j+1} "
+                  f"[{'HEADER' if drew else 'SLATE'}] | claim withheld - "
                   f"unfixed HARD red-team finding on this scene", flush=True)
         elif kind == "none":
             # NOTHING RELEVANT EXISTS FOR THIS KEYWORD, so put the script's
@@ -1940,10 +1980,6 @@ async def build():
     term_cards, sfx_events = [], []
     last_member = None
     header_fails = []
-    # the opening card's eyebrow: the video's own title, which is what the
-    # list is a list OF. Falls back to a neutral line when there isn't one.
-    title_eyebrow = ((data.get("title") if isinstance(data, dict) else "")
-                     or "In this video").strip()[:60]
 
     for i, sc in enumerate(scenes):
         mp4 = os.path.join(WORK, f"s{i:03d}.mp4")

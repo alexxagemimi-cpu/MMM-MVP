@@ -223,6 +223,17 @@ invented", and gagging on them would strip cards off a sound script. The
 narration still says the sentence: that is a script problem and it stays
 visible in the publish gate.
 
+**What a gagged shot shows instead is the CHECKLIST, not black.** The first
+version drew a flat slate and run 41 measured the cost: 38 of 129 shots blank,
+three of twelve contact-sheet frames pure black, scenes 5 and 8 reduced to
+long stretches of nothing. Trading an invented term for a void is not a fix —
+§4.9 already says the worst frame in this video is one carrying nothing, and
+black carries less than a still card. The checklist is built only from
+ungagged scenes, so every word on it is trusted; it fills the frame and tells
+the viewer where they are, which is the one honest thing to say during a scene
+whose own claims are in doubt. A header-only card was tried in between and
+rejected on sight: a title over four fifths of empty page.
+
 **4.23 One comparison per pair.** EDGE and APPLY both follow the last
 CATEGORY, so both took the same "last two members" and drew the identical
 diagram twice, 28s apart in run 38. A diagram earns its place by saying
