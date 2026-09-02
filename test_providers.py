@@ -411,14 +411,77 @@ def test_no_scene_loss():
 
     # All three stages must use it - one hole became three because each had
     # its own acceptance test.
-    src = open("brain.py").read()
-    for stage in ('keeps_scenes(data, cand, "revision")',
-                  'keeps_scenes(data, cand, "red-team repair")',
-                  'keeps_scenes(\n                    data, fixed, "shape repair")'):
-        ok = stage.replace("\n", "").replace("  ", " ") in \
-            src.replace("\n", "").replace("  ", " ")
-        name = stage.split('"')[1]
+    # Matched with a regex over collapsed whitespace: the call sites wrap
+    # across lines and indent differently, and a literal-substring check that
+    # breaks when a line is re-wrapped is a test that fails for the wrong
+    # reason - which trains people to ignore it.
+    import re as _re
+    src = _re.sub(r"\s+", " ", open("brain.py").read())
+    for name in ("revision", "red-team repair", "shape repair"):
+        ok = bool(_re.search(
+            rf'keeps_scenes\( *\w+, *\w+, *"{_re.escape(name)}"', src))
         print(f"  {'ok  ' if ok else 'FAIL'}  the {name} stage calls it")
+        bad += not ok
+    return bad
+
+
+
+def test_targeted_repair():
+    """
+    The red-team repair must be SMALL, and it must not be able to damage the
+    script it is repairing.
+
+    It is stage 6 of 6, so it runs when the quota is most depleted - and it
+    used to send the whole script plus the brief and ask for the whole script
+    back, to fix a handful of sentences. Runs 38, 39 and 41 all end the same
+    way: "red-team repair failed ... 429". The most important call in the
+    pipeline was the last and the largest, so it never once succeeded, and
+    every video shipped with findings the system had already identified.
+    """
+    line("the red-team repair is small, and cannot damage the script")
+    bad = 0
+    scenes = [{"scene": i + 1, "beat": "CATEGORY", "key_term": f"term {i+1}",
+               "key_fact": "a fact about this cut",
+               "narration": "word " * 116,
+               "image_keywords": [f"kw{j}" for j in range(9)]}
+              for i in range(11)]
+    data = {"title": "Every Type of Men's Jeans Explained",
+            "description": "d" * 300, "question": "q" * 160,
+            "tags": ["a"] * 12, "scenes": scenes}
+    scoped = [2, 5, 8]
+    slim = [{k: s.get(k) for k in
+             ("scene", "beat", "key_term", "key_fact", "narration")}
+            for s in scenes if s["scene"] in scoped]
+    whole, part = len(json.dumps(data, indent=2)), len(json.dumps(slim, indent=2))
+    print(f"  whole script : {whole:,} chars")
+    print(f"  3 scenes     : {part:,} chars  ({100 - 100*part//whole}% smaller)")
+
+    fixed = [{"scene": 2, "narration": "repaired two", "key_term": "term 2"},
+             {"scene": 47, "narration": "A SCENE THAT DOES NOT EXIST"},
+             {"scene": 8, "narration": "repaired eight", "key_term": "term 8"}]
+    out, applied = B.merge_scene_fixes(data, fixed)
+
+    checks = [
+        ("the targeted prompt is at least half the size", part < whole / 2),
+        ("it fits the fallback writer's cap", part < B.PROVIDER_CHAR_CAP.get("groq", 16000)),
+        ("both real fixes were applied", applied == 2),
+        ("the scene count is unchanged", len(out["scenes"]) == len(scenes)),
+        ("scene 2 was repaired", out["scenes"][1]["narration"] == "repaired two"),
+        ("scene 3 was left alone",
+         out["scenes"][2]["narration"] == scenes[2]["narration"]),
+        ("an invented scene number is ignored",
+         all(s["scene"] != 47 for s in out["scenes"])),
+        ("image_keywords survive the repair",
+         out["scenes"][1]["image_keywords"] == scenes[1]["image_keywords"]),
+        ("the caller's script is not mutated",
+         data["scenes"][1]["narration"].startswith("word")),
+        ("an empty reply changes nothing",
+         B.merge_scene_fixes(data, [])[1] == 0),
+        ("a malformed reply changes nothing",
+         B.merge_scene_fixes(data, ["nonsense", {"no_scene": 1}])[1] == 0),
+    ]
+    for what, ok in checks:
+        print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
         bad += not ok
     return bad
 
@@ -432,6 +495,7 @@ def main():
     bad += test_precap_avoids_the_round_trip()
     bad += test_cooldown()
     bad += test_no_scene_loss()
+    bad += test_targeted_repair()
     B.PROVIDER_CHAR_CAP = real_cap
     bad += test_real_cap_against_run36()
 

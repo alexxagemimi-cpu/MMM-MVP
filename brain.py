@@ -492,6 +492,45 @@ BRAIN_BUDGET_SEC = float(_env("BRAIN_BUDGET_MIN", "24")) * 60
 TIME_CUT = []              # caveats about work skipped to make the deadline
 
 
+def merge_scene_fixes(data, fixed):
+    """
+    Fold repaired scenes back into the script BY SCENE NUMBER.
+
+    Only the three text fields a repair is allowed to change are taken.
+    `beat`, `image_keywords` and everything else stay exactly as drafted -
+    a repair that rewrote those would quietly change the video's structure
+    while claiming to fix a sentence.
+
+    Returns (new_data, how_many_applied). Scene numbers the script does not
+    have are ignored rather than appended: a model inventing scene 47 must
+    not be able to grow the script through the repair door.
+    """
+    by_n = {}
+    for s in fixed or []:
+        if isinstance(s, dict) and s.get("scene") is not None:
+            try:
+                by_n[int(s["scene"])] = s
+            except (TypeError, ValueError):
+                continue
+    if not by_n:
+        return data, 0
+
+    out = json.loads(json.dumps(data))       # deep copy, do not mutate caller
+    applied = 0
+    for sc in out.get("scenes", []):
+        got = by_n.get(sc.get("scene"))
+        if not got:
+            continue
+        changed = False
+        for field in ("narration", "key_term", "key_fact"):
+            new = (got.get(field) or "").strip()
+            if new and new != (sc.get(field) or "").strip():
+                sc[field] = new
+                changed = True
+        applied += changed
+    return out, applied
+
+
 def keeps_scenes(old, cand, what):
     """
     True if `cand` has not thrown scenes away. ONE definition, used by every
@@ -1561,8 +1600,73 @@ def red_team(data, brief, sources_context):
                   "with one of these that the script does not yet cover. Do "
                   "not keep it because its sentences are true - being true is "
                   "not the same as belonging.")
+        # REPAIR ONLY THE SCENES THAT ARE BROKEN.
+        #
+        # This used to send json.dumps(data) - the whole script - plus the
+        # brief, and ask for the whole script back, in order to fix five
+        # sentences. It is stage 6 of 6, so by the time it runs brain has
+        # already spent ~20 model calls on research, drafting, three
+        # fact-check passes and shape repair. The single most important call
+        # in the pipeline was also the LAST and the LARGEST, and it has
+        # therefore never once succeeded: runs 38, 39 and 41 all end with
+        # "red-team repair failed ... 429". Every video this project has made
+        # shipped with hard findings the system had already identified and
+        # could not afford to fix.
+        #
+        # Worse on the fallback: at ~12,000 characters of script the prompt
+        # exceeds Groq's cap, and shrink() cuts the MIDDLE - so the repair
+        # would have been handed a script with its middle scenes deleted.
+        #
+        # A finding names its scene. Send those scenes and nothing else.
+        # Typically three scenes out of eleven: a quarter of the tokens, a
+        # far better-defined job, and the scene count cannot change because
+        # the result is merged back by number rather than replacing the
+        # script.
+        scoped = sorted({f["scene"] for f in findings
+                         if f.get("severity") == "hard" and f.get("scene")})
+        wanted = [s for s in data.get("scenes", []) if s.get("scene") in scoped]
+
         try:
-            cand = call(f"""Fix every problem listed. Change nothing else.
+            if wanted:
+                slim = [{k: s.get(k) for k in
+                         ("scene", "beat", "key_term", "key_fact", "narration")}
+                        for s in wanted]
+                print(f"      repairing {len(slim)} scene(s) "
+                      f"({', '.join(str(n) for n in scoped)}) "
+                      f"instead of all {len(data.get('scenes', []))}")
+                cand = call(f"""Fix every problem listed in these scenes. Change nothing else.
+
+PROBLEMS FOUND BY AN ADVERSARIAL REVIEW:
+{fixes}
+{members_rule}
+
+Write in plain language a 15-year-old reads without stopping. Short
+sentences. No filler, no hedging, no jargon where a common word exists.
+Keep each narration between {MIN_WORDS_PER_SCENE} and {MAX_WORDS_PER_SCENE}
+words. Each scene's key_term must still appear word for word in its own
+narration. Keep the same scene numbers and beats.
+
+SCENES TO FIX:
+---
+{json.dumps(slim, indent=2)}
+---
+Reply with JSON: {{"scenes": [{{"scene": <number>, "key_term": "...",
+"key_fact": "...", "narration": "..."}}]}} - only the scenes above.""",
+                            schema={"type": "object"})
+                merged, applied = merge_scene_fixes(
+                    data, cand.get("scenes") if isinstance(cand, dict) else None)
+                if applied:
+                    print(f"      applied {applied} scene fix(es)")
+                    data = merged
+                else:
+                    print(f"      !! the repair changed nothing - "
+                          f"keeping the previous draft")
+            else:
+                # Nothing scene-scoped: the findings are about the script as a
+                # whole (reading level, for instance). That genuinely needs the
+                # whole script, and it is also the cheap case - there are no
+                # per-scene quotes to carry.
+                cand = call(f"""Fix every problem listed. Change nothing else.
 
 PROBLEMS FOUND BY AN ADVERSARIAL REVIEW:
 {fixes}
@@ -1574,7 +1678,7 @@ Keep exactly {SCENE_COUNT} scenes and the same beat order, and keep every
 narration between {MIN_WORDS_PER_SCENE} and {MAX_WORDS_PER_SCENE} words.
 Each scene's key_term must still appear word for word in its own narration.
 
-BRIEF:
+BRIEF (the grounded summary this script was written from):
 ---
 {brief}
 ---
@@ -1583,12 +1687,10 @@ SCRIPT:
 {json.dumps(data, indent=2)}
 ---
 Return the corrected script in the required JSON format.""",
-                        schema=SCRIPT_SCHEMA)
-            # Was `if cand.get("scenes")` - which accepts a one-scene
-            # "repair" of an eleven-scene script. Same hole as the revision
-            # loop, and it is on the stage that runs LAST.
-            if cand.get("scenes") and keeps_scenes(data, cand, "red-team repair"):
-                data = cand
+                            schema=SCRIPT_SCHEMA)
+                if cand.get("scenes") and keeps_scenes(data, cand,
+                                                       "red-team repair"):
+                    data = cand
         except Exception as ex:
             print(f"      !! red-team repair failed ({str(ex)[:110]})")
             return data, findings

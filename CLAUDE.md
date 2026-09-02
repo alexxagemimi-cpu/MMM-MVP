@@ -210,6 +210,20 @@ drawn card or the checklist already names the term, and clipped to the moment
 a drawn card takes the screen. Three separate rendered frames showed the same
 words printed twice on one screen, once literally on top of themselves.
 
+**4.25 The red-team repair fixes SCENES, not the script.** It is stage 6 of 6,
+so it runs when the quota is most depleted — and it used to send the whole
+script plus the brief and ask for the whole script back, to fix a handful of
+sentences. Runs 38, 39 and 41 all end `red-team repair failed … 429`. **The
+single most important call in the pipeline was also the last and the largest,
+so it has never once succeeded**, and every video this project has made
+shipped with hard findings the system had already identified. Worse on the
+fallback: at ~11,000 characters the prompt exceeds Groq's cap and `shrink()`
+cuts the MIDDLE, so the repair would receive a script with its middle scenes
+deleted. A finding names its scene, so only those scenes are sent — measured
+at **80% smaller** (10,733 → 2,177 chars on run 41's shape) — and the reply is
+merged back **by scene number**, which makes deleting or adding a scene
+structurally impossible rather than forbidden by instruction.
+
 **4.22 A claim the red team flagged HARD never gets a card.** Run 38 wrote
 "top block" as one of three structural measurements of jeans. Not a standard
 term; in none of the run's 14 sources. The red team caught it HARD *twice*
