@@ -51,6 +51,7 @@ content**. That is why term cards exist (§4).
 | `contact.py` | 12 frames of the finished video on one JPEG, plus measurements | **How faults get found** |
 | `test_providers.py` | The fallback writer, against a provider that refuses on size | 19/19 |
 | `test_distrust.py` | A hard-flagged claim must never reach a card | 10/10 |
+| `test_wiring.py` | Nothing is computed, logged, and then ignored | 4 checks, each proved by reintroducing its bug |
 | `test_engine_local.py` | Runs the REAL engine against REAL ffmpeg locally, ~50s | Passing |
 | `.github/workflows/factory.yml` | The workflow. Has a no-AI engine-only test mode | Stable |
 
@@ -421,6 +422,7 @@ until July 2026), which is why every model id is an env var.
     python3 redteam.py               # runway regression, both directions
     python3 test_verify.py           # video-verifier logic, no network
     python3 test_providers.py        # the fallback writer when Gemini is out
+    python3 test_wiring.py           # is anything built and not connected?
     python3 contact.py final_video.mp4   # LOOK at what was just built
 
 Workflow test mode: run with `skip_brain_test_fixture=true` to render a

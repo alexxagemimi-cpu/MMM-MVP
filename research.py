@@ -225,10 +225,33 @@ def gather(queries, per_query=5, read_pages=True, max_sources=14):
     if read_pages:
         with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as pool:
             pages = list(pool.map(fetch_page, [h["url"] for h in hits]))
+        read = 0
         for h, page in zip(hits, pages):
             # keep the snippet when the page read came back empty or thinner
             if len(page) > len(h["content"]):
                 h["content"] = page
+                read += 1
+
+        # SAY HOW MANY PAGES ACTUALLY OPENED.
+        #
+        # fetch_page() returns "" on any exception, so a blocked site, a
+        # timeout and a page with genuinely no text are the same value. When
+        # a read fails the snippet stays - about 200 characters - and the run
+        # carries on quietly with a fortieth of the material it thinks it
+        # has. Nothing downstream can tell the difference: the writer is
+        # simply asked for 1,200 words from almost nothing, and fills the gap
+        # the way models do.
+        #
+        # That degradation must never be silent again. It is not fatal - some
+        # sites always refuse - so this reports rather than raises, and only
+        # shouts when most of them failed.
+        if read < len(hits):
+            note = (" - MOST SOURCES ARE SEARCH SNIPPETS, not pages; expect "
+                    "thin, poorly grounded output"
+                    if read < len(hits) / 2 else "")
+            print(f"      pages opened: {read}/{len(hits)} "
+                  f"({sum(len(h['content']) for h in hits):,} chars){note}",
+                  flush=True)
 
     blocks = []
     for i, h in enumerate(hits, 1):
