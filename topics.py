@@ -200,7 +200,12 @@ def score(per_source, topic=""):
              for s in per_source]
     lists = [l for l in lists if l]
     if len(lists) < 2:
-        return 0.0, [], [], {}
+        # Report the count even when there is nothing to score. An empty
+        # detail made every downstream message say "fewer than 3 sources"
+        # whether the model returned nothing, returned empty lists, or
+        # genuinely found members in two - three different problems wearing
+        # one sentence.
+        return 0.0, [], [], {"sources": len(lists), "usable": len(lists)}
 
     # display name for each normalised key, from the first source that used it
     display = {}
@@ -257,9 +262,12 @@ def verdict(topic, agreement, consensus, contested, detail):
         # have filed a perfectly good topic under `rejected` and, now that
         # the memory survives between runs, blocked it forever on the
         # strength of one transient 503.
-        return False, ["fewer than 3 sources named any members - could not "
-                       "judge this topic (this is a failure to check, not a "
-                       "verdict on the topic)"], {"unchecked": True}
+        got = detail.get("sources", 0)
+        return False, [f"only {got} source(s) named any member - could not "
+                       f"judge this topic (this is a failure to CHECK, not a "
+                       f"verdict on the topic). Three is the minimum for "
+                       f"agreement to mean anything. See the 'extraction:' "
+                       f"line above for what the model actually returned"], {"unchecked": True}
 
     if agreement < MIN_AGREEMENT:
         ok = False
@@ -313,9 +321,44 @@ def assess(topic, call, gather, per_query=5, verbose=True):
     # which showed the model the first two pages of eight and then reported
     # "fewer than 3 sources named any members".
     labelled = fair_share(context)
+    n_shown = labelled.count("[SOURCE ")
+    # How much text is there PER SOURCE, really? A retail page that blocked
+    # the fetch falls back to its ~200-character search snippet, and eight
+    # snippets are 1,600 characters with no member names anywhere in them.
+    # fair_share cannot help with that - there is nothing to share - and the
+    # two failures look identical in the log unless the size is printed.
+    print(f"      membership: {len(sources)} source(s), {len(context):,} chars "
+          f"gathered, {len(labelled):,} shown "
+          f"(~{len(labelled)//max(1, n_shown):,} per source)")
     try:
         data = call(extract_prompt(topic, labelled), schema={"type": "object"})
         per_source = data.get("sources", []) if isinstance(data, dict) else []
+
+        # SAY WHAT CAME BACK, or the next failure is unreadable too.
+        #
+        # Run 42 printed "fewer than 3 sources named any members" WITH the
+        # fair_share fix in place, and there was no way to tell from the log
+        # which of these had happened:
+        #   - the model returned nothing parseable
+        #   - it returned entries that were all empty
+        #   - it genuinely found members in only two pages
+        # score() collapses all three into an empty `detail`, so the message
+        # was a guess wearing a measurement's clothes. That is 4.21's mistake
+        # in a new place: a failure to look reported as a finding.
+        named = [s for s in per_source
+                 if isinstance(s, dict) and s.get("members")]
+        print(f"      extraction: showed {n_shown} source(s), model returned "
+              f"{len(per_source)} entr(ies), {len(named)} named any member")
+        if per_source and not named:
+            print(f"      .. every entry came back EMPTY - the model read the "
+                  f"pages and found no members in them, which is a different "
+                  f"problem from not being shown enough")
+        elif not per_source:
+            print(f"      .. the reply carried no 'sources' key at all - "
+                  f"got {list(data)[:6] if isinstance(data, dict) else type(data).__name__}")
+        for s in named[:3]:
+            print(f"         source {s.get('n','?')}: "
+                  f"{', '.join(str(m) for m in s.get('members', [])[:6])}")
     except Exception as e:
         # NOT a rejection. This is the single most dangerous confusion in the
         # scout: a live run logged "too few usable sources to judge this topic
@@ -396,6 +439,57 @@ if __name__ == "__main__":
           f"prompt still fits the fallback writer's cap")
     if not _ok:
         raise SystemExit("fair_share regression FAILED")
+
+    # THE FOUR WAYS THIS GATE CAN COME BACK EMPTY, and telling them apart.
+    #
+    # Run 42 printed "fewer than 3 sources named any members" WITH the
+    # fair_share fix in place, and the log could not say which of these had
+    # happened. One sentence was covering three different problems, so the
+    # obvious next move was a guess. Each case must now name itself.
+    _n = ["GQ", "Levis", "Lee", "7FAM", "Nordstrom", "Esquire", "Wrangler",
+          "Uniqlo"]
+
+    def _ctx(each):
+        return "\n".join(
+            f"[SOURCE {i+1}] {t}\nURL: http://x/{i}\n"
+            + ("The cuts are skinny, slim, straight, bootcut and relaxed. "
+               * max(1, each // 56))
+            for i, t in enumerate(_n))
+
+    _srcs = [{"title": t, "uri": "u"} for t in _n]
+    _GOOD = {"sources": [{"n": i + 1, "members": ["skinny", "slim", "straight",
+                                                  "bootcut", "relaxed"]}
+                         for i in range(8)]}
+    _EMPTY = {"sources": [{"n": i + 1, "members": []} for i in range(8)]}
+    _JUNK = {"result": "I could not find a list."}
+
+    print("\nTELLING THE FOUR EMPTY-GATE CAUSES APART")
+    _cases = [
+        ("pages read, members found", 4000, _GOOD, True, None),
+        ("pages read, model found nothing", 4000, _EMPTY, False, "EMPTY"),
+        ("reply had no 'sources' key", 4000, _JUNK, False, "no 'sources' key"),
+        ("pages BLOCKED - snippets only", 180, _EMPTY, False, "EMPTY"),
+    ]
+    _bad = 0
+    for _label, _each, _reply, _want_build, _want_note in _cases:
+        import io, contextlib
+        _buf = io.StringIO()
+        with contextlib.redirect_stdout(_buf):
+            _out = assess("every type of jeans for men explained",
+                          lambda p, **k: _reply,
+                          lambda q, **k: (_ctx(_each), _srcs), verbose=True)
+        _txt = _buf.getvalue()
+        _ok = (_out["build"] == _want_build
+               and (_want_note is None or _want_note in _txt)
+               and "per source" in _txt)
+        _per = [l for l in _txt.split("\n") if "membership:" in l]
+        print(f"  {'ok  ' if _ok else 'FAIL'}  {_label}")
+        print(f"        {_per[0].strip() if _per else '(no size line)'}")
+        _bad += not _ok
+    # the blocked-pages case must be visibly different from the healthy one
+    if _bad:
+        raise SystemExit("empty-gate diagnostics FAILED")
+    print("  ok    each cause names itself in the log")
 
     for name, data in (("real taxonomy (operating systems)", REAL),
                        ("fuzzy category (business expenses)", FUZZY)):
