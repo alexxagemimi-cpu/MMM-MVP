@@ -282,7 +282,7 @@ def _circle_image(src_path, d, ring_rgb):
     return tile
 
 
-def render(headline, accent, tiles, out_png, images=None, subtitle=None):
+def render(headline, accent, tiles, out_png, images=None):
     """
     headline : the short thumbnail line, e.g. "TYPES OF BUSINESS EXPENSES"
                (shorter than the video title - that difference is deliberate)

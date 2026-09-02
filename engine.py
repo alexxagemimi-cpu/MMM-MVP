@@ -63,6 +63,22 @@ except Exception as _e:
     print(f"   !! scriptbits unavailable ({_e}) - drawn shot cards will "
           f"carry only the term and its definition", flush=True)
 
+# WHICH BEATS ARE LIST ITEMS IS modes.py'S ANSWER, NOT OURS.
+#
+# CLAUDE.md section 11 records that the beat rules were "moved to modes.py so
+# the engine, the red team and brain cannot drift apart". redteam.py really
+# does call modes.is_member(). The engine never did - it kept private copies
+# of MEMBER_BEATS and CLOSING_BEATS and compared strings itself. They happen
+# to be identical today, so nothing is broken; that is luck, not design. Add a
+# member beat to modes.py and the red team would check it while the engine
+# silently left it off the checklist, which is 4.16's fault ("two places
+# working out the same thing, one goes stale") one file over.
+#
+# Unlike graphics and sfx, this is not optional polish: without it the engine
+# would fall back to its own idea of the rules, which is the exact drift being
+# prevented. A missing modes.py is a broken checkout, and it says so.
+import modes  # noqa: E402  (must follow the optional-import block above)
+
 try:
     import sfx
 except Exception as _e:                       # pragma: no cover
@@ -1630,10 +1646,6 @@ async def build():
     # nothing here checks that the CATEGORY scenes are genuinely members of
     # the category. It fixes the narrower bug of putting scenes on the list
     # that never claimed to be items in the first place.
-    MEMBER_BEATS = {"CATEGORY", "STEP"}
-    # scenes that belong to no section at all - the wrap-up, whatever the
-    # mode calls it
-    CLOSING_BEATS = {"CLOSE", "RESONANCE"}
 
     # NEVER PUT A KNOWN-BAD CLAIM ON A CARD.
     #
@@ -1665,7 +1677,7 @@ async def build():
               f"row and no diagram column: "
               f"{', '.join(sorted(str(i + 1) for i in distrusted))}")
     member_idx = [i for i, s in enumerate(scenes)
-                  if (s.get("beat") or "").strip().upper() in MEMBER_BEATS
+                  if modes.is_member(s)
                   and (s.get("key_term") or "").strip()
                   and i not in distrusted]
     members = [scenes[i]["key_term"].strip() for i in member_idx]
@@ -1692,8 +1704,7 @@ async def build():
     for _i, _s in enumerate(scenes):
         if _i in member_of:
             _run = member_of[_i]
-        section_of[_i] = None if (_s.get("beat") or "").strip().upper() \
-            in CLOSING_BEATS else _run
+        section_of[_i] = None if modes.is_closing(_s) else _run
 
     print("=" * 62, flush=True)
     print(f"  MMM ENGINE | {total} scenes | {W}x{H} @ {FPS}fps | voice={VOICE}",
@@ -2043,7 +2054,7 @@ async def build():
         # summary "ONE-OFF COSTS 3 OF 3" while the narration had moved on to
         # something else entirely, which is worse than no orientation: it is
         # wrong orientation. Seen on a rendered frame.
-        closing = (sc.get("beat") or "").strip().upper() in CLOSING_BEATS
+        closing = modes.is_closing(sc)
         if use_cards and not closing \
                 and (here is not None or last_member is not None):
             at = here if here is not None else last_member

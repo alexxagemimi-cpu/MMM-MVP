@@ -1358,6 +1358,34 @@ def write_run_summary(data, sources, metrics, fact_bad, history):
         srcs = "\n".join(f"- [{(s.get('title') or s.get('uri'))[:90]}]({s.get('uri')})"
                          for s in sources[:14]) or "_none_"
         words = wordcount(data)
+
+        # DID THE QUALITY LOOP CONVERGE, OR DID IT JUST RUN OUT OF PASSES?
+        #
+        # `history` was accepted by this function and never used. That is a
+        # shame, because CLAUDE.md section 9 lists "whether the quality loop
+        # converges within MAX_PASSES or always spends the budget" as an OPEN
+        # QUESTION - and the answer was being measured every single run and
+        # then dropped on the floor. Two columns of arithmetic already in
+        # memory close a question that has been open for the life of the
+        # project.
+        if history:
+            hrows = "\n".join(
+                f"| {h.get('pass','?')} | {h.get('fact_fails','?')} | "
+                f"{h.get('craft_fails','?')} |" for h in history)
+            first, last = history[0], history[-1]
+            moved = (first.get("fact_fails", 0) - last.get("fact_fails", 0),
+                     first.get("craft_fails", 0) - last.get("craft_fails", 0))
+            verdict_line = (
+                "converged - both bars cleared before the budget ran out"
+                if last.get("fact_fails") == 0 and last.get("craft_fails") == 0
+                else f"spent all {len(history)} pass(es); "
+                     f"fact issues {'fell' if moved[0] > 0 else 'did not fall'} "
+                     f"by {moved[0]}, craft by {moved[1]}")
+            passes = (f"**Revision passes:** {verdict_line}\n\n"
+                      f"| Pass | Fact issues | Craft issues |\n"
+                      f"|---|---|---|\n{hrows}")
+        else:
+            passes = "**Revision passes:** none recorded."
         with open(path, "a", encoding="utf-8") as f:
             f.write(f"""## Script: {data.get('title','(untitled)')}
 
@@ -1373,6 +1401,8 @@ def write_run_summary(data, sources, metrics, fact_bad, history):
 | # | Beat | Words | Term card | Fact |
 |---|---|---|---|---|
 {rows}
+
+{passes}
 
 <details><summary>{len(sources)} sources used</summary>
 
