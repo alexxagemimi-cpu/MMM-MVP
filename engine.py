@@ -1911,7 +1911,7 @@ async def build():
             path = out_stub + ".png"
             sec = section_of.get(i)
             drew = False
-            if graphics is not None and sec is not None and len(members) >= 2:
+            if graphics is not None and len(members) >= 2:
                 try:
                     # The CHECKLIST, not a bare header. A header-only card was
                     # the first attempt and it rendered as a title over four
@@ -1922,6 +1922,13 @@ async def build():
                     # where they are in the video - which is the one useful
                     # thing that can honestly be said during a scene whose own
                     # claims are in doubt.
+                    # current=None on a scene that belongs to no section -
+                    # the opening, the close - which draws the whole list with
+                    # nothing ticked. That is the OPENING card's own design
+                    # (10.1: "it opens on the WHOLE LIST"), so it is the right
+                    # picture there rather than a compromise. Run 44 rendered
+                    # those two shots flat black instead, which put the worst
+                    # frame in the video in its first twenty seconds.
                     graphics.overview_card(members, current=sec,
                                            eyebrow=title_eyebrow,
                                            out_png=path)
@@ -1930,10 +1937,19 @@ async def build():
                     print(f"      !! checklist card failed ({str(e)[:50]})",
                           flush=True)
             if not drew:
-                # No section to name - the opening or the close. Nothing
-                # trustworthy is left to draw, so a flat slate it is.
+                # No checklist exists at all (a story, or a script with fewer
+                # than two members). Nothing trustworthy is left to draw.
                 Image.new("RGB", (KB_W, KB_H), (11, 12, 16)).save(path, "PNG")
-            kind, ok = "image", False
+            # "card", NOT "image". render_shot holds a card perfectly still
+            # with no grade; the image path applies Ken Burns. Run 44 sent the
+            # checklist down the image path and the pan cropped its rows off
+            # the left edge - ".EVI'S 501 ORIGINAL FIT" - on three of twelve
+            # contact-sheet frames. A card that moves is not a card.
+            # ok=True when a real card was drawn: `ok` False means "this
+            # ended on the flat-slate fallback", and counting a deliberate
+            # checklist as a slate would overstate how much of the video
+            # is empty - the exact number 4.22 is judged on.
+            kind, ok = ("card", True) if drew else ("image", False)
             print(f"      shot scene {i+1} #{j+1} "
                   f"[{'HEADER' if drew else 'SLATE'}] | claim withheld - "
                   f"unfixed HARD red-team finding on this scene", flush=True)

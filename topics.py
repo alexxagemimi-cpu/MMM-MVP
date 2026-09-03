@@ -160,6 +160,25 @@ def fair_share(context, budget=EXTRACT_BUDGET):
     return "\n".join(p[:share].rstrip() for p in parts)
 
 
+EXTRACT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "sources": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "n": {"type": "integer"},
+                    "members": {"type": "array", "items": {"type": "string"}},
+                },
+                "required": ["n", "members"],
+            },
+        },
+    },
+    "required": ["sources"],
+}
+
+
 def extract_prompt(topic, context):
     """
     Ask ONE model call to read every source and report, per source, which
@@ -331,7 +350,14 @@ def assess(topic, call, gather, per_query=5, verbose=True):
           f"gathered, {len(labelled):,} shown "
           f"(~{len(labelled)//max(1, n_shown):,} per source)")
     try:
-        data = call(extract_prompt(topic, labelled), schema={"type": "object"})
+        # A REAL SCHEMA, not a bare {"type": "object"}.
+        #
+        # Run 44: "the reply carried no 'sources' key at all - got []", which
+        # is an EMPTY DICT. A schema with no properties describes nothing, so
+        # {} satisfies it and the model is free to answer with nothing at all
+        # while still being "valid". Naming the shape is the difference
+        # between asking for a structure and hoping for one.
+        data = call(extract_prompt(topic, labelled), schema=EXTRACT_SCHEMA)
         per_source = data.get("sources", []) if isinstance(data, dict) else []
 
         # SAY WHAT CAME BACK, or the next failure is unreadable too.
