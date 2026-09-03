@@ -32,7 +32,7 @@ on:
         type: choice
         options: ['1', '2', '3', '4', '6', '8']
       skip_brain_test_fixture:
-        description: 'TEST MODE: skip Brain, use a hand-written script.json (for testing Engine alone, e.g. when the Gemini quota is exhausted)'
+        description: '⚠️ ENGINE TEST ONLY - IGNORES YOUR TOPIC and renders a fixed sample script about business costs. Leave false to make a real video.'
         required: false
         default: 'false'
         type: choice
@@ -115,6 +115,36 @@ jobs:
       # "suggested but not yet made" list - is a file anyone can open and
       # read on github.com. Missing branch on the first ever run is normal
       # and not an error.
+      # A TOPIC PLUS TEST MODE IS ALWAYS A MISTAKE, SO SAY SO INSTEAD OF
+      # QUIETLY DOING THE WRONG THING.
+      #
+      # Test mode renders a hardcoded sample script and throws the topic
+      # away. The owner filled in "top 10 deadliest fighting styles",
+      # ticked this box because the label read like a harmless option, and
+      # got a one-minute video about business costs with nothing anywhere
+      # saying why. Three minutes of CI and a wasted round trip, and the
+      # only clue was a skipped step buried in the job list.
+      #
+      # Nobody types a topic and means "ignore it". Refuse the combination.
+      - name: Guard against test mode eating a real topic
+        if: ${{ github.event.inputs.skip_brain_test_fixture == 'true'
+                && github.event.inputs.topic != '' }}
+        run: |
+          echo "::error title=Test mode ignores your topic::You entered a topic" \
+               "(\"${{ github.event.inputs.topic }}\") but skip_brain_test_fixture" \
+               "is set to TRUE. Test mode does NOT write a video about your topic -" \
+               "it renders a fixed sample script about business costs, to test the" \
+               "video engine without using AI quota."
+          echo ""
+          echo "  To make a video about your topic:"
+          echo "     set skip_brain_test_fixture back to FALSE and run again."
+          echo ""
+          echo "  To test the engine only:"
+          echo "     leave the topic box EMPTY."
+          echo ""
+          echo "Stopping now rather than building the wrong video."
+          exit 1
+
       - name: Restore scout memory
         if: ${{ github.event.inputs.skip_brain_test_fixture != 'true' }}
         run: |
