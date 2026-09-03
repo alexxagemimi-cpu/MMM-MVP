@@ -1829,6 +1829,28 @@ def main():
                         for s in sources[:14])
     data, rt_findings = red_team(data, brief, src_ctx)
 
+    # VALIDATE AGAIN, because the red team is allowed to rewrite narration.
+    #
+    # validate() runs at stage 5, BEFORE the red team - so anything the
+    # repair breaks was checked before it was broken. The specific risk is
+    # 4.3: a repaired narration that no longer contains its own key_term.
+    # The engine handles that gracefully (no match, no card) which is exactly
+    # why it would be invisible - the video would just quietly lose a term
+    # card and nobody would know which stage took it.
+    #
+    # Reported, not repaired. Another repair pass here would be a third model
+    # call on an exhausted quota to fix a cosmetic problem, and the publish
+    # gate already carries the important verdicts.
+    after = validate(data)
+    new_faults = [x for x in after if x not in shape]
+    if new_faults:
+        print(f"\n   !! the red-team repair introduced "
+              f"{len(new_faults)} structural problem(s):")
+        for x in new_faults[:6]:
+            print(f"      - {x}")
+        print("      (the engine degrades safely on these - a term with no "
+              "match simply gets no card - but the repair caused them)")
+
     for i, s in enumerate(data["scenes"], 1):
         s["scene"] = i
     final_m = measure(data["scenes"])
