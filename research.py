@@ -47,6 +47,13 @@ PAGE_CHARS     = 3500    # per-page cap fed to the model
 MAX_PAGE_BYTES = 2_000_000
 FETCH_WORKERS  = 8
 
+# Above this many characters a source is a PAGE; below it, a search snippet.
+# DuckDuckGo snippets run ~150-400 characters and Tavily's cleaned content a
+# little more; a page that actually opened is thousands. 600 sits in the gap
+# with room on both sides, and it only ever feeds a log line - nothing is
+# discarded on the strength of it.
+SNIPPET_MAX = 600
+
 
 # ---------------------------------------------------------------------------
 # providers
@@ -217,20 +224,42 @@ def gather(queries, per_query=5, read_pages=True, max_sources=14):
     hits = []
     for q in queries:
         hits += search(q, max_results=per_query)
-    hits = _dedupe(hits)[:max_sources]
+    hits = _dedupe(hits)
 
     if not hits:
         return "", []
 
     if read_pages:
+        # TRY MORE URLS THAN WE NEED, AND KEEP THE ONES THAT OPENED.
+        #
+        # This used to cut to max_sources BEFORE fetching, so whichever URLs
+        # search happened to rank first were the only ones ever tried - and
+        # if five of eight were retail sites that refuse bots, the run
+        # continued on three pages and five ~200-character snippets. Run 44
+        # measured exactly that: "pages opened: 3/8".
+        #
+        # Fetching is parallel and each read is bounded, so trying twice as
+        # many costs a few seconds of wall clock and nothing else. Then keep
+        # the max_sources with the most text: a page that opened beats a
+        # snippet from a site that would not let us in, whatever the search
+        # engine thought of their order.
+        pool_size = min(len(hits), max_sources * 2)
+        hits = hits[:pool_size]
         with ThreadPoolExecutor(max_workers=FETCH_WORKERS) as pool:
             pages = list(pool.map(fetch_page, [h["url"] for h in hits]))
-        read = 0
         for h, page in zip(hits, pages):
-            # keep the snippet when the page read came back empty or thinner
             if len(page) > len(h["content"]):
                 h["content"] = page
-                read += 1
+        # Rank by OPENED-OR-NOT, not by raw length. Sorting on length alone
+        # would promote a huge irrelevant page over a shorter, sharper one;
+        # what actually matters is whether we got the page at all. Python's
+        # sort is stable, so within each group the search engine's own
+        # ranking is preserved exactly.
+        hits.sort(key=lambda h: 0 if len(h["content"]) > SNIPPET_MAX else 1)
+        hits = hits[:max_sources]
+
+        # A source counts as "opened" when it carries more than a snippet.
+        read = sum(1 for h in hits if len(h["content"]) > SNIPPET_MAX)
 
         # SAY HOW MANY PAGES ACTUALLY OPENED.
         #
@@ -262,8 +291,44 @@ def gather(queries, per_query=5, read_pages=True, max_sources=14):
     return "\n".join(blocks), sources
 
 
+def _selftest():
+    """
+    Offline proof that a blocked site cannot starve a run. No network.
+
+    Run 44 logged "pages opened: 3/8": five of the eight URLs search ranked
+    first were retail sites that refuse bots, and because gather() cut to
+    max_sources BEFORE fetching, those five were simply lost and the run
+    continued on three pages and five ~200-character snippets.
+    """
+    global search, fetch_page
+    real_search, real_fetch = search, fetch_page
+    try:
+        blocked = [{"url": f"http://shop/{i}", "title": f"Shop {i}",
+                    "content": "snippet " * 30} for i in range(8)]
+        openable = [{"url": f"http://wiki/{i}", "title": f"Wiki {i}",
+                     "content": "snippet " * 30} for i in range(8)]
+        # search ranks every blocked site above every readable one - the
+        # worst case, and close to what a shopping topic really returns
+        search = lambda q, max_results=6: blocked + openable
+        fetch_page = lambda u: ("real page text " * 300) if "wiki" in u else ""
+
+        ctx, srcs = gather(["q"], per_query=16, max_sources=8)
+        opened = sum(1 for s in srcs if "Wiki" in s["title"])
+        print(f"  8 readable + 8 blocked, blocked ranked FIRST")
+        print(f"  kept {len(srcs)} sources, {opened} of them real pages, "
+              f"{len(ctx):,} chars")
+        ok = opened == 8 and len(srcs) == 8
+        print(f"  {'ok  ' if ok else 'FAIL'}  a blocked site costs its slot, "
+              f"not the run")
+        return 0 if ok else 1
+    finally:
+        search, fetch_page = real_search, real_fetch
+
+
 if __name__ == "__main__":
     import sys
+    if sys.argv[1:2] == ["--selftest"]:
+        raise SystemExit(_selftest())
     q = sys.argv[1:] or ["how is coffee made from bean to cup"]
     ctx, srcs = gather(q, per_query=4)
     print(f"{len(srcs)} sources, {len(ctx)} chars of context\n")

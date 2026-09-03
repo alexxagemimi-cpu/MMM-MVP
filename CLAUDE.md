@@ -437,6 +437,7 @@ until July 2026), which is why every model id is an env var.
     python3 test_verify.py           # video-verifier logic, no network
     python3 test_providers.py        # the fallback writer when Gemini is out
     python3 test_wiring.py           # is anything built and not connected?
+    python3 research.py --selftest   # a blocked site costs its slot, not the run
     python3 contact.py final_video.mp4   # LOOK at what was just built
 
 Workflow test mode: run with `skip_brain_test_fixture=true` to render a

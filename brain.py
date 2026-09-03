@@ -1453,6 +1453,33 @@ def write_run_summary(data, sources, metrics, fact_bad, history):
         print(f"   (run summary not written: {str(e)[:100]})")
 
 
+# THE SHAPE THE SCOPED REPAIR MUST RETURN.
+#
+# Run 44's scoped repair died on "empty response" - not the 429 that killed
+# every earlier run, a genuinely new failure. It asked with a bare
+# {"type": "object"}, which describes nothing, and the same bare schema is
+# exactly what made topics.py's extraction come back as {} on that run. A
+# schema with no properties cannot oblige a model to produce anything.
+SCENE_FIX_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "scenes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "scene": {"type": "integer"},
+                    "key_term": {"type": "string"},
+                    "key_fact": {"type": "string"},
+                    "narration": {"type": "string"},
+                },
+                "required": ["scene", "narration"],
+            },
+        },
+    },
+    "required": ["scenes"],
+}
+
 VERIFIED_MEMBERS = []
 
 
@@ -1652,7 +1679,7 @@ SCENES TO FIX:
 ---
 Reply with JSON: {{"scenes": [{{"scene": <number>, "key_term": "...",
 "key_fact": "...", "narration": "..."}}]}} - only the scenes above.""",
-                            schema={"type": "object"})
+                            schema=SCENE_FIX_SCHEMA)
                 merged, applied = merge_scene_fixes(
                     data, cand.get("scenes") if isinstance(cand, dict) else None)
                 if applied:
