@@ -42,6 +42,10 @@ from google.genai import types
 
 import research as web
 import modes
+# Module scope, not inside choose_topic(). red_team() needs MIN_MEMBERS too,
+# and a function-local import there would have been a NameError on the one
+# path that matters - the run where a verified list actually exists.
+import topics
 
 MODEL          = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 TOPIC          = os.environ.get("TOPIC", "").strip()
@@ -529,6 +533,29 @@ def merge_scene_fixes(data, fixed):
                 changed = True
         applied += changed
     return out, applied
+
+
+def enforceable_members(verified):
+    """
+    The verified list, but ONLY if it is long enough to be the whole category.
+
+    Run 45 is why this exists. The membership gate produced a list for the
+    first time ever - and cross-source consensus on "every fighting style
+    worldwide" agreed on exactly one: Muay Thai. There are hundreds and no two
+    sources name the same ones, so a short list is the honest outcome.
+
+    That one word was then used to judge eleven scenes. Everything that was
+    not Muay Thai became a hard "not-a-member": 15 findings, 7 of 11 scenes
+    gagged, and seven of twelve frames came out black. The gate had not caught
+    ten lies - it had failed to establish the category, and the failure was
+    recorded as a verdict. 4.21's mistake in a new place.
+
+    topics.MIN_MEMBERS already encodes the bar: below three there is nothing
+    to explain one by one, so below three there is nothing to hold a script
+    against either. Under it the list still reaches the WRITER as guidance -
+    draft() uses it - it just stops being something the red team can fire.
+    """
+    return list(verified) if len(verified or []) >= topics.MIN_MEMBERS else None
 
 
 def keeps_scenes(old, cand, what):
@@ -1599,9 +1626,38 @@ def red_team(data, brief, sources_context):
     """
     import redteam
     for attempt in range(1, 4):
-        findings = redteam.check(data, VERIFIED_MEMBERS or None)
+        # A LIST TOO SHORT TO BE THE ANSWER MUST NOT JUDGE THE SCRIPT.
+        #
+        # Run 45, on "every type of fighting style worldwide", is the first
+        # run where the membership gate ever produced anything - 8 sources
+        # read, 6 naming members - and cross-source consensus agreed on
+        # exactly ONE: Muay Thai. There are hundreds of fighting styles and no
+        # two sources list the same ones, so low agreement is the honest
+        # result.
+        #
+        # That one word was then used to judge eleven scenes. Everything that
+        # was not Muay Thai became a hard "not-a-member" finding: 15 findings,
+        # 7 of 11 scenes gagged, and with fewer than two ungagged members left
+        # there was no checklist to draw either - so seven of twelve frames
+        # came out black. The gate did not catch ten lies; it failed to
+        # establish the category and that failure was recorded as a verdict.
+        # 4.21's mistake exactly, in a new place.
+        #
+        # topics.MIN_MEMBERS already encodes the bar: below three there is
+        # nothing to explain one by one, so below three there is also nothing
+        # to hold a script against. Under that, the list still reaches the
+        # writer as guidance (draft() uses it) - it simply stops being a
+        # weapon the red team can fire.
+        gate_members = enforceable_members(VERIFIED_MEMBERS)
+        if VERIFIED_MEMBERS and not gate_members:
+            print(f"      !! only {len(VERIFIED_MEMBERS)} verified member(s) "
+                  f"({', '.join(VERIFIED_MEMBERS)}) - too few to be the whole "
+                  f"category, so NOT enforcing membership. This is a failure "
+                  f"to establish the taxonomy, not evidence the script is "
+                  f"wrong.")
+        findings = redteam.check(data, gate_members)
         findings += redteam.attack(data, call, sources_context,
-                                   VERIFIED_MEMBERS or None)
+                                   gate_members)
         text, hard = redteam.report(findings)
         print(f"\n[6/6] red team, attempt {attempt}/3")
         print("      " + text.replace("\n", "\n      "))

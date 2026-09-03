@@ -1936,9 +1936,26 @@ async def build():
                 except Exception as e:
                     print(f"      !! checklist card failed ({str(e)[:50]})",
                           flush=True)
+            if not drew and graphics is not None:
+                # NO CHECKLIST EXISTS - a story, or a script where gagging
+                # left fewer than two trusted members. Run 45 hit exactly
+                # that: 7 of 11 scenes gagged, so the checklist itself had
+                # nothing left to show, and seven of twelve frames came out
+                # black.
+                #
+                # The TITLE is still safe to put on screen. It is the one
+                # thing on the page that no red-team finding touched - it says
+                # what the video is, not what any scene claims - and a title
+                # card is a real frame where black is a hole.
+                try:
+                    graphics.point_card(index=0, total=0, name="",
+                                        heading=title_eyebrow, out_png=path)
+                    drew = True
+                except Exception as e:
+                    print(f"      !! title card failed ({str(e)[:50]})",
+                          flush=True)
             if not drew:
-                # No checklist exists at all (a story, or a script with fewer
-                # than two members). Nothing trustworthy is left to draw.
+                # graphics itself is unavailable. Nothing can be drawn.
                 Image.new("RGB", (KB_W, KB_H), (11, 12, 16)).save(path, "PNG")
             # "card", NOT "image". render_shot holds a card perfectly still
             # with no grade; the image path applies Ken Burns. Run 44 sent the

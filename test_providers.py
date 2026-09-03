@@ -486,6 +486,40 @@ def test_targeted_repair():
     return bad
 
 
+
+def test_membership_gate_threshold():
+    """
+    A verified list too short to BE the category must not judge the script.
+
+    Run 45: the gate produced its first ever list - one member, "Muay Thai" -
+    and that single word made 15 hard not-a-member findings against an
+    eleven-scene script. Seven scenes were gagged and seven of twelve frames
+    came out black. The category had not been established; the failure to
+    establish it was recorded as a verdict.
+    """
+    line("a one-member 'verified list' must not gate an 11-scene script")
+    bad = 0
+    checks = [
+        ("no list at all does not gate", B.enforceable_members([]) is None),
+        ("None does not gate", B.enforceable_members(None) is None),
+        ("ONE member does not gate (run 45's exact case)",
+         B.enforceable_members(["Muay Thai"]) is None),
+        ("two members still do not gate",
+         B.enforceable_members(["Muay Thai", "Judo"]) is None),
+        ("three members DO gate - topics.MIN_MEMBERS is the bar",
+         B.enforceable_members(["Muay Thai", "Judo", "Boxing"])
+         == ["Muay Thai", "Judo", "Boxing"]),
+        ("a full list gates",
+         len(B.enforceable_members(["a", "b", "c", "d", "e"]) or []) == 5),
+        ("the bar is topics' own constant, not a second copy",
+         B.topics.MIN_MEMBERS == 3),
+    ]
+    for what, ok in checks:
+        print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+        bad += not ok
+    return bad
+
+
 def main():
     # PROVIDER_CHAR_CAP is monkeypatched by the tests above; keep the real one.
     real_cap = dict(B.PROVIDER_CHAR_CAP)
@@ -496,6 +530,7 @@ def main():
     bad += test_cooldown()
     bad += test_no_scene_loss()
     bad += test_targeted_repair()
+    bad += test_membership_gate_threshold()
     B.PROVIDER_CHAR_CAP = real_cap
     bad += test_real_cap_against_run36()
 
