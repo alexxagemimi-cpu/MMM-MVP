@@ -56,6 +56,8 @@ ALLOW_PARAMS = {
     ("test_providers.py", "dead_gemini"),
     ("test_providers.py", "live_groq"),
     ("test_providers.py", "picky"),
+    ("test_providers.py", "gem"),
+    ("test_providers.py", "groq"),
     # verdict() takes the topic for symmetry with score(); the arithmetic
     # genuinely does not need it
     ("topics.py", "verdict"),

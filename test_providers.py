@@ -520,6 +520,91 @@ def test_membership_gate_threshold():
     return bad
 
 
+
+def test_cooldown_sized_and_waited():
+    """
+    Run 47's real death, reproduced.
+
+        15:48:49  gemini rate limited -> resting it for 7 min
+        15:49:38  groq rate limited   -> resting it for 7 min
+        15:50:23  every provider is cooling off (next free in 326s)
+                  - trying them all anyway
+        15:51:16  FATAL
+
+    It died 53 seconds into a wait it had just measured at 326, with forty
+    minutes of job time unused. Two faults in one: Groq's 429 is a PER-MINUTE
+    token limit that clears in about a minute and was parked for seven, and
+    the chain refused to sit through a cooldown it could easily have waited
+    out. A cooldown that outlives the retry budget is a suicide pact.
+    """
+    line("a per-minute limit rests for a minute, not seven (run 47)")
+    bad = 0
+
+    GROQ_TPM = ('HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":'
+                '"Rate limit reached for model `openai/gpt-oss-120b` in '
+                'organization `org_x` service tier `on_demand` on tokens per '
+                'minute (TPM): Limit 8000, Used 7800","code":'
+                '"rate_limit_exceeded"}}')
+    GEMINI_DAY = ("429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': "
+                  "'You exceeded your current quota ... limit: "
+                  "generate_content_free_tier_requests, per day'}}")
+
+    seen = []
+
+    def gem(prompt, schema, drop_schema):
+        seen.append(("gemini", time.time()))
+        raise RuntimeError(GEMINI_DAY)
+
+    groq_state = {"fail_until": time.time() + 60}
+
+    def groq(prompt, schema, base_url, key, model, name, drop_schema=False):
+        seen.append(("groq", time.time()))
+        if time.time() < groq_state["fail_until"]:
+            raise RuntimeError(GROQ_TPM)
+        return '{"ok": true}'
+
+    B._gemini, B._openai_compatible = gem, groq
+    B._providers = lambda: [("gemini", None),
+                            ("groq", ("u", "k", "openai/gpt-oss-120b"))]
+    B.PROVIDER_COOLDOWN.clear()
+    B.PROVIDER_CHAR_CAP = {}
+
+    # Virtual clock: prove the LOGIC waits, without waiting in real life.
+    clock = {"t": time.time()}
+    real_time, real_sleep = time.time, time.sleep
+    B.time.time = lambda: clock["t"]
+    B.time.sleep = lambda s: clock.__setitem__("t", clock["t"] + s)
+    groq_state["fail_until"] = clock["t"] + 60
+    try:
+        started = clock["t"]
+        got = B.call("write something", schema={"x": 1}, retries=2)
+        waited = clock["t"] - started
+    except Exception as e:
+        got, waited = f"FAILED: {str(e)[:60]}", clock["t"] - started
+    finally:
+        B.time.time, B.time.sleep = real_time, real_sleep
+
+    gem_rest = B.PROVIDER_COOLDOWN.get("gemini", 0) - clock["t"]
+    checks = [
+        ("the call SUCCEEDED instead of dying in the cooldown",
+         got == {"ok": True}),
+        ("it waited past groq's 60s per-minute limit", waited >= 60),
+        ("gemini's PER DAY limit got the long rest",
+         gem_rest > B.COOLDOWN_PER_MINUTE * 2),
+        ("groq was retried after resting, not abandoned",
+         [p for p, _ in seen].count("groq") >= 2),
+        ("the wait budget exceeds a per-minute cooldown",
+         B.WAIT_OUT_MAX > B.COOLDOWN_PER_MINUTE),
+    ]
+    for what, ok in checks:
+        print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+        bad += not ok
+    print(f"  providers tried : {[p for p, _ in seen]}")
+    print(f"  virtual time    : {waited:.0f}s waited, result {got}")
+    B.PROVIDER_COOLDOWN.clear()
+    return bad
+
+
 def main():
     # PROVIDER_CHAR_CAP is monkeypatched by the tests above; keep the real one.
     real_cap = dict(B.PROVIDER_CHAR_CAP)
@@ -531,6 +616,7 @@ def main():
     bad += test_no_scene_loss()
     bad += test_targeted_repair()
     bad += test_membership_gate_threshold()
+    bad += test_cooldown_sized_and_waited()
     B.PROVIDER_CHAR_CAP = real_cap
     bad += test_real_cap_against_run36()
 

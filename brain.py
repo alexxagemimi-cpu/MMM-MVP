@@ -487,7 +487,24 @@ TRIMMED_CALLS = [0, 0]  # [calls whose prompt was cut, calls total]
 # few minutes is the honest middle: a per-minute limit is long over by then,
 # and a daily quota stops costing 40s a call.
 PROVIDER_COOLDOWN = {}     # provider -> unix time it may be tried again
-COOLDOWN_SECONDS = 420
+
+# TWO KINDS OF RATE LIMIT, TWO LENGTHS OF REST.
+#
+# Run 47 died because these were the same number. Groq's 429 is a TOKENS PER
+# MINUTE limit that clears in about sixty seconds; Gemini's is a daily quota
+# that does not clear until midnight Pacific. Parking both for seven minutes
+# treated a one-minute problem as a seven-minute one, and with both parked the
+# run had nothing left to try.
+#
+# The provider says which it is, in words, so read them rather than guessing.
+COOLDOWN_PER_MINUTE = 75      # "tokens per minute", "requests per minute"
+COOLDOWN_PER_DAY    = 1800    # a daily quota; long, but not the rest of time
+COOLDOWN_SECONDS    = 420     # unclear which - the old blanket value
+
+# How long the chain will WAIT for a cooling provider before giving up. It
+# must exceed COOLDOWN_PER_MINUTE, or a per-minute limit parks every provider
+# and the run dies inside a wait it could have sat through.
+WAIT_OUT_MAX = 200
 
 # The workflow kills the job at 45 minutes. Brain stops revising at 24 so the
 # engine still gets its ~20 - see the note at the deadline check in main().
@@ -710,9 +727,27 @@ def _call_sweep(prompt, schema, retries, provs):
     now = time.time()
     live = [(n, c) for n, c in provs if PROVIDER_COOLDOWN.get(n, 0) <= now]
     if not live:
+        # WAIT FOR THE COOLDOWN INSTEAD OF DYING INSIDE IT.
+        #
+        # This used to print "next free in 326s" and then try everything
+        # immediately anyway - which failed, because 326 seconds had not
+        # passed. Run 47 died 53 seconds into a wait it had just measured,
+        # with forty minutes of job time unused. A cooldown that outlives the
+        # retry budget is not caution, it is a suicide pact.
+        #
+        # Bounded, so a stale or absurd cooldown can never hang the job: at
+        # most WAIT_OUT_MAX, which is comfortably inside the 45-minute cap
+        # even if every stage needed it.
         soonest = min(PROVIDER_COOLDOWN.get(n, 0) for n, _ in provs)
-        print(f"   .. every provider is cooling off (next free in "
-              f"{soonest - now:.0f}s) - trying them all anyway")
+        gap = max(0.0, soonest - now)
+        if gap <= WAIT_OUT_MAX:
+            print(f"   .. every provider is cooling off - waiting {gap:.0f}s "
+                  f"for the soonest one rather than failing now", flush=True)
+            time.sleep(gap + 2)
+        else:
+            print(f"   .. every provider is cooling off and the soonest is "
+                  f"{gap:.0f}s away, past the {WAIT_OUT_MAX}s wait budget - "
+                  f"trying them all anyway", flush=True)
         live = provs
     elif len(live) < len(provs):
         parked = [n for n, _ in provs if PROVIDER_COOLDOWN.get(n, 0) > now]
@@ -870,12 +905,21 @@ def _call_sweep(prompt, schema, retries, provs):
                     continue
                 if rate_limited:
                     # It already had its one real wait above and came back
-                    # limited anyway, so this is not a busy minute. Park it,
-                    # rather than paying 40s for the same answer next call.
-                    PROVIDER_COOLDOWN[name] = time.time() + COOLDOWN_SECONDS
+                    # limited anyway, so this is not a busy minute. Park it -
+                    # for as long as the limit it actually hit, not a blanket
+                    # seven minutes. Run 47 parked Groq's per-MINUTE limit for
+                    # seven minutes and then had no provider left to try.
+                    low = msg.lower()
+                    if "per day" in low or "daily" in low:
+                        rest = COOLDOWN_PER_DAY
+                    elif "per minute" in low or "tokens per min" in low \
+                            or "requests per min" in low or "tpm" in low:
+                        rest = COOLDOWN_PER_MINUTE
+                    else:
+                        rest = COOLDOWN_SECONDS
+                    PROVIDER_COOLDOWN[name] = time.time() + rest
                     print(f"     -> {name} is rate/quota limited, switching "
-                          f"provider and resting it for "
-                          f"{COOLDOWN_SECONDS // 60} min")
+                          f"provider and resting it for {rest}s")
                     break
                 time.sleep(4 * (attempt + 1))
         print(f"   .. {name} exhausted, trying next provider")
