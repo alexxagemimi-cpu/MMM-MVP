@@ -107,3 +107,83 @@ video.
 watchability is marked honestly. It is not the video failing to build; it is
 the script being untrustworthy and the machine correctly refusing to put
 untrustworthy words on screen, with nothing good to show in their place.
+
+---
+
+## Run 49 — "top 10 deadliest fighting styles explained"
+
+**0/100. FATAL at stage [2/5], 3 minutes in. No script, no video, no frames.**
+
+    [2/5] drafting 11 scenes (~119 words each)
+       .. skipping gemini - out of quota earlier, cooling off
+     ! groq attempt 1/2: HTTP 429 ... tokens per minute
+     ! groq attempt 2/2: HTTP 429 ... -> resting it for 75s
+       .. every provider failed this minute - waiting 45s
+       .. every provider is cooling off - waiting 30s for the soonest one
+     ! gemini attempt 1/2: 429 RESOURCE_EXHAUSTED
+     ! gemini attempt 2/2: 429 RESOURCE_EXHAUSTED  -> resting it for 420s
+     ! groq attempt 1/2: HTTP 400 "Failed to validate JSON. Please adjust
+       your prompt. See 'failed_generation' for more details."
+       -> dropping response_schema, retrying plain JSON
+     ! groq attempt 2/2: empty response
+    FATAL: All LLM providers failed twice.
+
+### THE SAME PAIR THAT KILLED RUN 48's REPAIR NOW KILLS A WHOLE RUN
+
+`HTTP 400 "Failed to validate JSON"` → `drop_schema` retry → **empty
+response**. Two different prompts, two different runs, one fault. It is
+reproducible, and it is not quota.
+
+Reading `_openai_compatible` (brain.py:351), two things are wrong:
+
+**A. The 400 is misdiagnosed.** The code knows exactly one Groq JSON-mode
+complaint — *"'messages' must contain the word 'json'"* — and answers it by
+saying the word. This is a **different** 400: `json_object` mode was on, and
+the model's own generation was not valid JSON, so Groq refused the response
+rather than returning it. Saying "json" does not help; the generation is the
+problem.
+
+**B. The retry cannot ever return anything.** `gpt-oss-120b` is a reasoning
+model. brain.py:409 reads only:
+
+    (data["choices"][0]["message"]["content"] or "").strip()
+
+Groq returns a gpt-oss model's thinking in a separate `message.reasoning`
+field, and no `max_tokens` is set anywhere in the request. So the most likely
+mechanism for both halves is one mechanism: **the output budget is spent on
+reasoning tokens** — leaving the JSON truncated (the 400) and, with the schema
+dropped, `content` empty while `reasoning` holds everything. The code never
+looks at `reasoning`, so an answer that arrived is read as no answer.
+
+**This is 5.11/5.12's shape a third time**: a retry that could not have worked,
+sitting in a branch that reads correct.
+
+*NOT TESTED — expect it to break here:* I have no Groq key locally, so B is
+inference from the error text and the code, not a measurement. It needs a live
+call with `reasoning_effort` and an explicit `max_tokens`, and a look at what
+`message.reasoning` actually contains.
+
+### Second, smaller fault: research pulled junk sources
+
+    ? most lethal combat styles effectiveness comparison
+      - MOST—Missouri's 529 Education Plan | MOST 529
+      - YOUR ACCOUNT | MOST 529
+      - MOST | English meaning - Cambridge Dictionary
+
+3 of 14 sources are about the *word* "most". Nothing downstream can tell a
+529 plan from a martial art; those pages just dilute the pooled context that
+`fair_share()` then divides evenly. Run 48's sources were clean, so this is
+query-shaped, not general.
+
+---
+
+## Decision point reached at run 49
+
+Gemini's daily quota is exhausted and does not reset until roughly 07:00 UTC.
+**Every remaining run today is Groq-only, and Groq's JSON path is the thing
+that just killed a run.** Firing topics 3–5 into that wall would produce three
+more identical FATALs in about ten minutes and teach nothing.
+
+Run 50 (topic 3) is fired anyway as a *test of that claim* — if it dies the
+same way, the fault is deterministic and the freeze has served its purpose.
+That is the honest way to find out, and it costs three minutes.
