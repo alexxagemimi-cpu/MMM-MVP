@@ -227,11 +227,156 @@ def main():
          "quote": "They rise and fall with every sale",
          "detail": "A soft finding must NOT gag a scene."},
     ]
+    # THE OTHER TWO MODES HAVE NEVER BEEN RENDERED.
+    #
+    # modes.py has three - story, explainer, guide - and every run this
+    # project has ever done was an explainer. For a factory meant to take any
+    # topic, two thirds of the shapes it can be handed had never once reached
+    # the engine.
+    #
+    # STORY is the dangerous one and that is the point of including it: it has
+    # NO member beats, so `members` is empty, use_cards goes False, and the
+    # whole checklist-and-header system switches off. Every code path that
+    # assumes a section exists is exercised only by this fixture. GUIDE uses
+    # STEP as its member beat, so its checklist should build exactly like an
+    # explainer's CATEGORY.
+    guide = [
+        {"scene": 1, "beat": "PROMISE", "key_term": "sharpening a knife",
+         "key_fact": "Three stages, ten minutes, one stone",
+         "narration": "Sharpening a knife is three stages on one stone, and "
+                      "it takes ten minutes once you know the order: coarse "
+                      "grinding, fine honing, then stropping the burr away.",
+         "image_keywords": ["a", "b", "c"]},
+        {"scene": 2, "beat": "STAKES", "key_term": "a dull blade",
+         "key_fact": "A dull blade slips and cuts the hand, not the food",
+         "narration": "A dull blade is the dangerous one. It slides off the "
+                      "skin of a tomato instead of biting, and the hand that "
+                      "is pushing harder is the hand that gets cut.",
+         "image_keywords": ["d", "e"]},
+        {"scene": 3, "beat": "STEP", "key_term": "coarse grinding",
+         "key_fact": "Sets the angle and raises a burr along the edge",
+         "narration": "Coarse grinding comes first. You are setting the angle "
+                      "and raising a burr: a thin curl of steel that folds "
+                      "over the edge and tells you the bevel has met.",
+         "image_keywords": ["f", "g", "h"]},
+        {"scene": 4, "beat": "STEP", "key_term": "fine honing",
+         "key_fact": "Refines the scratches the coarse stone left",
+         "narration": "Fine honing refines what the coarse stone tore. Same "
+                      "angle, lighter pressure, and the deep scratches give "
+                      "way to a polish you can see.",
+         "image_keywords": ["i", "j"]},
+        {"scene": 5, "beat": "STEP", "key_term": "stropping",
+         "key_fact": "Removes the burr so the edge stops folding",
+         "narration": "Stropping removes the burr. Leather, a few passes "
+                      "trailing the edge, and the fold of steel breaks away "
+                      "instead of collapsing the first time you cut.",
+         "image_keywords": ["k", "l", "m"]},
+        {"scene": 6, "beat": "CLOSE", "key_term": "a sharp knife",
+         "key_fact": "Sharp is safer, not more dangerous",
+         "narration": "A sharp knife is the safe one, which is the part that "
+                      "surprises people. It goes where you point it, and "
+                      "nothing about that needs more force.",
+         "image_keywords": ["n", "o"]},
+    ]
+
+    story = [
+        {"scene": 1, "beat": "HOOK", "key_term": "the lighthouse",
+         "key_fact": "Three keepers vanished from a locked room",
+         "narration": "In December 1900 a supply boat reached the lighthouse "
+                      "and found the door shut, the table laid, and every one "
+                      "of the three keepers gone.",
+         "image_keywords": ["p", "q", "r"]},
+        {"scene": 2, "beat": "CONTEXT", "key_term": "the Flannan Isles",
+         "key_fact": "Twenty miles of open Atlantic from the nearest land",
+         "narration": "The Flannan Isles sit twenty miles into the Atlantic. "
+                      "Nothing grows there. The light had been running barely "
+                      "a year when the relief was late.",
+         "image_keywords": ["s", "t"]},
+        {"scene": 3, "beat": "INCITING", "key_term": "the last entry",
+         "key_fact": "The log stopped mid-week with nothing unusual in it",
+         "narration": "The log stopped on the fifteenth. It recorded wind and "
+                      "it recorded pressure, and it recorded nothing at all "
+                      "about what came next.",
+         "image_keywords": ["u", "v"]},
+        {"scene": 4, "beat": "ESCALATION", "key_term": "the west landing",
+         "key_fact": "Iron railings bent by water a hundred feet up",
+         "narration": "At the west landing the sea had reached a hundred feet "
+                      "above the water and bent iron railings flat, which is "
+                      "the detail nobody could explain away.",
+         "image_keywords": ["w", "x"]},
+        {"scene": 5, "beat": "TURN", "key_term": "a rogue wave",
+         "key_fact": "One wave, and two men already outside",
+         "narration": "The likeliest answer is the dullest. Two men were out "
+                      "securing the landing, one wave came over the rock, and "
+                      "the third went after them.",
+         "image_keywords": ["y", "z"]},
+        {"scene": 6, "beat": "RESONANCE", "key_term": "the sea",
+         "key_fact": "The light kept working long after the men were gone",
+         "narration": "The light itself never failed. It was still turning "
+                      "when the boat arrived, which is the part of the story "
+                      "that stays with people.",
+         "image_keywords": ["aa", "bb"]},
+    ]
+
+    fixtures = [
+        ("explainer", "The 3 Types of Business Cost", scenes, red_team),
+        ("guide", "How To Sharpen A Knife", guide, []),
+        ("story", "The Lighthouse Keepers Who Vanished", story, []),
+    ]
+
+    mode_ok = True
+    for mode_name, title, sc, rt in fixtures:
+        print("\n" + "#" * 62)
+        print(f"#  MODE: {mode_name.upper()}   ({len(sc)} scenes)")
+        print("#" * 62)
+        with open("script.json", "w") as f:
+            json.dump({"title": title, "scenes": sc, "red_team": rt}, f)
+        print("running the real build() with real ffmpeg ...\n")
+
+        import io as _io, contextlib as _cl
+        _cap = _io.StringIO()
+
+        class _Tee:
+            def write(self, t):
+                _cap.write(t)
+                sys.__stdout__.write(t)
+
+            def flush(self):
+                sys.__stdout__.flush()
+
+        with _cl.redirect_stdout(_Tee()):
+            asyncio.run(E.build())
+        built = _cap.getvalue()
+
+        dur = float(sh(["ffprobe", "-v", "error", "-show_entries",
+                        "format=duration", "-of", "default=nw=1:nk=1",
+                        "final_video.mp4"]))
+        drew_list = "drawing" in built and "list of" in built
+
+        # THE STRUCTURAL RULE, asserted rather than eyeballed.
+        #
+        # A guide's STEP beats ARE its checklist, exactly as an explainer's
+        # CATEGORY beats are. A story has neither, so it must get NO checklist
+        # at all - forcing one would be inventing a taxonomy for a narrative,
+        # which is 4.11's whole point. Observing this in the log is not the
+        # same as requiring it: the moment modes.py changes, only an assertion
+        # notices.
+        want_list = mode_name in ("explainer", "guide")
+        ok = dur > 20 and drew_list == want_list
+        print(f"\n  {mode_name}: {dur:.1f}s, checklist="
+              f"{'yes' if drew_list else 'no'} "
+              f"(want {'yes' if want_list else 'no'}) "
+              f"{'ok' if ok else '<< WRONG'}")
+        mode_ok &= ok
+
+    # the explainer fixture is rebuilt last so the assertions below - which
+    # are written against its scenes - still describe what is on disk
     with open("script.json", "w") as f:
         json.dump({"title": "The 3 Types of Business Cost",
                    "scenes": scenes, "red_team": red_team}, f)
-
-    print("running the real build() with real ffmpeg ...\n")
+    print("\n" + "#" * 62)
+    print("#  rebuilding the explainer for the artifact checks")
+    print("#" * 62)
     asyncio.run(E.build())
 
     # ---- verify the ARTIFACT, not just the exit code ----
@@ -281,6 +426,10 @@ def main():
     if leftovers:
         print(f"  FAIL: temp files leaked: {leftovers[:6]}"); ok = False
 
+    if not mode_ok:
+        print("  FAIL: a mode rendered the wrong structure "
+              "(see the per-mode lines above)")
+        ok = False
     print("=" * 62)
     print("LOCAL TEST PASSED" if ok else "LOCAL TEST FAILED")
     return 0 if ok else 1
