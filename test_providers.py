@@ -28,9 +28,11 @@ which the real one cannot.
     python3 test_providers.py
 """
 
+import io
 import os
 import json
 import sys
+import urllib.error
 import time
 import types
 
@@ -254,6 +256,195 @@ def test_json_mode_400():
         for what, ok in checks2:
             print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
             bad += not ok
+    finally:
+        restore()
+    return bad
+
+
+def scripted_provider(replies):
+    """
+    Fake urlopen with a SCRIPTED sequence of replies, one per request.
+
+    capture_requests() above always answers `{"ok": true}`, which cannot
+    express the fault that killed runs 48, 49 and 50: a 400 followed by a
+    reply that is empty in the one field the code reads. Each entry here is
+    either an Exception to raise or a dict to return as the message object,
+    so the exact shape Groq sends can be reproduced.
+    """
+    import urllib.request as U
+    sent = []
+    real = U.urlopen
+    seq = list(replies)
+
+    class Reply:
+        def __init__(self, message, finish="stop"):
+            self._t = json.dumps({"choices": [{"message": message,
+                                               "finish_reason": finish}]}
+                                 ).encode()
+
+        def read(self):
+            return self._t
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    def fake(req, timeout=None):
+        sent.append(json.loads(req.data.decode()))
+        nxt = seq.pop(0) if seq else {"content": '{"ok": true}'}
+        if isinstance(nxt, Exception):
+            raise nxt
+        return Reply(nxt if isinstance(nxt, dict) else {"content": nxt},
+                     "length" if nxt == {} else "stop")
+
+    U.urlopen = fake
+    return sent, (lambda: setattr(U, "urlopen", real))
+
+
+def test_reasoning_model_answers():
+    """
+    RUNS 48, 49 AND 50 - one fault, three runs, two stages.
+
+        ! groq HTTP 400 "Failed to validate JSON"
+          -> dropping response_schema, retrying plain JSON
+        ! groq attempt 2/2: empty response
+        FATAL
+
+    gpt-oss-120b is a reasoning model. Groq's default reasoning_effort is
+    "medium" and the thinking comes back in a SEPARATE `reasoning` field.
+    So the model spent the reply budget thinking, the JSON was cut off
+    mid-structure (the 400), and once the schema was dropped `content` was
+    empty while `reasoning` held everything it had produced. brain.py read
+    only `content`, so an answer that arrived was reported as no answer.
+
+    Faked at urlopen, not at _openai_compatible: the fix lives inside that
+    function, and an earlier test in this file faked the function itself and
+    so never ran the code it claimed to be testing.
+    """
+    line("a reasoning model's reply is not thrown away (runs 48/49/50)")
+    bad = 0
+    B._openai_compatible = REAL_OAI
+
+    sent, restore = scripted_provider([{"content": '{"ok": true}'}])
+    try:
+        REAL_OAI("Write eight scenes. Reply with json.", {"x": 1},
+                 "https://api.groq.com/openai/v1/chat/completions", "k",
+                 "openai/gpt-oss-120b", "groq")
+        checks = [
+            ("reasoning_effort is sent to gpt-oss",
+             "reasoning_effort" in sent[0]),
+            ("and it asks for LESS thinking, not the medium default",
+             sent[0].get("reasoning_effort") == "low"),
+        ]
+        for what, ok in checks:
+            print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+            bad += not ok
+    finally:
+        restore()
+
+    # A model that does not take the parameter must not be sent it - that
+    # would replace one 400 with another.
+    sent, restore = scripted_provider([{"content": '{"ok": true}'}])
+    try:
+        REAL_OAI("Reply with json.", {"x": 1}, "https://x/v1", "k",
+                 "llama-3.3-70b-versatile", "groq")
+        ok = "reasoning_effort" not in sent[0]
+        print(f"  {'ok  ' if ok else 'FAIL'}  "
+              f"a non-reasoning model is NOT sent reasoning_effort")
+        bad += not ok
+    finally:
+        restore()
+
+    # THE REGRESSION ITSELF: content empty, reasoning full.
+    sent, restore = scripted_provider([
+        {"content": "", "reasoning": 'thinking... {"ok": true}'}])
+    try:
+        out = REAL_OAI("Reply with json.", {"x": 1}, "https://x/v1", "k",
+                       "openai/gpt-oss-120b", "groq", drop_schema=True)
+        # Parsed defensively ON PURPOSE. Without the fix `out` is "", and
+        # json.loads("") raises - which killed the whole suite with a
+        # traceback instead of printing FAIL against the check that found
+        # the bug. A regression that explodes says less than one that
+        # reports.
+        try:
+            parsed = json.loads(B.strip_fences(out))
+        except Exception:
+            parsed = None
+        checks = [
+            ("an empty content field is not the end of the story",
+             bool(out)),
+            ("the JSON is dug out of the reasoning field",
+             parsed == {"ok": True}),
+        ]
+        for what, ok in checks:
+            print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+            bad += not ok
+    finally:
+        restore()
+
+    # And when BOTH are empty it must still report empty - the fallback must
+    # not invent an answer out of nothing.
+    sent, restore = scripted_provider([{"content": "", "reasoning": ""}])
+    try:
+        out = REAL_OAI("Reply with json.", {"x": 1}, "https://x/v1", "k",
+                       "openai/gpt-oss-120b", "groq", drop_schema=True)
+        ok = out == ""
+        print(f"  {'ok  ' if ok else 'FAIL'}  "
+              f"a genuinely empty reply is still empty")
+        bad += not ok
+    finally:
+        restore()
+    return bad
+
+
+def test_schema_drop_gets_its_own_attempt():
+    """
+    The schema drop used to eat the last attempt.
+
+    With retries=2 the 400 arrived on attempt 1, so the schema-less retry WAS
+    attempt 2 - and one empty reply then abandoned a provider that was up and
+    answering. That is precisely how runs 49 and 50 reached FATAL. Changing
+    the shape of a request is not an attempt at it.
+    """
+    line("dropping the schema does not spend the last attempt (49/50)")
+    bad = 0
+    B._openai_compatible = REAL_OAI
+    err = urllib.error.HTTPError(
+        "https://x", 400, "Bad Request", {},
+        io.BytesIO(json.dumps({"error": {
+            "message": "Failed to validate JSON. Please adjust your prompt. "
+                       "See 'failed_generation' for more details.",
+            "type": "invalid_request_error",
+            "code": "json_validate_failed",
+            "failed_generation": '{"scenes": [{"narration": "Green coffee'
+            }}).encode()))
+    # 400 -> schema dropped -> empty reply -> and there must STILL be a try
+    # left, which succeeds.
+    sent, restore = scripted_provider([
+        err,
+        {"content": "", "reasoning": ""},
+        {"content": '{"ok": true}'},
+    ])
+    try:
+        B.PROVIDER_COOLDOWN.clear()
+        out = B._call_sweep("Reply with json.", {"x": 1},
+                            provs=[("groq", ("https://x/v1", "k",
+                                             "openai/gpt-oss-120b"))],
+                            retries=2)
+        checks = [
+            ("it got an answer instead of dying", out == {"ok": True}),
+            ("that took three requests, not two", len(sent) == 3),
+            ("the schema was gone from the retry",
+             "response_format" not in sent[1]),
+        ]
+        for what, ok in checks:
+            print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+            bad += not ok
+    except Exception as e:
+        print(f"  FAIL  it still died: {str(e)[:120]}")
+        bad += 1
     finally:
         restore()
     return bad
@@ -611,6 +802,8 @@ def main():
     bad = test_shrink()
     bad += test_413_shrinks_and_succeeds()
     bad += test_json_mode_400()
+    bad += test_reasoning_model_answers()
+    bad += test_schema_drop_gets_its_own_attempt()
     bad += test_precap_avoids_the_round_trip()
     bad += test_cooldown()
     bad += test_no_scene_loss()

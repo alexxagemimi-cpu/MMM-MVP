@@ -388,6 +388,21 @@ def _openai_compatible(prompt, schema, base_url, key, model, label,
             "temperature": 0.8}
     if schema and not drop_schema:
         body["response_format"] = {"type": "json_object"}
+
+    # REASONING MODELS SPEND THE ANSWER ON THINKING.
+    #
+    # gpt-oss-120b is a reasoning model and Groq's default reasoning_effort is
+    # "medium". Runs 48, 49 and 50 all ended on the same pair - HTTP 400
+    # "Failed to validate JSON", then an empty response once the schema was
+    # dropped - on three different prompts at two different stages. Groq's own
+    # docs say gpt-oss-120b takes reasoning_effort low/medium/high and puts the
+    # thinking in a separate `reasoning` field. Asking for less thinking leaves
+    # more of the budget for the JSON we actually want.
+    #
+    # Only for gpt-oss: reasoning_effort is model-specific and sending it to a
+    # model that does not take it is a new 400 in place of the old one.
+    if "gpt-oss" in (model or ""):
+        body["reasoning_effort"] = REASONING_EFFORT
     req = urllib.request.Request(
         base_url, data=json.dumps(body).encode(),
         headers={"Authorization": f"Bearer {key}",
@@ -401,12 +416,45 @@ def _openai_compatible(prompt, schema, base_url, key, model, label,
         # run logged only "HTTP Error 403: Forbidden", which is unactionable;
         # the body said the model was blocked at the organisation level and
         # named the settings page to unblock it.
+        #
+        # 400 chars was too short and it cost three runs. Groq's "Failed to
+        # validate JSON" body carries a `failed_generation` field holding the
+        # text the model actually produced - the one piece of evidence that
+        # says WHY it was not valid JSON - and it sits past the 400th
+        # character every time, so every log of this fault showed the
+        # complaint and hid the cause.
         try:
-            detail = e.read().decode("utf-8", "replace")[:400]
+            detail = e.read().decode("utf-8", "replace")[:2000]
         except Exception:
             detail = ""
         raise RuntimeError(f"HTTP {e.code} from {label} ({model}): {detail}")
-    return (data["choices"][0]["message"]["content"] or "").strip()
+
+    msg = data["choices"][0].get("message", {}) or {}
+    out = (msg.get("content") or "").strip()
+    if not out:
+        # AN ANSWER THAT ARRIVED, READ AS NO ANSWER.
+        #
+        # Groq returns a gpt-oss model's thinking in `reasoning`, separate
+        # from `content`. When the model runs out of room mid-thought,
+        # `content` is empty and everything it produced - the JSON included,
+        # if it got that far - is sitting in `reasoning`. This function read
+        # only `content`, so "empty response" meant "we did not look".
+        # strip_fences() can dig an object out of prose; give it the chance
+        # rather than throwing the reply away.
+        reasoning = (msg.get("reasoning") or "").strip()
+        if reasoning:
+            print(f"     -> {label} returned no content but "
+                  f"{len(reasoning):,} chars of reasoning; reading that "
+                  f"instead", flush=True)
+            out = reasoning
+    fin = data["choices"][0].get("finish_reason")
+    if fin and fin != "stop":
+        # "length" here means the reply was CUT OFF, which is exactly how
+        # valid JSON becomes invalid JSON. Without this the log showed a
+        # refusal and never said the generation had been truncated.
+        print(f"     -> {label} stopped early: finish_reason={fin}",
+              flush=True)
+    return out
 
 
 def _oai_available_models(base_url, key):
@@ -458,6 +506,22 @@ def _oai_available_models(base_url, key):
 # and URLs, which tokenize far worse than prose, and being under the limit is
 # worth more than squeezing in two more paragraphs.
 PROVIDER_CHAR_CAP = {"groq": 16000}
+
+# HOW MUCH OF THAT REPLY BUDGET THE MODEL IS ALLOWED TO SPEND ON THINKING.
+#
+# The ~2,600 tokens reserved for the answer above assumed the answer was the
+# only thing coming back. It is not: gpt-oss-120b is a reasoning model and
+# Groq's default reasoning_effort is "medium", so an unknown share of those
+# tokens goes on thinking before a single character of JSON is emitted. Runs
+# 48, 49 and 50 all died on the consequence - a JSON object that stopped
+# mid-structure ("Failed to validate JSON") and then, with the schema
+# dropped, nothing in `content` at all.
+#
+# "low" is the default here because this pipeline never asks for a hard
+# think - it asks for a known shape filled in from source text it was handed.
+# An env var because if a future model needs more, that must not be a code
+# change.
+REASONING_EFFORT = _env("REASONING_EFFORT", "low")
 
 # WHO ACTUALLY WROTE THIS SCRIPT, AND HOW MUCH OF THE RESEARCH THEY SAW.
 #
@@ -774,7 +838,12 @@ def _call_sweep(prompt, schema, retries, provs):
                   f"{PROVIDER_CHAR_CAP[name]:,} chars; trimmed the prompt from "
                   f"{len(prompt):,} to {len(body):,}")
 
-        for attempt in range(retries):
+        attempts_left = retries
+        spent_schema_drop = False
+        attempt = -1
+        while attempts_left > 0:
+            attempt += 1
+            attempts_left -= 1
             try:
                 if name == "gemini":
                     text = _gemini(body, schema, drop_schema)
@@ -792,11 +861,31 @@ def _call_sweep(prompt, schema, retries, provs):
             except Exception as e:
                 last = e
                 msg = str(e)
-                print(f"   ! {name} attempt {attempt+1}/{retries}: {msg[:200]}")
+                print(f"   ! {name} attempt {attempt+1}/"
+                      f"{attempt + 1 + attempts_left}: {msg[:200]}")
+                # "failed to validate json" is named EXPLICITLY. It matched
+                # before only through the word "invalid", which appears in
+                # this body once - inside the unrelated type name
+                # `invalid_request_error`. A safety branch that fires on an
+                # incidental substring of a field it is not reading is one
+                # provider wording away from never firing again.
                 if schema and not drop_schema and (
-                        "schema" in msg.lower() or "invalid" in msg.lower()):
+                        "schema" in msg.lower() or "invalid" in msg.lower()
+                        or "failed to validate json" in msg.lower()):
                     print("     -> dropping response_schema, retrying plain JSON")
                     drop_schema = True
+                    # DO NOT SPEND AN ATTEMPT ON THE DIAGNOSIS.
+                    #
+                    # With retries=2 the 400 arrived on attempt 1, so the
+                    # schema-less retry WAS attempt 2 - the last one - and a
+                    # single empty reply then abandoned a provider that was up
+                    # and answering. Runs 49 and 50 both died exactly there.
+                    # Changing the request shape is not an attempt at the
+                    # request; it is what makes the next attempt different.
+                    # Granted once per provider, so this cannot loop.
+                    if not spent_schema_drop:
+                        spent_schema_drop = True
+                        attempts_left += 1
                     continue
 
                 # A 403 carrying "error code: 1010" is CLOUDFLARE, not the

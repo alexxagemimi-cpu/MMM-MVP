@@ -365,6 +365,49 @@ for the appended instruction so the fix that follows the trim cannot defeat
 it. **Look for this shape elsewhere: a flag that is set, logged, and not
 plumbed through is indistinguishable in the log from one that works.**
 
+**5.13 The fallback model spent the answer on thinking — and the answer it
+did produce was read as no answer.** Runs 48, 49 and 50 all ended on the same
+two lines, at two different stages, on three different topics:
+
+    ! groq HTTP 400: "Failed to validate JSON. Please adjust your prompt.
+      See 'failed_generation' for more details."
+      -> dropping response_schema, retrying plain JSON
+    ! groq attempt 2/2: empty response
+
+Not quota — run 48's *repair* died on it, then runs 49 and 50 died on it at
+stage 2 with no script at all. **`gpt-oss-120b` is a reasoning model and
+Groq's default `reasoning_effort` is "medium"**, so an unknown share of the
+~2,600 reply tokens `PROVIDER_CHAR_CAP` budgets goes on thinking before one
+character of JSON is emitted: the object stops mid-structure and Groq refuses
+it. Then the schema-less retry came back with `content` empty — because Groq
+returns a gpt-oss model's thinking in a **separate `reasoning` field**, and
+`_openai_compatible` read only `content`. *An answer that arrived was reported
+as no answer.* Both facts are Groq's documented behaviour, not a guess.
+
+Four things were wrong and each is fixed and proved by reverting it:
+`reasoning_effort="low"` is now sent (gpt-oss only — the parameter is
+model-specific and sending it elsewhere trades one 400 for another);
+`reasoning` is read when `content` is empty; `finish_reason` is logged, since
+`length` is exactly how valid JSON becomes invalid JSON; and the error body is
+logged to 2,000 chars instead of 400, because Groq's `failed_generation` — the
+one field saying *what* the model actually produced — sits past character 400
+every time, so **every log of this fault showed the complaint and hid the
+cause.**
+
+**And the retry could not have worked anyway.** With `retries=2` the 400
+arrived on attempt 1, so the schema-less retry *was* attempt 2, and a single
+empty reply abandoned a provider that was up and answering. Changing the shape
+of a request is not an attempt at it; the drop now grants one extra attempt,
+once per provider. **Third time in this file** — 5.11, 5.12, and now this — for
+a retry that re-sent, or gave up, in a branch that reads correct.
+
+*Related, found by the regression rather than by a run:* the branch that drops
+the schema matched this 400 only through the word "invalid", which appears in
+that body once, inside the unrelated type name `invalid_request_error`. It now
+names "failed to validate json" explicitly. A safety branch firing on an
+incidental substring of a field it is not reading is one provider wording away
+from silently never firing.
+
 **A note on how 5.12's test was got wrong first.** The first version of the
 regression faked `_openai_compatible` — the function the fix lives *inside* —
 so the fixed code never ran and the test reported FAIL against a working fix.
