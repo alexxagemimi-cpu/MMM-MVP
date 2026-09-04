@@ -610,6 +610,55 @@ WAIT_OUT_MAX = 200
 RATE_WAIT_BUDGET = float(_env("RATE_WAIT_BUDGET", "120"))
 
 
+def missing_required(obj, schema, path=""):
+    """
+    Required keys the reply does not actually have, INCLUDING inside arrays.
+
+    The first version of this check read only the top-level `required` list,
+    and run 55 walked straight through it: the draft carried `title`,
+    `scenes` and every other top-level key, and not one of its eleven scenes
+    had a `beat`. The log said so -
+
+        !! the draft reply left out required field(s): beat on 11 scene(s)
+
+    - and then the run carried on and the engine reported
+
+        no list beats (CATEGORY/STEP) in this script - footage only,
+        no checklist
+
+    so the finished video had no checklist at all. The orientation device the
+    whole design rests on (§10.2) was absent because one field was missing
+    from a nested object, and json_object mode enforces nothing.
+
+    Reports at most a handful of names: this goes into an exception message
+    that is logged, and "beat on 11 scenes" is the useful form, not eleven
+    separate complaints.
+    """
+    out = []
+    if not isinstance(schema, dict):
+        return out
+    kind = schema.get("type")
+    if kind == "object" or "properties" in schema:
+        if not isinstance(obj, dict):
+            return [f"{path or 'reply'} is not an object"]
+        for k in schema.get("required") or []:
+            if k not in obj:
+                out.append(f"{path}{k}")
+        for k, sub in (schema.get("properties") or {}).items():
+            if k in obj:
+                out += missing_required(obj[k], sub, f"{path}{k}.")
+    elif kind == "array" or "items" in schema:
+        if not isinstance(obj, list):
+            return [f"{path or 'reply'} is not a list"]
+        seen = {}
+        for i, item in enumerate(obj):
+            for name in missing_required(item, schema.get("items") or {},
+                                         path):
+                seen[name] = seen.get(name, 0) + 1
+        out += [f"{n} (on {c} item(s))" for n, c in seen.items()]
+    return out[:6]
+
+
 def stated_retry_delay(msg):
     """
     Seconds the provider ASKED us to wait, or None.
@@ -936,8 +985,7 @@ def _call_sweep(prompt, schema, retries, provs):
                 # instead of a KeyError surfacing four stack frames away with
                 # no mention of a provider.
                 if schema:
-                    need = [k for k in (schema.get("required") or [])
-                            if not isinstance(parsed, dict) or k not in parsed]
+                    need = missing_required(parsed, schema)
                     if need:
                         raise RuntimeError(
                             f"reply parsed but is missing required key(s): "

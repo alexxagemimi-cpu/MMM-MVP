@@ -1,0 +1,1445 @@
+﻿2026-09-04T13:35:24.0520776Z Current runner version: '2.337.0'
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20260828.587
+Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+Build Date: 2026-08-28T16:44:25Z
+Worker ID: {6247c188-d902-4c09-8c41-05a767a84aff}
+Azure Region: southcentralus
+##[endgroup]
+##[group]Operating System
+Ubuntu
+24.04.4
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-24.04
+Version: 20260831.293.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260831.293/images/ubuntu/Ubuntu2404-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260831.293
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+Complete job name: build-video
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+##[group]Run actions/checkout@v4
+with:
+  repository: alexxagemimi-cpu/MMM-MVP
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  persist-credentials: true
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+env:
+  PYTHONUNBUFFERED: 1
+##[endgroup]
+Syncing repository: alexxagemimi-cpu/MMM-MVP
+##[group]Getting Git version info
+Working directory is '/home/runner/work/MMM-MVP/MMM-MVP'
+[command]/usr/bin/git version
+git version 2.55.0
+##[endgroup]
+Temporarily overriding HOME='/home/runner/work/_temp/85679d29-4a6f-4af7-a353-c84bcd098d41' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/MMM-MVP/MMM-MVP
+Deleting the contents of '/home/runner/work/MMM-MVP/MMM-MVP'
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/MMM-MVP/MMM-MVP
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+Initialized empty Git repository in /home/runner/work/MMM-MVP/MMM-MVP/.git/
+[command]/usr/bin/git remote add origin https://github.com/alexxagemimi-cpu/MMM-MVP
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +9e2f20de3fb2c537d571b1f070034bf9fbfa9c0b:refs/remotes/origin/claude/project-setup-pvczp8
+From https://github.com/alexxagemimi-cpu/MMM-MVP
+ * [new ref]         9e2f20de3fb2c537d571b1f070034bf9fbfa9c0b -> origin/claude/project-setup-pvczp8
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+[command]/usr/bin/git sparse-checkout disable
+[command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force -B claude/project-setup-pvczp8 refs/remotes/origin/claude/project-setup-pvczp8
+Switched to a new branch 'claude/project-setup-pvczp8'
+branch 'claude/project-setup-pvczp8' set up to track 'origin/claude/project-setup-pvczp8'.
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+9e2f20de3fb2c537d571b1f070034bf9fbfa9c0b
+##[group]Run NEED=""
+[36;1mNEED=""[0m
+[36;1mcommand -v ffmpeg >/dev/null || NEED="$NEED ffmpeg"[0m
+[36;1mfc-list 2>/dev/null | grep -qi dejavu || NEED="$NEED fonts-dejavu-core"[0m
+[36;1mif [ -n "$NEED" ]; then[0m
+[36;1m  echo "installing:$NEED"[0m
+[36;1m  sudo apt-get update -qq[0m
+[36;1m  sudo apt-get install -y -qq $NEED[0m
+[36;1melse[0m
+[36;1m  echo "ffmpeg and fonts already present on the runner"[0m
+[36;1mfi[0m
+[36;1mffmpeg -version | head -n1[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+##[endgroup]
+installing: ffmpeg
+Selecting previously unselected package libva2:amd64.
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 201676 files and directories currently installed.)
+Preparing to unpack .../00-libva2_2.20.0-2ubuntu0.2_amd64.deb ...
+Unpacking libva2:amd64 (2.20.0-2ubuntu0.2) ...
+Selecting previously unselected package libva-drm2:amd64.
+Preparing to unpack .../01-libva-drm2_2.20.0-2ubuntu0.2_amd64.deb ...
+Unpacking libva-drm2:amd64 (2.20.0-2ubuntu0.2) ...
+Selecting previously unselected package libva-x11-2:amd64.
+Preparing to unpack .../02-libva-x11-2_2.20.0-2ubuntu0.2_amd64.deb ...
+Unpacking libva-x11-2:amd64 (2.20.0-2ubuntu0.2) ...
+Selecting previously unselected package libvdpau1:amd64.
+Preparing to unpack .../03-libvdpau1_1.5-2build1_amd64.deb ...
+Unpacking libvdpau1:amd64 (1.5-2build1) ...
+Selecting previously unselected package libvpl2.
+Preparing to unpack .../04-libvpl2_2023.3.0-1build1_amd64.deb ...
+Unpacking libvpl2 (2023.3.0-1build1) ...
+Selecting previously unselected package ocl-icd-libopencl1:amd64.
+Preparing to unpack .../05-ocl-icd-libopencl1_2.3.2-1build1_amd64.deb ...
+Unpacking ocl-icd-libopencl1:amd64 (2.3.2-1build1) ...
+Selecting previously unselected package libavutil58:amd64.
+Preparing to unpack .../06-libavutil58_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libavutil58:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libcodec2-1.2:amd64.
+Preparing to unpack .../07-libcodec2-1.2_1.2.0-2build1_amd64.deb ...
+Unpacking libcodec2-1.2:amd64 (1.2.0-2build1) ...
+Selecting previously unselected package libdav1d7:amd64.
+Preparing to unpack .../08-libdav1d7_1.4.1-1build1_amd64.deb ...
+Unpacking libdav1d7:amd64 (1.4.1-1build1) ...
+Selecting previously unselected package libgsm1:amd64.
+Preparing to unpack .../09-libgsm1_1.0.22-1build1_amd64.deb ...
+Unpacking libgsm1:amd64 (1.0.22-1build1) ...
+Selecting previously unselected package libhwy1t64:amd64.
+Preparing to unpack .../10-libhwy1t64_1.0.7-8.1build1_amd64.deb ...
+Unpacking libhwy1t64:amd64 (1.0.7-8.1build1) ...
+Selecting previously unselected package libjxl0.7:amd64.
+Preparing to unpack .../11-libjxl0.7_0.7.0-10.2ubuntu6.1_amd64.deb ...
+Unpacking libjxl0.7:amd64 (0.7.0-10.2ubuntu6.1) ...
+Selecting previously unselected package libmp3lame0:amd64.
+Preparing to unpack .../12-libmp3lame0_3.100-6build1_amd64.deb ...
+Unpacking libmp3lame0:amd64 (3.100-6build1) ...
+Selecting previously unselected package libopus0:amd64.
+Preparing to unpack .../13-libopus0_1.4-1build1_amd64.deb ...
+Unpacking libopus0:amd64 (1.4-1build1) ...
+Selecting previously unselected package librav1e0:amd64.
+Preparing to unpack .../14-librav1e0_0.7.1-2_amd64.deb ...
+Unpacking librav1e0:amd64 (0.7.1-2) ...
+Selecting previously unselected package librsvg2-2:amd64.
+Preparing to unpack .../15-librsvg2-2_2.58.0+dfsg-1build1_amd64.deb ...
+Unpacking librsvg2-2:amd64 (2.58.0+dfsg-1build1) ...
+Selecting previously unselected package libshine3:amd64.
+Preparing to unpack .../16-libshine3_3.1.1-2build1_amd64.deb ...
+Unpacking libshine3:amd64 (3.1.1-2build1) ...
+Selecting previously unselected package libspeex1:amd64.
+Preparing to unpack .../17-libspeex1_1.2.1-2ubuntu2.24.04.1_amd64.deb ...
+Unpacking libspeex1:amd64 (1.2.1-2ubuntu2.24.04.1) ...
+Selecting previously unselected package libsvtav1enc1d1:amd64.
+Preparing to unpack .../18-libsvtav1enc1d1_1.7.0+dfsg-2build1_amd64.deb ...
+Unpacking libsvtav1enc1d1:amd64 (1.7.0+dfsg-2build1) ...
+Selecting previously unselected package libsoxr0:amd64.
+Preparing to unpack .../19-libsoxr0_0.1.3-4build3_amd64.deb ...
+Unpacking libsoxr0:amd64 (0.1.3-4build3) ...
+Selecting previously unselected package libswresample4:amd64.
+Preparing to unpack .../20-libswresample4_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libswresample4:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libtheora0:amd64.
+Preparing to unpack .../21-libtheora0_1.1.1+dfsg.1-16.1build3_amd64.deb ...
+Unpacking libtheora0:amd64 (1.1.1+dfsg.1-16.1build3) ...
+Selecting previously unselected package libtwolame0:amd64.
+Preparing to unpack .../22-libtwolame0_0.4.0-2build3_amd64.deb ...
+Unpacking libtwolame0:amd64 (0.4.0-2build3) ...
+Selecting previously unselected package libvorbisenc2:amd64.
+Preparing to unpack .../23-libvorbisenc2_1.3.7-1build3_amd64.deb ...
+Unpacking libvorbisenc2:amd64 (1.3.7-1build3) ...
+Selecting previously unselected package libvpx9:amd64.
+Preparing to unpack .../24-libvpx9_1.14.0-1ubuntu2.3_amd64.deb ...
+Unpacking libvpx9:amd64 (1.14.0-1ubuntu2.3) ...
+Selecting previously unselected package libx264-164:amd64.
+Preparing to unpack .../25-libx264-164_2%3a0.164.3108+git31e19f9-1_amd64.deb ...
+Unpacking libx264-164:amd64 (2:0.164.3108+git31e19f9-1) ...
+Selecting previously unselected package libx265-199:amd64.
+Preparing to unpack .../26-libx265-199_3.5-2build1_amd64.deb ...
+Unpacking libx265-199:amd64 (3.5-2build1) ...
+Selecting previously unselected package libxvidcore4:amd64.
+Preparing to unpack .../27-libxvidcore4_2%3a1.3.7-1build1_amd64.deb ...
+Unpacking libxvidcore4:amd64 (2:1.3.7-1build1) ...
+Selecting previously unselected package libzvbi-common.
+Preparing to unpack .../28-libzvbi-common_0.2.42-2_all.deb ...
+Unpacking libzvbi-common (0.2.42-2) ...
+Selecting previously unselected package libzvbi0t64:amd64.
+Preparing to unpack .../29-libzvbi0t64_0.2.42-2_amd64.deb ...
+Unpacking libzvbi0t64:amd64 (0.2.42-2) ...
+Selecting previously unselected package libavcodec60:amd64.
+Preparing to unpack .../30-libavcodec60_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libavcodec60:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libraw1394-11:amd64.
+Preparing to unpack .../31-libraw1394-11_2.1.2-2build3_amd64.deb ...
+Unpacking libraw1394-11:amd64 (2.1.2-2build3) ...
+Selecting previously unselected package libavc1394-0:amd64.
+Preparing to unpack .../32-libavc1394-0_0.5.4-5build3_amd64.deb ...
+Unpacking libavc1394-0:amd64 (0.5.4-5build3) ...
+Selecting previously unselected package libunibreak5:amd64.
+Preparing to unpack .../33-libunibreak5_5.1-2build1_amd64.deb ...
+Unpacking libunibreak5:amd64 (5.1-2build1) ...
+Selecting previously unselected package libass9:amd64.
+Preparing to unpack .../34-libass9_1%3a0.17.1-2build1_amd64.deb ...
+Unpacking libass9:amd64 (1:0.17.1-2build1) ...
+Selecting previously unselected package libudfread0:amd64.
+Preparing to unpack .../35-libudfread0_1.1.2-1build1_amd64.deb ...
+Unpacking libudfread0:amd64 (1.1.2-1build1) ...
+Selecting previously unselected package libbluray2:amd64.
+Preparing to unpack .../36-libbluray2_1%3a1.3.4-1build1_amd64.deb ...
+Unpacking libbluray2:amd64 (1:1.3.4-1build1) ...
+Selecting previously unselected package libchromaprint1:amd64.
+Preparing to unpack .../37-libchromaprint1_1.5.1-5_amd64.deb ...
+Unpacking libchromaprint1:amd64 (1.5.1-5) ...
+Selecting previously unselected package libgme0:amd64.
+Preparing to unpack .../38-libgme0_0.6.3-7build1_amd64.deb ...
+Unpacking libgme0:amd64 (0.6.3-7build1) ...
+Selecting previously unselected package libmpg123-0t64:amd64.
+Preparing to unpack .../39-libmpg123-0t64_1.32.5-1ubuntu1.1_amd64.deb ...
+Unpacking libmpg123-0t64:amd64 (1.32.5-1ubuntu1.1) ...
+Selecting previously unselected package libopenmpt0t64:amd64.
+Preparing to unpack .../40-libopenmpt0t64_0.7.3-1.1build3_amd64.deb ...
+Unpacking libopenmpt0t64:amd64 (0.7.3-1.1build3) ...
+Selecting previously unselected package libcjson1:amd64.
+Preparing to unpack .../41-libcjson1_1.7.17-1_amd64.deb ...
+Unpacking libcjson1:amd64 (1.7.17-1) ...
+Selecting previously unselected package libmbedcrypto7t64:amd64.
+Preparing to unpack .../42-libmbedcrypto7t64_2.28.8-1_amd64.deb ...
+Unpacking libmbedcrypto7t64:amd64 (2.28.8-1) ...
+Selecting previously unselected package librist4:amd64.
+Preparing to unpack .../43-librist4_0.2.10+dfsg-2_amd64.deb ...
+Unpacking librist4:amd64 (0.2.10+dfsg-2) ...
+Selecting previously unselected package libsrt1.5-gnutls:amd64.
+Preparing to unpack .../44-libsrt1.5-gnutls_1.5.3-1build2_amd64.deb ...
+Unpacking libsrt1.5-gnutls:amd64 (1.5.3-1build2) ...
+Selecting previously unselected package libssh-gcrypt-4:amd64.
+Preparing to unpack .../45-libssh-gcrypt-4_0.10.6-2ubuntu0.5_amd64.deb ...
+Unpacking libssh-gcrypt-4:amd64 (0.10.6-2ubuntu0.5) ...
+Selecting previously unselected package libavformat60:amd64.
+Preparing to unpack .../46-libavformat60_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libavformat60:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libbs2b0:amd64.
+Preparing to unpack .../47-libbs2b0_3.1.0+dfsg-7build1_amd64.deb ...
+Unpacking libbs2b0:amd64 (3.1.0+dfsg-7build1) ...
+Selecting previously unselected package libflite1:amd64.
+Preparing to unpack .../48-libflite1_2.2-6build3_amd64.deb ...
+Unpacking libflite1:amd64 (2.2-6build3) ...
+Selecting previously unselected package libserd-0-0:amd64.
+Preparing to unpack .../49-libserd-0-0_0.32.2-1_amd64.deb ...
+Unpacking libserd-0-0:amd64 (0.32.2-1) ...
+Selecting previously unselected package libzix-0-0:amd64.
+Preparing to unpack .../50-libzix-0-0_0.4.2-2build1_amd64.deb ...
+Unpacking libzix-0-0:amd64 (0.4.2-2build1) ...
+Selecting previously unselected package libsord-0-0:amd64.
+Preparing to unpack .../51-libsord-0-0_0.16.16-2build1_amd64.deb ...
+Unpacking libsord-0-0:amd64 (0.16.16-2build1) ...
+Selecting previously unselected package libsratom-0-0:amd64.
+Preparing to unpack .../52-libsratom-0-0_0.6.16-1build1_amd64.deb ...
+Unpacking libsratom-0-0:amd64 (0.6.16-1build1) ...
+Selecting previously unselected package liblilv-0-0:amd64.
+Preparing to unpack .../53-liblilv-0-0_0.24.22-1build1_amd64.deb ...
+Unpacking liblilv-0-0:amd64 (0.24.22-1build1) ...
+Selecting previously unselected package libmysofa1:amd64.
+Preparing to unpack .../54-libmysofa1_1.3.2+dfsg-2ubuntu2_amd64.deb ...
+Unpacking libmysofa1:amd64 (1.3.2+dfsg-2ubuntu2) ...
+Selecting previously unselected package libplacebo338:amd64.
+Preparing to unpack .../55-libplacebo338_6.338.2-2build1_amd64.deb ...
+Unpacking libplacebo338:amd64 (6.338.2-2build1) ...
+Selecting previously unselected package libblas3:amd64.
+Preparing to unpack .../56-libblas3_3.12.0-3build1.1_amd64.deb ...
+Unpacking libblas3:amd64 (3.12.0-3build1.1) ...
+Selecting previously unselected package liblapack3:amd64.
+Preparing to unpack .../57-liblapack3_3.12.0-3build1.1_amd64.deb ...
+Unpacking liblapack3:amd64 (3.12.0-3build1.1) ...
+Selecting previously unselected package libasyncns0:amd64.
+Preparing to unpack .../58-libasyncns0_0.8-6build4_amd64.deb ...
+Unpacking libasyncns0:amd64 (0.8-6build4) ...
+Selecting previously unselected package libflac12t64:amd64.
+Preparing to unpack .../59-libflac12t64_1.4.3+ds-2.1ubuntu2_amd64.deb ...
+Unpacking libflac12t64:amd64 (1.4.3+ds-2.1ubuntu2) ...
+Selecting previously unselected package libsndfile1:amd64.
+Preparing to unpack .../60-libsndfile1_1.2.2-1ubuntu5.24.04.1_amd64.deb ...
+Unpacking libsndfile1:amd64 (1.2.2-1ubuntu5.24.04.1) ...
+Selecting previously unselected package libpulse0:amd64.
+Preparing to unpack .../61-libpulse0_1%3a16.1+dfsg1-2ubuntu10.1_amd64.deb ...
+Unpacking libpulse0:amd64 (1:16.1+dfsg1-2ubuntu10.1) ...
+Selecting previously unselected package libsphinxbase3t64:amd64.
+Preparing to unpack .../62-libsphinxbase3t64_0.8+5prealpha+1-17build2_amd64.deb ...
+Unpacking libsphinxbase3t64:amd64 (0.8+5prealpha+1-17build2) ...
+Selecting previously unselected package libpocketsphinx3:amd64.
+Preparing to unpack .../63-libpocketsphinx3_0.8.0+real5prealpha+1-15ubuntu5_amd64.deb ...
+Unpacking libpocketsphinx3:amd64 (0.8.0+real5prealpha+1-15ubuntu5) ...
+Selecting previously unselected package libpostproc57:amd64.
+Preparing to unpack .../64-libpostproc57_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libpostproc57:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libsamplerate0:amd64.
+Preparing to unpack .../65-libsamplerate0_0.2.2-4build1_amd64.deb ...
+Unpacking libsamplerate0:amd64 (0.2.2-4build1) ...
+Selecting previously unselected package librubberband2:amd64.
+Preparing to unpack .../66-librubberband2_3.3.0+dfsg-2build1_amd64.deb ...
+Unpacking librubberband2:amd64 (3.3.0+dfsg-2build1) ...
+Selecting previously unselected package libswscale7:amd64.
+Preparing to unpack .../67-libswscale7_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libswscale7:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libvidstab1.1:amd64.
+Preparing to unpack .../68-libvidstab1.1_1.1.0-2build1_amd64.deb ...
+Unpacking libvidstab1.1:amd64 (1.1.0-2build1) ...
+Selecting previously unselected package libzimg2:amd64.
+Preparing to unpack .../69-libzimg2_3.0.5+ds1-1build1_amd64.deb ...
+Unpacking libzimg2:amd64 (3.0.5+ds1-1build1) ...
+Selecting previously unselected package libavfilter9:amd64.
+Preparing to unpack .../70-libavfilter9_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libavfilter9:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libcaca0:amd64.
+Preparing to unpack .../71-libcaca0_0.99.beta20-4ubuntu0.2_amd64.deb ...
+Unpacking libcaca0:amd64 (0.99.beta20-4ubuntu0.2) ...
+Selecting previously unselected package libcdio19t64:amd64.
+Preparing to unpack .../72-libcdio19t64_2.1.0-4.1ubuntu1.2_amd64.deb ...
+Unpacking libcdio19t64:amd64 (2.1.0-4.1ubuntu1.2) ...
+Selecting previously unselected package libcdio-cdda2t64:amd64.
+Preparing to unpack .../73-libcdio-cdda2t64_10.2+2.0.1-1.1build2_amd64.deb ...
+Unpacking libcdio-cdda2t64:amd64 (10.2+2.0.1-1.1build2) ...
+Selecting previously unselected package libcdio-paranoia2t64:amd64.
+Preparing to unpack .../74-libcdio-paranoia2t64_10.2+2.0.1-1.1build2_amd64.deb ...
+Unpacking libcdio-paranoia2t64:amd64 (10.2+2.0.1-1.1build2) ...
+Selecting previously unselected package libdc1394-25:amd64.
+Preparing to unpack .../75-libdc1394-25_2.2.6-4build1_amd64.deb ...
+Unpacking libdc1394-25:amd64 (2.2.6-4build1) ...
+Selecting previously unselected package libiec61883-0:amd64.
+Preparing to unpack .../76-libiec61883-0_1.2.0-6build1_amd64.deb ...
+Unpacking libiec61883-0:amd64 (1.2.0-6build1) ...
+Selecting previously unselected package libjack-jackd2-0:amd64.
+Preparing to unpack .../77-libjack-jackd2-0_1.9.21~dfsg-3ubuntu3_amd64.deb ...
+Unpacking libjack-jackd2-0:amd64 (1.9.21~dfsg-3ubuntu3) ...
+Selecting previously unselected package libopenal-data.
+Preparing to unpack .../78-libopenal-data_1%3a1.23.1-4build1_all.deb ...
+Unpacking libopenal-data (1:1.23.1-4build1) ...
+Selecting previously unselected package libsndio7.0:amd64.
+Preparing to unpack .../79-libsndio7.0_1.9.0-0.3build3_amd64.deb ...
+Unpacking libsndio7.0:amd64 (1.9.0-0.3build3) ...
+Selecting previously unselected package libopenal1:amd64.
+Preparing to unpack .../80-libopenal1_1%3a1.23.1-4build1_amd64.deb ...
+Unpacking libopenal1:amd64 (1:1.23.1-4build1) ...
+Selecting previously unselected package libdecor-0-0:amd64.
+Preparing to unpack .../81-libdecor-0-0_0.2.2-1build2_amd64.deb ...
+Unpacking libdecor-0-0:amd64 (0.2.2-1build2) ...
+Selecting previously unselected package libsdl2-2.0-0:amd64.
+Preparing to unpack .../82-libsdl2-2.0-0_2.30.0+dfsg-1ubuntu3.1_amd64.deb ...
+Unpacking libsdl2-2.0-0:amd64 (2.30.0+dfsg-1ubuntu3.1) ...
+Selecting previously unselected package libxcb-shape0:amd64.
+Preparing to unpack .../83-libxcb-shape0_1.15-1ubuntu2_amd64.deb ...
+Unpacking libxcb-shape0:amd64 (1.15-1ubuntu2) ...
+Selecting previously unselected package libxv1:amd64.
+Preparing to unpack .../84-libxv1_2%3a1.0.11-1.1build1_amd64.deb ...
+Unpacking libxv1:amd64 (2:1.0.11-1.1build1) ...
+Selecting previously unselected package libavdevice60:amd64.
+Preparing to unpack .../85-libavdevice60_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libavdevice60:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package ffmpeg.
+Preparing to unpack .../86-ffmpeg_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking ffmpeg (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libigdgmm12:amd64.
+Preparing to unpack .../87-libigdgmm12_22.3.17+ds1-1ubuntu1_amd64.deb ...
+Unpacking libigdgmm12:amd64 (22.3.17+ds1-1ubuntu1) ...
+Selecting previously unselected package intel-media-va-driver:amd64.
+Preparing to unpack .../88-intel-media-va-driver_24.1.0+dfsg1-1ubuntu0.2_amd64.deb ...
+Unpacking intel-media-va-driver:amd64 (24.1.0+dfsg1-1ubuntu0.2) ...
+Selecting previously unselected package libaacs0:amd64.
+Preparing to unpack .../89-libaacs0_0.11.1-2build1_amd64.deb ...
+Unpacking libaacs0:amd64 (0.11.1-2build1) ...
+Selecting previously unselected package libbdplus0:amd64.
+Preparing to unpack .../90-libbdplus0_0.2.0-3build1_amd64.deb ...
+Unpacking libbdplus0:amd64 (0.2.0-3build1) ...
+Selecting previously unselected package libdecor-0-plugin-1-gtk:amd64.
+Preparing to unpack .../91-libdecor-0-plugin-1-gtk_0.2.2-1build2_amd64.deb ...
+Unpacking libdecor-0-plugin-1-gtk:amd64 (0.2.2-1build2) ...
+Selecting previously unselected package librsvg2-common:amd64.
+Preparing to unpack .../92-librsvg2-common_2.58.0+dfsg-1build1_amd64.deb ...
+Unpacking librsvg2-common:amd64 (2.58.0+dfsg-1build1) ...
+Selecting previously unselected package mesa-va-drivers:amd64.
+Preparing to unpack .../93-mesa-va-drivers_25.2.8-0ubuntu0.24.04.2_amd64.deb ...
+Unpacking mesa-va-drivers:amd64 (25.2.8-0ubuntu0.24.04.2) ...
+Selecting previously unselected package mesa-vdpau-drivers:amd64.
+Preparing to unpack .../94-mesa-vdpau-drivers_25.2.8-0ubuntu0.24.04.2_amd64.deb ...
+Unpacking mesa-vdpau-drivers:amd64 (25.2.8-0ubuntu0.24.04.2) ...
+Selecting previously unselected package i965-va-driver:amd64.
+Preparing to unpack .../95-i965-va-driver_2.4.1+dfsg1-1ubuntu0.2_amd64.deb ...
+Unpacking i965-va-driver:amd64 (2.4.1+dfsg1-1ubuntu0.2) ...
+Selecting previously unselected package va-driver-all:amd64.
+Preparing to unpack .../96-va-driver-all_2.20.0-2ubuntu0.2_amd64.deb ...
+Unpacking va-driver-all:amd64 (2.20.0-2ubuntu0.2) ...
+Selecting previously unselected package vdpau-driver-all:amd64.
+Preparing to unpack .../97-vdpau-driver-all_1.5-2build1_amd64.deb ...
+Unpacking vdpau-driver-all:amd64 (1.5-2build1) ...
+Selecting previously unselected package pocketsphinx-en-us.
+Preparing to unpack .../98-pocketsphinx-en-us_0.8.0+real5prealpha+1-15ubuntu5_all.deb ...
+Unpacking pocketsphinx-en-us (0.8.0+real5prealpha+1-15ubuntu5) ...
+Setting up libgme0:amd64 (0.6.3-7build1) ...
+Setting up libchromaprint1:amd64 (1.5.1-5) ...
+Setting up libssh-gcrypt-4:amd64 (0.10.6-2ubuntu0.5) ...
+Setting up libhwy1t64:amd64 (1.0.7-8.1build1) ...
+Setting up libudfread0:amd64 (1.1.2-1build1) ...
+Setting up libraw1394-11:amd64 (2.1.2-2build3) ...
+Setting up libspeex1:amd64 (1.2.1-2ubuntu2.24.04.1) ...
+Setting up libshine3:amd64 (3.1.1-2build1) ...
+Setting up libcaca0:amd64 (0.99.beta20-4ubuntu0.2) ...
+Setting up libvpl2 (2023.3.0-1build1) ...
+Setting up libx264-164:amd64 (2:0.164.3108+git31e19f9-1) ...
+Setting up libtwolame0:amd64 (0.4.0-2build3) ...
+Setting up libmbedcrypto7t64:amd64 (2.28.8-1) ...
+Setting up libgsm1:amd64 (1.0.22-1build1) ...
+Setting up libsoxr0:amd64 (0.1.3-4build3) ...
+Setting up libzix-0-0:amd64 (0.4.2-2build1) ...
+Setting up libcodec2-1.2:amd64 (1.2.0-2build1) ...
+Setting up libmysofa1:amd64 (1.3.2+dfsg-2ubuntu2) ...
+Setting up libxcb-shape0:amd64 (1.15-1ubuntu2) ...
+Setting up libcdio19t64:amd64 (2.1.0-4.1ubuntu1.2) ...
+Setting up libsvtav1enc1d1:amd64 (1.7.0+dfsg-2build1) ...
+Setting up libigdgmm12:amd64 (22.3.17+ds1-1ubuntu1) ...
+Setting up libmpg123-0t64:amd64 (1.32.5-1ubuntu1.1) ...
+Setting up libcjson1:amd64 (1.7.17-1) ...
+Setting up libxvidcore4:amd64 (2:1.3.7-1build1) ...
+Setting up librav1e0:amd64 (0.7.1-2) ...
+Setting up libcdio-cdda2t64:amd64 (10.2+2.0.1-1.1build2) ...
+Setting up librist4:amd64 (0.2.10+dfsg-2) ...
+Setting up librsvg2-2:amd64 (2.58.0+dfsg-1build1) ...
+Setting up libblas3:amd64 (3.12.0-3build1.1) ...
+update-alternatives: using /usr/lib/x86_64-linux-gnu/blas/libblas.so.3 to provide /usr/lib/x86_64-linux-gnu/libblas.so.3 (libblas.so.3-x86_64-linux-gnu) in auto mode
+Setting up libplacebo338:amd64 (6.338.2-2build1) ...
+Setting up libva2:amd64 (2.20.0-2ubuntu0.2) ...
+Setting up libopus0:amd64 (1.4-1build1) ...
+Setting up libcdio-paranoia2t64:amd64 (10.2+2.0.1-1.1build2) ...
+Setting up libdc1394-25:amd64 (2.2.6-4build1) ...
+Setting up intel-media-va-driver:amd64 (24.1.0+dfsg1-1ubuntu0.2) ...
+Setting up libxv1:amd64 (2:1.0.11-1.1build1) ...
+Setting up libunibreak5:amd64 (5.1-2build1) ...
+Setting up libaacs0:amd64 (0.11.1-2build1) ...
+Setting up libjxl0.7:amd64 (0.7.0-10.2ubuntu6.1) ...
+Setting up librsvg2-common:amd64 (2.58.0+dfsg-1build1) ...
+Setting up pocketsphinx-en-us (0.8.0+real5prealpha+1-15ubuntu5) ...
+Setting up libx265-199:amd64 (3.5-2build1) ...
+Setting up libsndio7.0:amd64 (1.9.0-0.3build3) ...
+Setting up libbdplus0:amd64 (0.2.0-3build1) ...
+Setting up libvidstab1.1:amd64 (1.1.0-2build1) ...
+Setting up libvpx9:amd64 (1.14.0-1ubuntu2.3) ...
+Setting up libsrt1.5-gnutls:amd64 (1.5.3-1build2) ...
+Setting up libflite1:amd64 (2.2-6build3) ...
+Setting up libdav1d7:amd64 (1.4.1-1build1) ...
+Setting up libva-drm2:amd64 (2.20.0-2ubuntu0.2) ...
+Setting up ocl-icd-libopencl1:amd64 (2.3.2-1build1) ...
+Setting up libasyncns0:amd64 (0.8-6build4) ...
+Setting up libvdpau1:amd64 (1.5-2build1) ...
+Setting up libbs2b0:amd64 (3.1.0+dfsg-7build1) ...
+Setting up libtheora0:amd64 (1.1.1+dfsg.1-16.1build3) ...
+Setting up libdecor-0-0:amd64 (0.2.2-1build2) ...
+Setting up libzimg2:amd64 (3.0.5+ds1-1build1) ...
+Setting up libopenal-data (1:1.23.1-4build1) ...
+Setting up libflac12t64:amd64 (1.4.3+ds-2.1ubuntu2) ...
+Setting up mesa-va-drivers:amd64 (25.2.8-0ubuntu0.24.04.2) ...
+Setting up libbluray2:amd64 (1:1.3.4-1build1) ...
+Setting up libsamplerate0:amd64 (0.2.2-4build1) ...
+Setting up libva-x11-2:amd64 (2.20.0-2ubuntu0.2) ...
+Setting up libdecor-0-plugin-1-gtk:amd64 (0.2.2-1build2) ...
+Setting up libopenmpt0t64:amd64 (0.7.3-1.1build3) ...
+Setting up libzvbi-common (0.2.42-2) ...
+Setting up libmp3lame0:amd64 (3.100-6build1) ...
+Setting up i965-va-driver:amd64 (2.4.1+dfsg1-1ubuntu0.2) ...
+Setting up libvorbisenc2:amd64 (1.3.7-1build3) ...
+Setting up libiec61883-0:amd64 (1.2.0-6build1) ...
+Setting up libserd-0-0:amd64 (0.32.2-1) ...
+Setting up libavc1394-0:amd64 (0.5.4-5build3) ...
+Setting up mesa-vdpau-drivers:amd64 (25.2.8-0ubuntu0.24.04.2) ...
+Setting up liblapack3:amd64 (3.12.0-3build1.1) ...
+update-alternatives: using /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3 to provide /usr/lib/x86_64-linux-gnu/liblapack.so.3 (liblapack.so.3-x86_64-linux-gnu) in auto mode
+Setting up libzvbi0t64:amd64 (0.2.42-2) ...
+Setting up libavutil58:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up libopenal1:amd64 (1:1.23.1-4build1) ...
+Setting up libass9:amd64 (1:0.17.1-2build1) ...
+Setting up libswresample4:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up va-driver-all:amd64 (2.20.0-2ubuntu0.2) ...
+Setting up libavcodec60:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up librubberband2:amd64 (3.3.0+dfsg-2build1) ...
+Setting up libjack-jackd2-0:amd64 (1.9.21~dfsg-3ubuntu3) ...
+Setting up vdpau-driver-all:amd64 (1.5-2build1) ...
+Setting up libsord-0-0:amd64 (0.16.16-2build1) ...
+Setting up libpostproc57:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up libsratom-0-0:amd64 (0.6.16-1build1) ...
+Setting up libsndfile1:amd64 (1.2.2-1ubuntu5.24.04.1) ...
+Setting up liblilv-0-0:amd64 (0.24.22-1build1) ...
+Setting up libswscale7:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up libpulse0:amd64 (1:16.1+dfsg1-2ubuntu10.1) ...
+Setting up libavformat60:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up libsphinxbase3t64:amd64 (0.8+5prealpha+1-17build2) ...
+Setting up libsdl2-2.0-0:amd64 (2.30.0+dfsg-1ubuntu3.1) ...
+Setting up libpocketsphinx3:amd64 (0.8.0+real5prealpha+1-15ubuntu5) ...
+Setting up libavfilter9:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up libavdevice60:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up ffmpeg (7:6.1.1-3ubuntu5) ...
+Processing triggers for man-db (2.12.0-4build2) ...
+Not building database; man-db/auto-update is not 'true'.
+Processing triggers for libgdk-pixbuf-2.0-0:amd64 (2.42.10+dfsg-3ubuntu3.3) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.8) ...
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+##[group]Run actions/setup-python@v5
+with:
+  python-version: 3.11
+  cache: pip
+  check-latest: false
+  token: ***
+  update-environment: true
+  allow-prereleases: false
+  freethreaded: false
+env:
+  PYTHONUNBUFFERED: 1
+##[endgroup]
+##[group]Installed versions
+(node:3607) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Successfully set up CPython (3.11.16)
+##[endgroup]
+[command]/opt/hostedtoolcache/Python/3.11.16/x64/bin/pip cache dir
+/home/runner/.cache/pip
+Cache hit for: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.16-pip-e5ba78aa43bbbbdf9b6ef16636129448b8ac2abc09ada2a164475212ef6ee421
+(node:3607) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+Received 46524346 of 46524346 (100.0%), 55.3 MBs/sec
+Cache Size: ~44 MB (46524346 B)
+[command]/usr/bin/tar -xf /home/runner/work/_temp/0ebef248-2a4e-4a61-b28e-dd678abf7030/cache.tzst -P -C /home/runner/work/MMM-MVP/MMM-MVP --use-compress-program unzstd
+Cache restored successfully
+Cache restored from key: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.16-pip-e5ba78aa43bbbbdf9b6ef16636129448b8ac2abc09ada2a164475212ef6ee421
+##[group]Run python -m pip install --upgrade pip
+[36;1mpython -m pip install --upgrade pip[0m
+[36;1mpip install -r requirements.txt[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+##[endgroup]
+Requirement already satisfied: pip in /opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/site-packages (26.2.1)
+Collecting google-genai>=1.0.0 (from -r requirements.txt (line 1))
+  Downloading google_genai-2.22.0-py3-none-any.whl.metadata (56 kB)
+Collecting edge-tts>=6.1.0 (from -r requirements.txt (line 2))
+  Using cached edge_tts-7.2.8-py3-none-any.whl.metadata (5.5 kB)
+Collecting Pillow>=10.0.0 (from -r requirements.txt (line 3))
+  Using cached pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.1 kB)
+Collecting requests>=2.31.0 (from -r requirements.txt (line 4))
+  Using cached requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+Collecting ddgs>=9.0.0 (from -r requirements.txt (line 5))
+  Using cached ddgs-9.16.0-py3-none-any.whl.metadata (16 kB)
+Collecting anyio<5.0.0,>=4.8.0 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Downloading anyio-4.15.0-py3-none-any.whl.metadata (4.7 kB)
+Collecting google-auth<3.0.0,>=2.56.0 (from google-auth[requests]<3.0.0,>=2.56.0->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Downloading google_auth-2.57.1-py3-none-any.whl.metadata (6.0 kB)
+Collecting httpx<1.0.0,>=0.28.1 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting pydantic<3.0.0,>=2.12.5 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached pydantic-2.13.5-py3-none-any.whl.metadata (110 kB)
+Collecting tenacity<9.2.0,>=8.2.3 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached tenacity-9.1.4-py3-none-any.whl.metadata (1.2 kB)
+Collecting websockets<17.0,>=13.0.0 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached websockets-16.1.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.8 kB)
+Collecting typing-extensions<5.0.0,>=4.14.0 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting distro<2,>=1.7.0 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached distro-1.9.0-py3-none-any.whl.metadata (6.8 kB)
+Collecting sniffio (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+Collecting charset_normalizer<4,>=2 (from requests>=2.31.0->-r requirements.txt (line 4))
+  Using cached charset_normalizer-3.5.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (45 kB)
+Collecting idna<4,>=2.5 (from requests>=2.31.0->-r requirements.txt (line 4))
+  Using cached idna-3.19-py3-none-any.whl.metadata (9.2 kB)
+Collecting urllib3<3,>=1.26 (from requests>=2.31.0->-r requirements.txt (line 4))
+  Using cached urllib3-2.7.0-py3-none-any.whl.metadata (6.9 kB)
+Collecting certifi>=2023.5.7 (from requests>=2.31.0->-r requirements.txt (line 4))
+  Using cached certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+Collecting pyasn1-modules>=0.2.1 (from google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting cryptography>=38.0.3 (from google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached cryptography-50.0.1-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.3 kB)
+Collecting httpcore==1.* (from httpx<1.0.0,>=0.28.1->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting h11>=0.16 (from httpcore==1.*->httpx<1.0.0,>=0.28.1->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting annotated-types>=0.6.0 (from pydantic<3.0.0,>=2.12.5->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.46.5 (from pydantic<3.0.0,>=2.12.5->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached pydantic_core-2.46.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.6 kB)
+Collecting typing-inspection>=0.4.2 (from pydantic<3.0.0,>=2.12.5->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+Collecting aiohttp<4.0.0,>=3.8.0 (from edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached aiohttp-3.14.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.3 kB)
+Collecting tabulate<1.0.0,>=0.4.4 (from edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached tabulate-0.10.0-py3-none-any.whl.metadata (40 kB)
+Collecting aiohappyeyeballs>=2.5.0 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached aiohappyeyeballs-2.7.1-py3-none-any.whl.metadata (5.9 kB)
+Collecting aiosignal>=1.4.0 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+Collecting attrs>=17.3.0 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+Collecting frozenlist>=1.1.1 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached frozenlist-1.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (20 kB)
+Collecting multidict<7.0,>=4.5 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached multidict-6.7.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.3 kB)
+Collecting propcache>=0.2.0 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached propcache-0.5.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (16 kB)
+Collecting yarl<2.0,>=1.17.0 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached yarl-1.24.5-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (103 kB)
+Collecting click>=8.1.8 (from ddgs>=9.0.0->-r requirements.txt (line 5))
+  Using cached click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting primp>=1.3.1 (from ddgs>=9.0.0->-r requirements.txt (line 5))
+  Using cached primp-2.0.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (3.9 kB)
+Collecting lxml>=4.9.4 (from ddgs>=9.0.0->-r requirements.txt (line 5))
+  Downloading lxml-6.1.3-cp311-cp311-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl.metadata (3.3 kB)
+Collecting cffi>=2.0.0 (from cryptography>=38.0.3->google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+Collecting pycparser (from cffi>=2.0.0->cryptography>=38.0.3->google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached pyasn1-0.6.4-py3-none-any.whl.metadata (8.4 kB)
+Downloading google_genai-2.22.0-py3-none-any.whl (1.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 10.3 MB/s  0:00:00
+Using cached requests-2.34.2-py3-none-any.whl (73 kB)
+Downloading anyio-4.15.0-py3-none-any.whl (131 kB)
+Using cached charset_normalizer-3.5.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (262 kB)
+Using cached distro-1.9.0-py3-none-any.whl (20 kB)
+Downloading google_auth-2.57.1-py3-none-any.whl (259 kB)
+Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+Using cached idna-3.19-py3-none-any.whl (68 kB)
+Using cached pydantic-2.13.5-py3-none-any.whl (472 kB)
+Using cached pydantic_core-2.46.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+Using cached tenacity-9.1.4-py3-none-any.whl (28 kB)
+Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Using cached urllib3-2.7.0-py3-none-any.whl (131 kB)
+Using cached websockets-16.1.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (186 kB)
+Using cached edge_tts-7.2.8-py3-none-any.whl (31 kB)
+Using cached aiohttp-3.14.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (1.8 MB)
+Using cached multidict-6.7.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (246 kB)
+Using cached tabulate-0.10.0-py3-none-any.whl (39 kB)
+Using cached yarl-1.24.5-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (111 kB)
+Using cached pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (6.9 MB)
+Using cached ddgs-9.16.0-py3-none-any.whl (47 kB)
+Using cached aiohappyeyeballs-2.7.1-py3-none-any.whl (15 kB)
+Using cached aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+Using cached annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Using cached attrs-26.1.0-py3-none-any.whl (67 kB)
+Using cached certifi-2026.7.22-py3-none-any.whl (136 kB)
+Using cached click-8.5.0-py3-none-any.whl (125 kB)
+Using cached cryptography-50.0.1-cp311-abi3-manylinux_2_34_x86_64.whl (4.7 MB)
+Using cached cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (217 kB)
+Using cached frozenlist-1.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (231 kB)
+Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+Downloading lxml-6.1.3-cp311-cp311-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl (5.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.2/5.2 MB 24.2 MB/s  0:00:00
+Using cached primp-2.0.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (5.9 MB)
+Using cached propcache-0.5.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (58 kB)
+Using cached pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+Using cached pyasn1-0.6.4-py3-none-any.whl (84 kB)
+Using cached typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+Using cached pycparser-3.0-py3-none-any.whl (48 kB)
+Using cached sniffio-1.3.1-py3-none-any.whl (10 kB)
+Installing collected packages: websockets, urllib3, typing-extensions, tenacity, tabulate, sniffio, pycparser, pyasn1, propcache, primp, Pillow, multidict, lxml, idna, h11, frozenlist, distro, click, charset_normalizer, certifi, attrs, annotated-types, aiohappyeyeballs, yarl, typing-inspection, requests, pydantic-core, pyasn1-modules, httpcore, ddgs, cffi, anyio, aiosignal, pydantic, httpx, cryptography, aiohttp, google-auth, edge-tts, google-genai
+
+Successfully installed Pillow-12.3.0 aiohappyeyeballs-2.7.1 aiohttp-3.14.3 aiosignal-1.4.0 annotated-types-0.8.0 anyio-4.15.0 attrs-26.1.0 certifi-2026.7.22 cffi-2.1.1 charset_normalizer-3.5.1 click-8.5.0 cryptography-50.0.1 ddgs-9.16.0 distro-1.9.0 edge-tts-7.2.8 frozenlist-1.8.0 google-auth-2.57.1 google-genai-2.22.0 h11-0.16.0 httpcore-1.0.9 httpx-0.28.1 idna-3.19 lxml-6.1.3 multidict-6.7.1 primp-2.0.0 propcache-0.5.2 pyasn1-0.6.4 pyasn1-modules-0.4.2 pycparser-3.0 pydantic-2.13.5 pydantic-core-2.46.5 requests-2.34.2 sniffio-1.3.1 tabulate-0.10.0 tenacity-9.1.4 typing-extensions-4.16.0 typing-inspection-0.4.4 urllib3-2.7.0 websockets-16.1.1 yarl-1.24.5
+##[group]Run if git fetch --depth=1 origin factory-state 2>/dev/null; then
+[36;1mif git fetch --depth=1 origin factory-state 2>/dev/null; then[0m
+[36;1m  git show FETCH_HEAD:made.json > made.json 2>/dev/null \[0m
+[36;1m    && echo "restored scout memory:" \[0m
+[36;1m    || echo "factory-state exists but carries no made.json yet"[0m
+[36;1m  python -c "[0m
+[36;1mimport json[0m
+[36;1mtry:[0m
+[36;1m    s = json.load(open('made.json'))[0m
+[36;1m    print(f\"  made {len(s.get('made', []))}, \"[0m
+[36;1m          f\"shortlisted {len(s.get('backlog', []))}, \"[0m
+[36;1m          f\"rejected {len(s.get('rejected', []))}\")[0m
+[36;1mexcept Exception as e:[0m
+[36;1m    print('  (unreadable, starting fresh:', e, ')')[0m
+[36;1m" || rm -f made.json[0m
+[36;1melse[0m
+[36;1m  echo "no factory-state branch yet - first run, starting fresh"[0m
+[36;1mfi[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+##[endgroup]
+no factory-state branch yet - first run, starting fresh
+##[group]Run python brain.py
+[36;1mpython brain.py[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+  GEMINI_API_KEY: ***
+  GEMINI_MODEL: gemini-3.6-flash
+  TOPIC: the eight blood types explained
+  TARGET_MINUTES: 8
+  STRICT_FACTS: 1
+  MAX_PASSES: 3
+  TAVILY_API_KEY: 
+  YOUTUBE_API_KEY: ***
+  CEREBRAS_API_KEY: 
+  GROQ_API_KEY: ***
+  OPENROUTER_API_KEY: 
+  CEREBRAS_MODEL: 
+  GROQ_MODEL: 
+  OPENROUTER_MODEL: 
+##[endgroup]
+[0/6] topic given: the eight blood types explained
+      membership: 8 source(s), 27,496 chars gathered, 14,006 shown (~1,750 per source)
+Direct use of automatic function calling (AFC) in Models.generate_content is not recommended. Instead, we recommend to use AFC in Chat.send_message. Similarly, direct use of AFC in Models.generate_content_stream is not recommended. Instead, we recommend to use AFC in Chat.send_message_stream.
+   ! gemini attempt 1/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is busy, not broken; waiting 20s and trying again
+   ! gemini attempt 2/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is rate/quota limited, switching provider and resting it for 420s
+   .. gemini exhausted, trying next provider
+      extraction: showed 8 source(s), model returned 8 entr(ies), 4 named any member
+         source 2: A+, A-, B+, B-, O+, O-
+         source 3: A+, A-, B+, B-, AB+, AB-
+         source 6: A+, A-, B+, B-, AB+, AB-
+  [BUILD] the eight blood types explained  (agreement 1.0, 8 members, 8 sources)
+        - 8 members agreed across 4 independent sources at 1.0 agreement
+        - suggested length ~10 min, set by the material rather than by a target
+      members  : A+, B-, AB+, A-, B+, O+, O-, AB-
+      agreement: 1.0
+================================================================
+  MMM BRAIN | gemini-3.6-flash | 8min | 11 scenes
+  topic      : the eight blood types explained
+  mode       : explainer   max passes: 3   strict_facts=True
+  verified   : 8 members from cross-source agreement
+================================================================
+[1/5] web research | mode=explainer
+   .. skipping gemini - out of quota earlier, cooling off
+        ? Eight blood types explained differences characteristics
+        ? ABO blood group system types A B AB O traits
+        ? How to identify each of the eight blood types
+        ? Blood type compatibility chart eight groups
+        ? Medical significance of the eight human blood types
+      14 sources, 50,852 chars of source text
+        - Blood type - Wikipedia
+        - Blood Types: Differences, Rarity and Compatibility
+        - Blood Types Explained - A, B, AB and O | Red Cross Blood Services
+        - Blood types: What are they and what do they mean?
+        - ABO blood group system - Wikipedia
+        - The ABO blood group - Blood Groups and Red Cell Antigens - NCBI Booksh
+   .. skipping gemini - out of quota earlier, cooling off
+   .. groq caps requests at ~16,000 chars; trimmed the prompt from 52,120 to 15,592
+      brief: 625 words
+[2/5] drafting 11 scenes (~119 words each)
+   .. skipping gemini - out of quota earlier, cooling off
+   ! groq attempt 1/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 12.2s; waiting 13.2s and trying again (13s of 120s used)
+      !! the draft reply left out required field(s): beat on 11 scene(s)
+      725 words / 11 scenes
+      answering: What are the eight blood types, how are they defined, and why do they matter for
+      .. saved a usable script.json (first draft)
+
+--- pass 1/3 ---
+      facts   : 0 unresolved
+      craft   : 4 below bar
+      metrics : density=15.03 sd=5.65 short=0.068 tells=0 hedge=0.0 causal=1.79
+        - sent_len_sd=5.65 (need >= 7.0) - sentence-length variation - flat rhythm kills retention
+        - short_ratio=0.068 (need >= 0.1) - share of punchy sentences (<=7 words)
+        - define_rate=0.41 (need >= 1.2) - definitional phrasing per 100 words - a taxonomy must define
+        - example_rate=0.0 (need >= 0.5) - concrete examples per 100 words
+      verifying against the web...
+   .. skipping gemini - out of quota earlier, cooling off
+   ! groq attempt 1/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 7.4s; waiting 8.4s and trying again (8s of 120s used)
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+   .. skipping gemini - out of quota earlier, cooling off
+   .. groq caps requests at ~16,000 chars; trimmed the prompt from 38,558 to 15,660
+   ! groq attempt 1/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 39.3s; waiting 30.0s and trying again (30s of 120s used)
+   ! groq attempt 2/3: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 9.1s; waiting 10.1s and trying again (40s of 120s used)
+   .. skipping gemini - out of quota earlier, cooling off
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+   .. skipping gemini - out of quota earlier, cooling off
+   .. groq caps requests at ~16,000 chars; trimmed the prompt from 38,207 to 15,650
+   .. skipping gemini - out of quota earlier, cooling off
+   ! groq attempt 1/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 4.7s; waiting 5.7s and trying again (6s of 120s used)
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+   .. skipping gemini - out of quota earlier, cooling off
+   .. groq caps requests at ~16,000 chars; trimmed the prompt from 37,828 to 15,562
+   ! groq attempt 1/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 15.5s; waiting 16.5s and trying again (16s of 120s used)
+      30 sources, 26 problem claim(s)
+        ! SCENE 1 | there are not twelve or sixteen common blood categories as many think | UNSUPPORTED | source only st
+        ! SCENE 1 | the universal donor is O‑ and many mistake it for O+ | UNSUPPORTED | source identifies O‑ as univers
+        ! SCENE 3 | A+ can receive red cells from A+, A‑, O+ and O‑ donors | UNSUPPORTED | source does not provide this 
+        ! SCENE 3 | A+ can give red cells only to A+ or AB+ recipients | UNSUPPORTED | source does not provide this spec
+        ! SCENE 4 | A‑ can donate red cells to any A‑ or AB‑ recipient and also to A+ and AB+ (Rh‑ positive types sharin
+        ! SCENE 4 | A‑ cannot receive Rh‑ positive blood without risk of immune reaction | UNSUPPORTED | source does not
+        ! SCENE 5 | B+ individuals have B antigen and RhD protein | UNSUPPORTED | Source material does not address ABO o
+        ! SCENE 5 | B+ plasma naturally contains anti‑A antibodies | UNSUPPORTED | No information on plasma antibody pro
+      .. saved a usable script.json (after pass 1)
+      revising...
+   .. skipping gemini - out of quota earlier, cooling off
+   .. groq caps requests at ~16,000 chars; trimmed the prompt from 24,148 to 15,809
+   ! groq attempt 1/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 51.5s; waiting 30.0s and trying again (30s of 120s used)
+   ! groq attempt 2/3: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 21.3s; waiting 22.3s and trying again (52s of 120s used)
+   ! groq attempt 3/4: Extra data: line 1 column 1147 (char 1146)
+   ! groq attempt 4/4: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 13.1s; waiting 14.1s and trying again (66s of 120s used)
+   ! groq attempt 5/5: reply parsed but is missing required key(s): title, description, question, tags, thumb_headline, thumb_accent
+   .. groq exhausted, trying next provider
+   .. every provider failed this minute - waiting 45s and trying the whole chain once more
+   .. skipping gemini - out of quota earlier, cooling off
+   .. groq caps requests at ~16,000 chars; trimmed the prompt from 24,148 to 15,809
+   ! groq attempt 1/2: reply parsed but is missing required key(s): title, description, question, tags, thumb_headline, thumb_accent
+   ! groq attempt 2/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 12.2s; waiting 13.2s and trying again (13s of 120s used)
+   ! groq attempt 3/3: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 18.4s; waiting 19.4s and trying again (33s of 120s used)
+   ! groq attempt 4/4: reply parsed but is missing required key(s): title, description, question, tags, thumb_headline, thumb_accent
+   .. groq exhausted, trying next provider
+      !! revision failed (All LLM providers failed twice. Last error: All LLM providers failed. Last error: reply parsed but is missing )
+
+14 structural problem(s)
+   - scene 1: 73 words (need >= 104)
+   - scene 1: key_term 'ANSWER' is never spoken in the narration - it must be a literal phrase from it
+   - scene 2: 79 words (need >= 104)
+   - scene 3: 66 words (need >= 104)
+   - scene 4: 69 words (need >= 104)
+   - scene 5: 65 words (need >= 104)
+   - scene 6: 65 words (need >= 104)
+   - scene 7: 64 words (need >= 104)
+[5/5] repairing structure
+   .. skipping gemini - out of quota earlier, cooling off
+   .. groq caps requests at ~16,000 chars; trimmed the prompt from 17,673 to 15,816
+   ! groq attempt 1/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> too big for groq: re-sending at 7,908 chars instead of 15,816
+   ! groq attempt 2/2: reply parsed but is missing required key(s): title, description, question, tags, thumb_headline, thumb_accent
+   .. groq exhausted, trying next provider
+   .. every provider failed this minute - waiting 45s and trying the whole chain once more
+   ! gemini attempt 1/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is busy, not broken; waiting 20s and trying again
+   ! gemini attempt 2/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is rate/quota limited, switching provider and resting it for 420s
+   .. gemini exhausted, trying next provider
+   .. groq caps requests at ~16,000 chars; trimmed the prompt from 17,673 to 15,816
+     -> groq tokens: 3946 in, 3072 out (105 of them reasoning)
+     -> groq stopped early: finish_reason=length
+   ! groq attempt 1/2: truncated reply from groq (openai/gpt-oss-120b): finish_reason=length after 12,660 chars - the answer did not fit
+     -> too big for groq: re-sending at 7,908 chars instead of 15,816
+   ! groq attempt 2/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 3.5s; waiting 4.5s and trying again (5s of 120s used)
+   ! groq attempt 3/3: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 16.5s; waiting 17.5s and trying again (22s of 120s used)
+   ! groq attempt 4/4: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq is busy, not broken; waiting 20s and trying again
+   .. groq exhausted, trying next provider
+   !! shape repair failed (All LLM providers failed twice. Last error: All LLM providers failed. Last error: HTTP 429 from groq (openai/g)
+   .. skipping gemini - out of quota earlier, cooling off
+
+[6/6] red team, attempt 1/3
+      2 HARD, 5 soft
+        [hard] not-a-member scene 11: scene 11 explains 'EDGE', which is NOT in the verified list for this topic (A+, A-, AB+, AB-, B+, B-, O+, O-). Every sentence about it may be true and
+        [hard] too-complex: reading grade 9.8 (target <= 9.5). The narration is harder to follow than it needs to be - shorter sentences and plainer words.
+        [soft] repetition: 3 sentences start with 'their plasma contains...'
+        [soft] hard-to-follow scene 4: "Because they lack RhD, A‑ can donate red cells to any A‑ or " The sentence is convoluted; simplify to: "A‑ can donate red cells to A‑, A+, AB‑, and AB+ recipients."
+        [soft] hard-to-follow scene 6: "As Rh‑ negative, B‑ can donate to any recipient lacking RhD " The phrasing is awkward; rewrite as: "B‑ can donate red cells to B‑ and AB‑ recipients."
+        [soft] vague scene 11: "This rare medical event demonstrates that blood type, though" The claim is vague about frequency and impact; provide specific data on how often bone‑marrow transplants change blood type and its clinical relevance
+        [soft] empty scene 1: "This sets the stage for a deeper look at how antigens and an" The sentence adds no factual content and can be removed without loss of information.
+      repairing 1 scene(s) (11) instead of all 11
+   .. skipping gemini - out of quota earlier, cooling off
+      applied 1 scene fix(es)
+   .. skipping gemini - out of quota earlier, cooling off
+   ! groq attempt 1/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq asked for 3.4s; waiting 4.4s and trying again (4s of 120s used)
+
+[6/6] red team, attempt 2/3
+      0 HARD, 6 soft
+        [soft] repetition: 3 sentences start with 'their plasma contains...'
+        [soft] hard-to-follow scene 4: "Because they lack RhD, A‑ can donate red cells to any A‑ or " The sentence is overly complex; split into two clearer statements: one about donating to A‑ and AB‑, and another about donating to A+ and AB+ due to s
+        [soft] vague scene 11: "The change is permanent because the body now produces blood " The statement oversimplifies; blood type can revert if recipient's own marrow recovers. Rephrase to note that the change persists as long as donor mar
+        [soft] empty scene 1: "By the end of this video you will know each of those eight:" This promotional line adds no factual content and can be removed.
+        [soft] hard-to-follow scene 3: "In plasma, A+ individuals naturally produce anti‑B antibodie" Simplify to: "A+ plasma contains anti‑B antibodies that react against B antigens."
+        [soft] unsupported scene 10: "Their plasma, however, contains both anti‑A and anti‑B antib" Sources discuss plasma compatibility but do not explicitly state plasma from O‑ is limited to O‑ recipients; clarify that O‑ plasma is generally not u
+      PASSED - no hard findings
+
+   !! the red-team repair introduced 1 structural problem(s):
+      - total 769 words, target ~1304 (~4.7 min vs 8 asked for)
+      (the engine degrades safely on these - a term with no match simply gets no card - but the repair caused them)
+
+================================================================
+script.json written
+   title    : The Eight Human Blood Types Explained
+   answers  : What are the eight blood types, how are they defined, and why do they 
+   scenes   : 11  words: 769 (~4.7 min)
+   sources  : 14
+   density  : 14.3 anchors/100w | rhythm sd 5.55 | tells 0
+   unresolved: 3 craft, 0 CONTRADICTED, 26 unconfirmed
+
+  CAVEATS (not blockers - you decide):
+    - 4 of 13 model calls had their prompt trimmed to fit a provider's limit - that much of the research never reached the writer
+    - written partly by the fallback writer (groq: 13 call(s)) - less grounded than a full Gemini run
+================================================================
+!! NOT READY TO PUBLISH
+   - 26 claim(s) not found in any source we fetched - not proof they are wrong, but too much of the script is unverified to publish
+   The video will still build so it can be looked at.
+================================================================
+    1. [?         ]   73w  11 shots
+    2. [?         ]   79w  11 shots
+    3. [?         ]   66w  11 shots
+    4. [?         ]   69w  11 shots
+    5. [?         ]   65w  11 shots
+    6. [?         ]   65w  11 shots
+    7. [?         ]   64w  11 shots
+    8. [?         ]   62w  11 shots
+    9. [?         ]   57w  11 shots
+   10. [?         ]   62w  11 shots
+   11. [?         ]  107w  11 shots
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+##[group]Run actions/upload-artifact@v4
+with:
+  name: script-json
+  path: script.json
+made.json
+
+  if-no-files-found: warn
+  retention-days: 30
+  compression-level: 6
+  overwrite: false
+  include-hidden-files: false
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+##[endgroup]
+(node:3955) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Multiple search paths detected. Calculating the least common ancestor of all paths
+The least common ancestor is /home/runner/work/MMM-MVP/MMM-MVP. This will be the root directory of the artifact
+With the provided path, there will be 1 file uploaded
+Artifact name is valid!
+Root directory input is valid!
+Beginning upload of artifact content to blob storage
+(node:3955) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+Uploaded bytes 6127
+Finished uploading artifact content to blob storage!
+SHA256 digest of uploaded artifact zip is c2cddecd8d7089604543afd24f15d6db0687a9efa52888a210682edcd8efeaab
+Finalizing artifact upload
+Artifact script-json.zip successfully finalized. Artifact ID 9939342032
+Artifact script-json has been successfully uploaded! Final size is 6127 bytes. Artifact ID is 9939342032
+Artifact download URL: https://github.com/alexxagemimi-cpu/MMM-MVP/actions/runs/33878903477/artifacts/9939342032
+##[group]Run python -c "import thumbnail; thumbnail.from_script('script.json', 'thumbnail.png')"
+[36;1mpython -c "import thumbnail; thumbnail.from_script('script.json', 'thumbnail.png')"[0m
+[36;1mpython -c "[0m
+[36;1mfrom PIL import Image[0m
+[36;1mim = Image.open('thumbnail.png')[0m
+[36;1mprint(f'thumbnail.png {im.size[0]}x{im.size[1]}')[0m
+[36;1massert im.size == (1280, 720), im.size[0m
+[36;1m"[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+  PIXABAY_API_KEY: ***
+##[endgroup]
+   thumbnail: 11 tiles, 7 with a picture
+thumbnail.png 1280x720
+##[group]Run python engine.py
+[36;1mpython engine.py[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+  VOICE: en-US-GuyNeural
+  RESOLUTION: 540
+  PIXABAY_API_KEY: ***
+  STYLE: explainer
+##[endgroup]
+==============================================================
+  MMM ENGINE | 11 scenes | 960x540 @ 25fps | voice=en-US-GuyNeural
+==============================================================
+
+[1/3] voice x11 ...
+      voice 2/11 ok
+      voice 1/11 ok
+      voice 3/11 ok
+      voice 4/11 ok
+      voice 5/11 ok
+      voice 6/11 ok
+      voice 8/11 ok
+      voice 9/11 ok
+      voice 7/11 ok
+      voice 10/11 ok
+      voice 11/11 ok
+      audio 5.0 min | boundaries from service: 11/11
+
+[2/3] visuals x60 (11 scenes) | source: Pixabay (real footage) + AI fallback ...
+      subject anchor: blood, human - a clip has to be about this, not just match the query
+      shot scene 1 #2 [LIST] | A-, B+, B-, AB+, AB-, O+
+        pixabay video 'close up of red blood cells un' <- medicine, blood cells, health, blood donation, artery
+        pixabay video 'hand holding a blood donation ' <- blood vessels, human body, vein, vascular, artery, anatomy, anatomical, healthcare, cardiovascular
+        pixabay video 'hospital blood bank shelves' <- red blood cells, rbc, stream, anemia, 3d, educational, red, cell, health, medical, medicine, research, biology
+      shot scene 1 #1 [video] | close up of red blood cells under microscope
+        pixabay video 'digital display of blood type ' <- dialysis, machine, blood wash, hospital
+      shot scene 1 #3 [video] | digital display of blood type chart
+      shot scene 1 #5 [video] | hospital blood bank shelves
+      shot scene 1 #4 [video] | hand holding a blood donation bag
+      shot scene 2 #2 [LIST] | B, Both (AB), None (O)
+      !! 20 clips for 'split screen showing ABO and Rh sy', none relevant - skipping rather than showing the wrong thing
+        pixabay video 'diagram of ABO antigens on red' <- red blood cells, erythrocyte, medical, health, cell, red, science, human, biology, scientific, micro, laborato
+        pixabay video 'scientist labeling blood tubes' <- bullfinch, blood fink, bird, songbird, finch, pyrrhula, nature, sparrow bird, animal
+        pixabay video 'animated graphic of blood type' <- red blood cells, biology, medical, science, veins, health
+      shot scene 2 #3 [CARD] | split screen showing ABO and Rh systems
+      shot scene 2 #1 [video] | diagram of ABO antigens on red cells
+      shot scene 2 #5 [video] | animated graphic of blood type combination
+      shot scene 2 #4 [video] | scientist labeling blood tubes
+      shot scene 3 #2 [LIST] | A‑, O+, O‑ donors
+      !! 20 clips for 'doctor checking patient wristband', none relevant - skipping rather than showing the wrong thing
+        pixabay video 'red cross blood donation sign' <- heart, donor, blood drive, a heart, donation, health
+        pixabay video 'close up of blood typing plate' <- medicine, blood flow, disease, health
+        pixabay photo 'doctor checking patient wristb' <- blood pressure monitor, health, heart rate, blood pressure, check, doctor, ill, heal, heartbeat, supply, nurse
+      shot scene 3 #1 [CARD] | blood sample labeled A+ on lab bench
+      shot scene 2 #6 [video] | close up of blood typing plate
+      shot scene 3 #4 [video] | red cross blood donation sign
+      shot scene 3 #3 [image] | doctor checking patient wristband
+        pixabay video 'blood bag labeled A- on freeze' <- blood pressure, doctor, health, hospital, heart, stethoscope, nurse, medical, investigation, disease, medicine
+      !! 20 clips for 'RhD negative test strip', none relevant - skipping rather than showing the wrong thing
+      !! 19 clips for 'doctor reviewing Rh status', none relevant - skipping rather than showing the wrong thing
+      shot scene 4 #1 [video] | blood bag labeled A- on freezer shelf
+      shot scene 4 #2 [CARD] | RhD negative test strip
+      shot scene 4 #3 [CARD] | doctor reviewing Rh status
+      shot scene 3 #5 [CARD] | hand holding A+ typed blood bag
+      shot scene 3 #6 [CARD] | patient chart with A+ notation
+      shot scene 5 #2 [LIST] | B‑, O+, O‑ donors
+      !! 20 clips for 'laboratory plate with A- reactions', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'hand holding A- sample tube', none relevant - skipping rather than showing the wrong thing
+      shot scene 5 #3 [CARD] | doctor discussing B+ results with patient
+      shot scene 5 #1 [CARD] | blood tube marked B+ on lab counter
+      shot scene 4 #5 [CARD] | laboratory plate with A- reactions
+        pixabay photo 'hand holding A- sample tube' <- blood test, blood sample, medical technology, medical technologist, surgical gloves, face mask, sample, hospit
+      shot scene 4 #4 [image] | hand holding A- sample tube
+      !! 20 clips for 'RhD negative indicator strip', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'technician labeling B- sample', none relevant - skipping rather than showing the wrong thing
+      !! 13 clips for 'blood bag labeled B- in refrigerat', none relevant - skipping rather than showing the wrong thing
+      shot scene 5 #4 [CARD] | hand placing B+ bag into cooler
+      shot scene 5 #5 [CARD] | hospital signage for B+ blood
+      shot scene 6 #3 [CARD] | technician labeling B- sample
+        pixabay photo 'blood bag labeled B- in refrig' <- earth, blood drive, blood donation, blood drive, blood donation, blood donation, blood donation, blood donatio
+      shot scene 6 #2 [CARD] | RhD negative indicator strip
+      shot scene 6 #1 [image] | blood bag labeled B- in refrigerated unit
+        pixabay video 'dual antigen illustration on r' <- human cell, cell membrane, nucleus, nucleolus, nuclear membrane, cytoplasm, endoplasmic reticulum, golgi appar
+      !! 20 clips for 'doctor explaining universal recipi', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'close up of B antigen on cell', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'doctor consulting B- patient chart', none relevant - skipping rather than showing the wrong thing
+      shot scene 7 #2 [video] | dual antigen illustration on red cell
+      shot scene 7 #1 [CARD] | blood bag labeled AB+ on shelf
+      shot scene 6 #4 [CARD] | close up of B antigen on cell
+      shot scene 7 #3 [CARD] | doctor explaining universal recipient to pat
+      shot scene 6 #5 [CARD] | doctor consulting B- patient chart
+      shot scene 8 #2 [LIST] | Plasma, Like AB+, Contains no anti‑A, Anti‑B
+      !! 13 clips for 'blood bag marked AB- in freezer', none relevant - skipping rather than showing the wrong thing
+      shot scene 7 #4 [CARD] | hand holding AB+ plasma unit
+        pixabay video 'doctor discussing plasma donat' <- donor, blood drive, donation, health
+      shot scene 7 #5 [CARD] | hospital signage for AB+ donors
+        pixabay photo 'blood bag marked AB- in freeze' <- blood pressure, stethoscope, medical, health, blood pressure monitor, blood pressure, stethoscope, medical, me
+      shot scene 8 #3 [video] | doctor discussing plasma donation with AB- d
+      shot scene 8 #1 [image] | blood bag marked AB- in freezer
+      !! 20 clips for 'laboratory plate showing AB- react', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'hand holding AB- plasma unit', none relevant - skipping rather than showing the wrong thing
+      shot scene 9 #1 [CARD] | blood bag labeled O+ on shelf
+      shot scene 9 #3 [CARD] | doctor reviewing O+ donor eligibility
+      shot scene 8 #5 [CARD] | laboratory plate showing AB- reactions
+      shot scene 9 #2 [CARD] | microscope view of O+ cells without A/B anti
+      shot scene 8 #4 [CARD] | hand holding AB- plasma unit
+      shot scene 10 #2 [LIST] | Plasma, However, Contains both anti‑A, Anti‑
+      !! 19 clips for 'doctor checking O- donor status', none relevant - skipping rather than showing the wrong thing
+      shot scene 9 #4 [CARD] | hand holding O+ blood unit
+      !! 13 clips for 'blood bag labeled O- in refrigerat', none relevant - skipping rather than showing the wrong thing
+      shot scene 9 #5 [CARD] | hospital signage for O+ donations
+        pixabay photo 'doctor checking O- donor statu' <- blood bags, red, red blood cells, blood donors, blood bags, blood bags, blood bags, blood bags, blood bags
+        pixabay photo 'blood bag labeled O- in refrig' <- blood bags, red, red blood cells, blood donors
+      shot scene 10 #3 [image] | doctor checking O- donor status
+      shot scene 10 #1 [image] | blood bag labeled O- in refrigerated unit
+      !! 20 clips for 'hand placing O- unit into transpor', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'close up of stem cell infusion bag', none relevant - skipping rather than showing the wrong thing
+      !! 15 clips for 'hospital emergency room blood frid', none relevant - skipping rather than showing the wrong thing
+      !! 13 clips for 'doctor reviewing post‑transplant b', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'operating room with bone marrow tr', none relevant - skipping rather than showing the wrong thing
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 11 #2 [CARD] | close up of stem cell infusion bag
+      shot scene 10 #4 [CARD] | hand placing O- unit into transport cooler
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 10 #5 [CARD] | hospital emergency room blood fridge
+      shot scene 11 #3 [CARD] | doctor reviewing post‑transplant blood test
+      shot scene 11 #1 [CARD] | operating room with bone marrow transplant t
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      shot scene 11 #4 [CARD] | laboratory analysis of new blood type
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 11 #6 [CARD] | microscope slide showing donor antigens
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      shot scene 11 #7 [CARD] | nurse monitoring infusion line
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 11 #8 [CARD] | hospital signage for transplant unit
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 11 #5 [CARD] | patient recovering in hospital bed
+      no list beats (CATEGORY/STEP) in this script - footage only, no checklist
+
+[3/3] render x11 scenes (60 shots) ...
+        shot 0: 5.28s 1331506B
+        shot 1: 5.28s 50062B
+        shot 2: 5.28s 1448917B
+        shot 3: 5.28s 2027660B
+        shot 4: 5.40s 1305726B
+        audio : 26.40s 158400B | target 26.52s
+        (no term-card anchor for 'ANSWER')
+      scene 1/11 [?] 5 shot(s)  26.5s  (+42s elapsed)
+        shot 0: 5.16s 1490387B
+        shot 1: 5.16s 54781B
+        shot 2: 5.16s 54781B
+        shot 3: 5.16s 1630930B
+        shot 4: 5.16s 1747559B
+        shot 5: 5.20s 2603378B
+        audio : 30.86s 185184B | target 31.00s
+      scene 2/11 [?] 6 shot(s)  31.0s  (+56s elapsed)
+        shot 0: 4.64s 38141B
+        shot 1: 4.64s 38141B
+        shot 2: 4.64s 2906641B
+        shot 3: 4.64s 84846B
+        shot 4: 4.64s 38141B
+        shot 5: 4.72s 38309B
+        audio : 27.79s 166752B | target 27.92s
+        (term card for 'A+' skipped - the drawn card already says it)
+      scene 3/11 [?] 6 shot(s)  27.9s  (+73s elapsed)
+        shot 0: 5.16s 1443979B
+        shot 1: 5.16s 21968B
+        shot 2: 5.16s 21968B
+        shot 3: 5.16s 913478B
+        shot 4: 5.28s 22112B
+        audio : 25.80s 154800B | target 25.92s
+      scene 4/11 [?] 5 shot(s)  25.9s  (+77s elapsed)
+        shot 0: 5.08s 39870B
+        shot 1: 5.08s 39870B
+        shot 2: 5.08s 39870B
+        shot 3: 5.08s 39870B
+        shot 4: 5.12s 39995B
+        audio : 25.30s 151776B | target 25.44s
+        (term card for 'B+' skipped - the drawn card already says it)
+      scene 5/11 [?] 5 shot(s)  25.4s  (+96s elapsed)
+        shot 0: 5.08s 1114431B
+        shot 1: 5.08s 24048B
+        shot 2: 5.08s 24048B
+        shot 3: 5.08s 24048B
+        shot 4: 5.24s 24248B
+        audio : 25.44s 152640B | target 25.56s
+      scene 6/11 [?] 5 shot(s)  25.6s  (+100s elapsed)
+        shot 0: 5.12s 26127B
+        shot 1: 5.12s 1240618B
+        shot 2: 5.12s 26127B
+        shot 3: 5.12s 26127B
+        shot 4: 5.20s 26238B
+        audio : 25.56s 153360B | target 25.68s
+        (term card for 'AB+' skipped - the drawn card already says it)
+      scene 7/11 [?] 5 shot(s)  25.7s  (+103s elapsed)
+        shot 0: 4.96s 1176566B
+        shot 1: 4.96s 80999B
+        shot 2: 4.96s 70743B
+        shot 3: 4.96s 80999B
+        shot 4: 5.08s 80083B
+        audio : 24.77s 148608B | target 24.92s
+      scene 8/11 [?] 5 shot(s)  24.9s  (+117s elapsed)
+        shot 0: 4.72s 25986B
+        shot 1: 4.72s 25986B
+        shot 2: 4.72s 25986B
+        shot 3: 4.72s 25986B
+        shot 4: 4.80s 26089B
+        audio : 23.54s 141264B | target 23.68s
+        (term card for 'O+' skipped - the drawn card already says it)
+      scene 9/11 [?] 5 shot(s)  23.7s  (+120s elapsed)
+        shot 0: 4.88s 1459318B
+        shot 1: 4.88s 78359B
+        shot 2: 4.88s 2794947B
+        shot 3: 4.88s 78359B
+        shot 4: 4.92s 78643B
+        audio : 24.31s 145872B | target 24.44s
+      scene 10/11 [?] 5 shot(s)  24.4s  (+134s elapsed)
+        shot 0: 5.12s 24118B
+        shot 1: 5.12s 24118B
+        shot 2: 5.12s 24118B
+        shot 3: 5.12s 24118B
+        shot 4: 5.12s 24118B
+        shot 5: 5.12s 24118B
+        shot 6: 5.12s 24118B
+        shot 7: 5.16s 36252B
+        audio : 40.85s 245088B | target 41.00s
+        (term card for 'A+' skipped - the drawn card already says it)
+      scene 11/11 [?] 8 shot(s)  41.0s  (+139s elapsed)
+
+> assembling 11 scenes (5.0 min)...
+   ✓ 153 subtitle cues -> subtitles.srt
+   ✓ 153 karaoke caption cues, 5 term card(s) -> captions.ass
+> music: synthesising ambient bed
+> sound: 16 effects across 5.0 min
+> final composite...
+
+==============================================================
+DONE  final_video.mp4
+   duration : 5.0 min
+   size     : 21.6 MB  (4.3 MB/min -> a 16 min cut would be ~69 MB)
+   subtitles: 153 cues
+   visuals  : 12/60 real Pixabay footage
+   drawn    : 42/60 shots drawn from the script (no relevant footage existed)
+   build    : 3.4 min
+==============================================================
+##[group]Run python contact.py final_video.mp4 contact_sheet.jpg \
+[36;1mpython contact.py final_video.mp4 contact_sheet.jpg \[0m
+[36;1m  --b64[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+##[endgroup]
+
+contact sheet | final_video.mp4 | 302.2s | 72 KB
+ #      at  bright header   ink   note
+----------------------------------------------------------
+ 1   12.6s   146.3  160.4  0.21   
+ 2   37.8s   242.3  244.2  0.01   
+ 3   63.0s   243.3  246.6  0.01   
+ 4   88.1s   135.1  160.0  0.30   
+ 5  113.3s   242.7  246.5  0.01   
+ 6  138.5s    92.3   51.1  0.46   
+ 7  163.7s   242.9  246.0  0.01   
+ 8  188.9s   148.3  130.7  0.37   
+ 9  214.0s   244.0  246.5  0.01   
+10  239.2s   111.8   92.9  0.42   
+11  264.4s   243.7  246.6  0.01   
+12  289.6s   243.0  246.6  0.01   
+
+no motionless stretch of 3.5s or more.
+
+[sheet removed]
+##[group]Run python verify.py final_video.mp4 script.json
+[36;1mpython verify.py final_video.mp4 script.json[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+  GEMINI_API_KEY: ***
+  VERIFY_MODEL: gemini-3.6-flash
+##[endgroup]
+Direct use of automatic function calling (AFC) in Models.generate_content is not recommended. Instead, we recommend to use AFC in Chat.send_message. Similarly, direct use of AFC in Models.generate_content_stream is not recommended. Instead, we recommend to use AFC in Chat.send_message_stream.
+COULD NOT WATCH (not a verdict on the video): 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+##[group]Run df -h / | tail -1
+[36;1mdf -h / | tail -1[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+##[endgroup]
+/dev/root       145G   59G   86G  41% /
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+##[group]Run actions/upload-artifact@v4
+with:
+  name: finished-720p-video
+  path: final_video.mp4
+thumbnail.png
+contact_sheet.jpg
+verify.json
+subtitles.srt
+captions.ass
+
+  if-no-files-found: warn
+  retention-days: 3
+  compression-level: 6
+  overwrite: false
+  include-hidden-files: false
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+##[endgroup]
+(node:7461) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Multiple search paths detected. Calculating the least common ancestor of all paths
+The least common ancestor is /home/runner/work/MMM-MVP/MMM-MVP. This will be the root directory of the artifact
+With the provided path, there will be 5 files uploaded
+Artifact name is valid!
+Root directory input is valid!
+Beginning upload of artifact content to blob storage
+(node:7461) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+Uploaded bytes 8388608
+Uploaded bytes 16777216
+Uploaded bytes 22460578
+Finished uploading artifact content to blob storage!
+SHA256 digest of uploaded artifact zip is 8900773e975c93458c1d0c40605445ca56a2bcdad49d7eae8a6d2ce2501e2c82
+Finalizing artifact upload
+Artifact finished-720p-video.zip successfully finalized. Artifact ID 9939472887
+Artifact finished-720p-video has been successfully uploaded! Final size is 22460578 bytes. Artifact ID is 9939472887
+Artifact download URL: https://github.com/alexxagemimi-cpu/MMM-MVP/actions/runs/33878903477/artifacts/9939472887
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+Post job cleanup.
+Cache hit occurred on the primary key setup-python-Linux-x64-24.04-Ubuntu-python-3.11.16-pip-e5ba78aa43bbbbdf9b6ef16636129448b8ac2abc09ada2a164475212ef6ee421, not saving cache.
+(node:7474) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+Post job cleanup.
+[command]/usr/bin/git version
+git version 2.55.0
+Temporarily overriding HOME='/home/runner/work/_temp/bd1bbcb5-1f1b-4bc6-baf4-0423aea2fbf7' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/MMM-MVP/MMM-MVP
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+http.https://github.com/.extraheader
+[command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Cleaning up orphan processes
+##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

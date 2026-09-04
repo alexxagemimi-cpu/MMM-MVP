@@ -597,6 +597,54 @@ def test_truncated_and_wrong_shape():
     print(f"  {'ok  ' if ok else 'FAIL'}  a shape that never arrives says so "
           f"-- {why}")
     bad += not ok
+
+    # RUN 55: THE CHECK ONLY LOOKED AT THE TOP LEVEL.
+    #
+    # That draft had `title`, `scenes` and every other top-level key, and not
+    # one of its eleven scenes had a `beat`. It walked straight through, and
+    # the engine then reported "no list beats (CATEGORY/STEP) in this script -
+    # footage only, no checklist": the finished video had no checklist at all,
+    # because one field was missing from a nested object.
+    deep = {"type": "object",
+            "properties": {"scenes": {"type": "array", "items": {
+                "type": "object",
+                "properties": {"beat": {"type": "string"},
+                               "narration": {"type": "string"}},
+                "required": ["beat", "narration"]}}},
+            "required": ["scenes"]}
+    beatless = {"scenes": [{"narration": "one"}, {"narration": "two"}]}
+    whole = {"scenes": [{"beat": "ANSWER", "narration": "one"}]}
+    cases = [
+        ("a scene with no 'beat' is caught",
+         bool(B.missing_required(beatless, deep))),
+        ("it says how many scenes are affected",
+         any("2 item" in m for m in B.missing_required(beatless, deep))),
+        ("a complete script passes", not B.missing_required(whole, deep)),
+        ("a missing top-level key is still caught",
+         bool(B.missing_required({}, deep))),
+        ("scenes of the wrong type do not explode",
+         isinstance(B.missing_required({"scenes": "nope"}, deep), list)),
+    ]
+    for what, ok in cases:
+        print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+        bad += not ok
+
+    # END TO END: a beatless draft is retried, not accepted.
+    sent, restore = scripted_provider([
+        {"content": json.dumps(beatless)}, {"content": json.dumps(whole)}])
+    try:
+        B.PROVIDER_COOLDOWN.clear()
+        out = B._call_sweep("Reply with json.", deep,
+                            provs=[("groq", ("https://x/v1", "k", "m"))],
+                            retries=2)
+        ok = out == whole
+    except Exception:
+        ok = False
+    finally:
+        restore()
+    print(f"  {'ok  ' if ok else 'FAIL'}  a beatless draft is retried, "
+          f"not accepted (run 55)")
+    bad += not ok
     return bad
 
 

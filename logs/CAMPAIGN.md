@@ -519,3 +519,83 @@ error.
 
 Every one of these is the same sentence: **the provider told us something and
 the code was not reading it.** Not one has been a bug in the video pipeline.
+
+---
+
+## Run 55 — "the eight blood types explained" — 87/100, the best yet
+
+**The scorer says 87/100, beating the project's previous best of 73. Upload:
+still NO — and the frames show the scorer is being generous.**
+
+| | |
+|---|---|
+| video | 5.0 min, 11 scenes, 769 words, 21.6 MB |
+| shots | 60 — 42 drawn, **0 blank, 0 withheld** |
+| truth gate | BUILD, **8 verified members at agreement 1.0** |
+| red team | 2 HARD → 1 scene fix → **0 HARD. PASSED.** |
+| fact check | **0 unresolved** |
+| publish gate | NOT READY — 26 unconfirmed claims, 0 contradicted |
+
+### Three firsts in one run
+
+1. **A perfect member list.** `agreement 1.0, 8 members` — A+, A−, AB+, AB−,
+   B+, B−, O+, O−, agreed by every source that named any. This is what the
+   truth gate was built for and it had never had a topic this clean.
+2. **The red team PASSED a script.** 2 hard findings, one repair, zero left.
+   It caught scene 11 explaining "EDGE" — a beat name, not a blood type —
+   under the not-a-member rule, and the repair removed it.
+3. **The stated-delay fix carried the run.** Fourteen separate
+   *"groq asked for 12.2s; waiting 13.2s"* lines. Every one of those would
+   have been run 54's death.
+
+### What the frames actually show — and why 87 is too kind
+
+Real photographs at last: a dialysis machine, a blood-pressure cuff, a blood
+draw, a stethoscope. The subject anchor let medical footage through, and it is
+relevant. Term cards carry the type and its definition over the photo.
+
+But:
+
+- **There is no checklist anywhere in the video**, and the log says why:
+  `no list beats (CATEGORY/STEP) in this script - footage only, no checklist`.
+- **The card headers do not match their own bullets.** Frame 03 is headed
+  `A+` with a bullet reading `A-`. Frame 05 is headed `B+` with bullets `B-`
+  and `O+`. Frame 02 is headed **`FRAME`** — a beat name printed as a title.
+- **Frames 11 and 12 are the same card**, 25 seconds apart: `A+` over
+  "Bone marrow transplants can change blood type" — a general fact, not an
+  A+ fact, shown twice.
+- **The script is 769 words against a 1304 target** — 59%, giving 5.0 minutes
+  where 8 were asked for.
+
+Honest read: content is the best this project has produced — nothing
+contradicted, nothing invented, a verified list. The *presentation* has four
+visible faults. Call it 65–70 by eye, not 87.
+
+### The cause of most of it: one missing field
+
+    !! the draft reply left out required field(s): beat on 11 scene(s)
+
+`number_scenes()` reported it — that reporting was added the day before and
+did its job. Nothing acted on it. The draft had every top-level key, so the
+`required` check added for run 53 passed it, because that check only read the
+**top level**. Eleven scenes with no `beat`, and `modes.py` cannot tell a
+CATEGORY from a CLOSE without one, so there were no list beats, no checklist,
+no section headers — and the cards fell back to whatever they could find.
+
+Fixed: `missing_required()` now walks nested objects and array items, so a
+scene missing `beat` is a failed attempt and the provider is asked again. It
+reports "beat (on 11 item(s))" rather than eleven separate complaints.
+
+Proved by reverting: with the array walk removed, all three new checks fail
+and run 55's hole is reopened exactly.
+
+### Still open after this run
+
+- **The script comes back short.** 769 of 1304 words, every scene under the
+  per-scene floor. The prompt states the range; the model does not obey it,
+  and nothing enforces it. This is the same class as the missing `beat` — a
+  constraint stated in words to a provider that only promises valid JSON.
+- **The duplicated card** (frames 11 and 12) and the **header/bullet
+  mismatch** are engine-side and not yet diagnosed. They may well be
+  downstream of the missing beats; the next run with beats present is the
+  test.
