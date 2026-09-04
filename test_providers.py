@@ -600,6 +600,111 @@ def test_truncated_and_wrong_shape():
     return bad
 
 
+def test_provider_stated_delay():
+    """
+    RUN 54 - the provider said what to do and the code did not listen.
+
+        HTTP 429 from groq: "Rate limit reached ... on tokens per minute
+        (TPM): Limit 8000, Used 6701, Requested 1609.
+        Please try again in 2.325s."
+
+    Two seconds. The old branch answered that with a flat 20-second wait,
+    once, and then parked groq for 75 seconds - and with gemini out for the
+    day there was nowhere left to go, so the run died against a provider that
+    was working.
+
+    Thirty calls at ~4,000 tokens through an 8,000-per-minute pipe means this
+    pipeline lives at the limit permanently. Short repeated waits are the
+    normal case, not a broken provider.
+    """
+    line("the provider's own 'try again in Ns' is obeyed (run 54)")
+    bad = 0
+
+    reads = [
+        ('... Please try again in 2.325s. Need more tokens?', 2.325),
+        ('{"retryDelay": "23s"}', 23.0),
+        ('"retry_delay": "7s"', 7.0),
+        ("no number here at all", None),
+    ]
+    for text, want in reads:
+        got = B.stated_retry_delay(text)
+        ok = got == want
+        print(f"  {'ok  ' if ok else 'FAIL'}  reads {want!r} from "
+              f"{text[:34]!r} (got {got!r})")
+        bad += not ok
+
+    # END TO END: two 429s naming a short delay, then success - and it must
+    # not have burned the whole 20s-then-park path to get there.
+    B._openai_compatible = REAL_OAI
+    B.PROVIDER_CHAR_CAP = {}
+    slept = []
+    real_sleep = time.sleep
+    B.time.sleep = lambda s: slept.append(s)
+    tpm = urllib.error.HTTPError(
+        "https://x", 429, "Too Many Requests", {},
+        io.BytesIO(json.dumps({"error": {
+            "message": "Rate limit reached for model `openai/gpt-oss-120b` on "
+                       "tokens per minute (TPM): Limit 8000, Used 6701, "
+                       "Requested 1609. Please try again in 2.325s.",
+            "type": "tokens", "code": "rate_limit_exceeded"}}).encode()))
+    tpm2 = urllib.error.HTTPError(
+        "https://x", 429, "Too Many Requests", {},
+        io.BytesIO(json.dumps({"error": {
+            "message": "Rate limit reached on tokens per minute (TPM): "
+                       "Limit 8000. Please try again in 1.5s.",
+            "type": "tokens", "code": "rate_limit_exceeded"}}).encode()))
+    sent, restore = scripted_provider([tpm, tpm2, {"content": '{"ok": true}'}])
+    try:
+        B.PROVIDER_COOLDOWN.clear()
+        out = B._call_sweep("Reply with json.", {"x": 1},
+                            provs=[("groq", ("https://x/v1", "k",
+                                             "openai/gpt-oss-120b"))],
+                            retries=2)
+        checks = [
+            ("it recovered instead of dying", out == {"ok": True}),
+            ("it took all three requests", len(sent) == 3),
+            (f"it waited seconds, not tens of seconds (slept {slept})",
+             bool(slept) and all(s <= 4 for s in slept)),
+            ("groq was NOT parked", "groq" not in B.PROVIDER_COOLDOWN
+             or B.PROVIDER_COOLDOWN.get("groq", 0) <= time.time()),
+        ]
+    except Exception as e:
+        checks = [(f"it recovered instead of dying (raised {e})", False)]
+    finally:
+        restore()
+        B.time.sleep = real_sleep
+    for what, ok in checks:
+        print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+        bad += not ok
+
+    # A PER-DAY quota still gets the long rest - the short-delay path must not
+    # swallow the one limit that genuinely does not clear.
+    slept.clear()
+    B.time.sleep = lambda s: slept.append(s)
+    daily = urllib.error.HTTPError(
+        "https://x", 429, "Too Many Requests", {},
+        io.BytesIO(json.dumps({"error": {
+            "message": "You exceeded your current quota. limit: "
+                       "generate_content_free_tier_requests, per day. "
+                       "Please try again in 3s.",
+            "status": "RESOURCE_EXHAUSTED"}}).encode()))
+    sent, restore = scripted_provider([daily, daily])
+    try:
+        B.PROVIDER_COOLDOWN.clear()
+        B._call_sweep("Reply with json.", {"x": 1},
+                      provs=[("groq", ("https://x/v1", "k", "m"))], retries=2)
+        ok = False
+    except Exception:
+        ok = B.PROVIDER_COOLDOWN.get("groq", 0) - time.time() > 600
+    finally:
+        restore()
+        B.time.sleep = real_sleep
+    print(f"  {'ok  ' if ok else 'FAIL'}  a PER DAY quota still gets the long "
+          f"rest, not 3 seconds")
+    bad += not ok
+    return bad
+
+
 def test_unschemad_draft_survives():
     """
     RUN 51 - the fix above worked, and the run died one stage later.
@@ -1019,6 +1124,7 @@ def main():
     bad += test_schema_drop_gets_its_own_attempt()
     bad += test_unschemad_draft_survives()
     bad += test_truncated_and_wrong_shape()
+    bad += test_provider_stated_delay()
     bad += test_precap_avoids_the_round_trip()
     bad += test_cooldown()
     bad += test_no_scene_loss()

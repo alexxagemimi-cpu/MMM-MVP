@@ -467,3 +467,55 @@ first 21 calls and produced a complete video.
 answers. On Groq alone it is at the edge of what fits in 8,000 tokens per
 minute, and every run that leans on it is one bad split away from dying. That
 is a budget problem, not a bug list.
+
+---
+
+## Run 54 — "the eight blood types explained", second attempt
+
+**0/100. FATAL at stage [2/5].** But the error message is now the whole
+diagnosis, which is the point of the last two commits:
+
+    RuntimeError: All LLM providers failed twice. Last error:
+      HTTP 429 from groq: "Rate limit reached ... on tokens per minute (TPM):
+      Limit 8000, Used 6701, Requested 1609. Please try again in 2.325s."
+
+### The provider said what to do and the code did not listen
+
+**Two seconds.** Groq names the exact delay in every 429 it sends. The code
+answered with a flat 20-second wait, once, and then parked the provider for 75
+seconds — and with Gemini out for the day there was nowhere left to go, so the
+run died against a provider that was working and two seconds from ready.
+
+`Used 6701, Requested 1609` against a limit of 8000 also says the request was
+not too big. The pipeline had simply spent that minute's tokens already. Thirty
+calls at roughly 4,000 tokens through an 8,000-per-minute pipe means **this
+pipeline lives at the limit permanently** — short repeated waits are its normal
+operating mode, not a symptom of a broken provider.
+
+Fixed: `stated_retry_delay()` reads the number both providers already send
+(groq's *"try again in 2.325s"*, gemini's *"retryDelay": "23s"*), waits it out
+with a second of margin, and repeats up to a 120-second budget per call. Those
+waits do not spend an attempt — waiting for a limit to clear is not an attempt
+at the request, the same reasoning as the schema drop. And a provider that
+names a short delay is parked for *that*, not for a blanket 75 seconds.
+
+A **per-day** quota still gets the long 1800-second rest; the short-delay path
+must not swallow the one limit that genuinely does not clear. That is a check
+in the regression, because getting it wrong would turn a dead provider into a
+busy-wait.
+
+Proved by reverting: with the branch removed the test dies with run 54's exact
+error.
+
+### Runs 49–54, one table
+
+| run | died at | cause | fix |
+|---|---|---|---|
+| 49, 50 | stage 2 | reasoning ate the reply; empty `content` read as no answer | `reasoning_effort=low`, read `reasoning` |
+| 51 | stage 3 | draft had no `scene` key | `number_scenes()` at the door |
+| 52 | — | **completed, 66/100** | — |
+| 53 | stage 2 | reply truncated at 10,242 chars; wrong-shaped object returned | truncation shrinks the input; `required` keys checked |
+| 54 | stage 2 | 429 said "try again in 2.3s"; we waited 20s then parked 75s | obey the stated delay |
+
+Every one of these is the same sentence: **the provider told us something and
+the code was not reading it.** Not one has been a bug in the video pipeline.

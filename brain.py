@@ -597,6 +597,41 @@ COOLDOWN_SECONDS    = 420     # unclear which - the old blanket value
 # and the run dies inside a wait it could have sat through.
 WAIT_OUT_MAX = 200
 
+# HOW LONG ONE CALL MAY SPEND WAITING OUT A PER-MINUTE LIMIT.
+#
+# Groq's 429 names the exact delay - "Please try again in 2.325s" - and the
+# code used to answer it with a flat 20-second wait, one time only, and then
+# park the provider for 75 seconds. Run 54 died on that: 30 calls at ~4,000
+# tokens each through an 8,000-tokens-per-minute pipe means the pipeline is
+# ALWAYS at the limit, and the only correct response to "try again in 2.3s"
+# is to try again in 2.3 seconds. Several short waits are the normal case,
+# not a sign the provider is broken; this bounds them so a jammed provider
+# still cannot eat the 45-minute job cap.
+RATE_WAIT_BUDGET = float(_env("RATE_WAIT_BUDGET", "120"))
+
+
+def stated_retry_delay(msg):
+    """
+    Seconds the provider ASKED us to wait, or None.
+
+    Both providers say it and neither was being read:
+
+        groq   : "Please try again in 2.325s"
+        gemini : "retryDelay": "23s"
+
+    Guessing when you have been told is the same mistake as the flat 20s
+    wait, and this file has a section for it.
+    """
+    m = re.search(r"try again in ([\d.]+)\s*s", msg, re.I)
+    if not m:
+        m = re.search(r"retry[_ ]?delay\"?[:=]\s*\"?([\d.]+)s", msg, re.I)
+    if not m:
+        return None
+    try:
+        return max(0.0, float(m.group(1)))
+    except ValueError:
+        return None
+
 # The workflow kills the job at 45 minutes. Brain stops revising at 24 so the
 # engine still gets its ~20 - see the note at the deadline check in main().
 _started = time.time()
@@ -867,6 +902,7 @@ def _call_sweep(prompt, schema, retries, provs):
 
         attempts_left = retries
         spent_schema_drop = False
+        waited_secs = 0.0
         attempt = -1
         while attempts_left > 0:
             attempt += 1
@@ -1065,6 +1101,35 @@ def _call_sweep(prompt, schema, retries, provs):
                 # waiting the limit out.
                 transient = overloaded or (rate_limited
                                            and "per day" not in msg.lower())
+
+                # DO WHAT THE PROVIDER ACTUALLY ASKED FOR.
+                #
+                # Groq's 429 carries the answer: "Limit 8000, Used 6701,
+                # Requested 1609. Please try again in 2.325s." The old branch
+                # waited a flat 20 seconds, once, and then parked the provider
+                # for 75. Run 54 died on exactly that, with a provider that
+                # was up and two seconds from being ready.
+                #
+                # A short stated delay is not a broken provider - it is a
+                # token bucket refilling, and at 30 calls of ~4,000 tokens
+                # through an 8,000/minute pipe this pipeline lives at that
+                # limit permanently. So these waits repeat, bounded by
+                # RATE_WAIT_BUDGET, and they do NOT spend an attempt: waiting
+                # for a limit to clear is not an attempt at the request, the
+                # same reasoning as the schema drop above.
+                asked = stated_retry_delay(msg) if transient else None
+                if (asked is not None
+                        and waited_secs + asked + 1 <= RATE_WAIT_BUDGET):
+                    wait = min(asked + 1.0, 30.0)
+                    waited_secs += wait
+                    print(f"     -> {name} asked for {asked:.1f}s; waiting "
+                          f"{wait:.1f}s and trying again "
+                          f"({waited_secs:.0f}s of {RATE_WAIT_BUDGET:.0f}s "
+                          f"used)")
+                    time.sleep(wait)
+                    attempts_left += 1
+                    continue
+
                 if transient and not waited_out_a_limit:
                     waited_out_a_limit = True
                     wait = 20 if rate_limited else 30
@@ -1079,8 +1144,14 @@ def _call_sweep(prompt, schema, retries, provs):
                     # seven minutes. Run 47 parked Groq's per-MINUTE limit for
                     # seven minutes and then had no provider left to try.
                     low = msg.lower()
+                    asked = stated_retry_delay(msg)
                     if "per day" in low or "daily" in low:
                         rest = COOLDOWN_PER_DAY
+                    elif asked is not None and asked <= COOLDOWN_PER_MINUTE:
+                        # It named its own number. Parking a provider that is
+                        # two seconds from ready for seventy-five is how run
+                        # 54 ran out of providers with both of them working.
+                        rest = asked + 2
                     elif "per minute" in low or "tokens per min" in low \
                             or "requests per min" in low or "tpm" in low:
                         rest = COOLDOWN_PER_MINUTE
@@ -1088,7 +1159,7 @@ def _call_sweep(prompt, schema, retries, provs):
                         rest = COOLDOWN_SECONDS
                     PROVIDER_COOLDOWN[name] = time.time() + rest
                     print(f"     -> {name} is rate/quota limited, switching "
-                          f"provider and resting it for {rest}s")
+                          f"provider and resting it for {rest:.0f}s")
                     break
                 time.sleep(4 * (attempt + 1))
         print(f"   .. {name} exhausted, trying next provider")
