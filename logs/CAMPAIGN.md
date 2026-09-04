@@ -599,3 +599,44 @@ and run 55's hole is reopened exactly.
   mismatch** are engine-side and not yet diagnosed. They may well be
   downstream of the missing beats; the next run with beats present is the
   test.
+
+---
+
+## Run 56 — "top 10 exercises to blow aesthetic abs in weeks"
+
+**0/100. FATAL at stage [2/5], and the fault was MINE, introduced one commit
+earlier.**
+
+    ! groq attempt 2/3: reply parsed but is missing required key(s):
+      scenes.scene (on 10 item(s))
+    ! groq attempt 3/3: reply parsed but is missing required key(s):
+      scenes.scene (on 10 item(s))
+    FATAL
+
+`SCRIPT_SCHEMA` lists `scene` as required per item. `number_scenes()` exists
+**precisely because the fallback writer does not reliably send it** — that was
+run 51's fix — and the pipeline renumbers every scene positionally again
+before writing `script.json`, so the model's own numbering was never believed.
+
+So the nested-required check added for run 55 demanded a field the very next
+function supplies, and rejected draft after draft from a provider that was
+answering correctly. A validator must not require what the pipeline itself
+fills in.
+
+Fixed by removing `scene` from the per-item `required` list — the schema now
+says what is genuinely needed *from the model*. Everything else stays
+required: `beat`, `narration`, `key_term`, `key_fact`, `image_keywords` cannot
+be reconstructed, and a missing `beat` is what left run 55 with no checklist.
+
+The regression asserts against the **real** `SCRIPT_SCHEMA`, not a toy one —
+a toy schema is what let the mistake through in the first place. Proved by
+reverting: put `scene` back and run 56's death reappears.
+
+### The lesson, stated against myself
+
+Run 55's fix was correct in principle and wrong in its blast radius. It was
+tested only against a hand-made schema that happened not to include the one
+field the pipeline supplies, so the test passed and the real pipeline died.
+**Testing the fix against a fixture instead of against the real object is the
+same mistake as §5.12's first test**, which faked the function the fix lived
+inside. Third variation of it in this file now.

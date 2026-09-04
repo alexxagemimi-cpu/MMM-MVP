@@ -645,6 +645,40 @@ def test_truncated_and_wrong_shape():
     print(f"  {'ok  ' if ok else 'FAIL'}  a beatless draft is retried, "
           f"not accepted (run 55)")
     bad += not ok
+
+    # RUN 56: THE CHECK ABOVE, OVERDONE, KILLED A RUN OF ITS OWN.
+    #
+    #     ! groq attempt 3/3: reply parsed but is missing required key(s):
+    #       scenes.scene (on 10 item(s))
+    #     FATAL
+    #
+    # SCRIPT_SCHEMA listed "scene" as required per item, and number_scenes()
+    # exists precisely BECAUSE the fallback writer does not reliably send it
+    # - so the validator demanded a field the very next function supplies,
+    # and rejected every draft from a provider that was answering correctly.
+    # This asserts against the REAL schema, not a toy one.
+    real = B.SCRIPT_SCHEMA
+    item = (real["properties"]["scenes"]["items"]["required"])
+    full = {"title": "T", "description": "d", "question": "q", "tags": ["t"],
+            "thumb_headline": "H", "thumb_accent": "H",
+            "scenes": [{"beat": "ANSWER", "narration": "n", "key_term": "k",
+                        "key_fact": "f", "image_keywords": ["a"]}]}
+    nobeat = json.loads(json.dumps(full))
+    del nobeat["scenes"][0]["beat"]
+    cases = [
+        ("the real schema does NOT require 'scene' from the model",
+         "scene" not in item),
+        ("a draft with no scene numbers is accepted",
+         not B.missing_required(full, real)),
+        ("...and number_scenes() then supplies them",
+         [s["scene"] for s in
+          B.number_scenes(json.loads(json.dumps(full)))["scenes"]] == [1]),
+        ("a draft with no 'beat' is still rejected",
+         bool(B.missing_required(nobeat, real))),
+    ]
+    for what, ok in cases:
+        print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+        bad += not ok
     return bad
 
 

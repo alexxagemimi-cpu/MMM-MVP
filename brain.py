@@ -291,7 +291,24 @@ SCRIPT_SCHEMA = {
                     "key_fact":       {"type": "string"},
                     "image_keywords": {"type": "array", "items": {"type": "string"}},
                 },
-                "required": ["scene", "beat", "narration", "key_term",
+                # "scene" IS DELIBERATELY NOT REQUIRED FROM THE MODEL.
+                #
+                # number_scenes() stamps scene numbers positionally the
+                # moment a script comes back, precisely because the fallback
+                # writer does not reliably send them - and the pipeline
+                # renumbers them again before writing script.json, so the
+                # model's own numbering was never believed anyway.
+                #
+                # Listing it here as required cost run 56 outright: the
+                # nested-required check added for run 55 rejected every
+                # draft with "scenes.scene (on 10 item(s))" and the run died
+                # against a provider that was answering correctly. A
+                # validator must not demand a field that the very next
+                # function supplies.
+                #
+                # Everything else IS required: it cannot be reconstructed,
+                # and a missing `beat` is what left run 55 with no checklist.
+                "required": ["beat", "narration", "key_term",
                              "key_fact", "image_keywords"],
             },
         },
