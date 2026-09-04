@@ -863,15 +863,30 @@ def _call_sweep(prompt, schema, retries, provs):
                 msg = str(e)
                 print(f"   ! {name} attempt {attempt+1}/"
                       f"{attempt + 1 + attempts_left}: {msg[:200]}")
-                # "failed to validate json" is named EXPLICITLY. It matched
-                # before only through the word "invalid", which appears in
-                # this body once - inside the unrelated type name
-                # `invalid_request_error`. A safety branch that fires on an
-                # incidental substring of a field it is not reading is one
-                # provider wording away from never firing again.
+                # The JSON-mode refusals are named EXPLICITLY. This branch
+                # matched before only through the word "invalid", which
+                # appears in these bodies once - inside the unrelated type
+                # name `invalid_request_error` - and a safety branch firing
+                # on an incidental substring of a field it is not reading is
+                # one provider wording away from never firing again.
+                #
+                # That was not theory. The commit naming "failed to VALIDATE
+                # json" shipped, and run 52 came back with
+                #
+                #     "Failed to GENERATE JSON. Please adjust your prompt."
+                #
+                # a second wording for the same fault, which the new explicit
+                # string missed and the incidental "invalid" caught again.
+                # Match the machine-readable `code` instead of the prose:
+                # groq sends json_validate_failed / json_generate_failed, and
+                # a code is what a provider changes last.
+                low = msg.lower()
                 if schema and not drop_schema and (
-                        "schema" in msg.lower() or "invalid" in msg.lower()
-                        or "failed to validate json" in msg.lower()):
+                        "schema" in low or "invalid" in low
+                        or "json_validate_failed" in low
+                        or "json_generate_failed" in low
+                        or "failed to validate json" in low
+                        or "failed to generate json" in low):
                     print("     -> dropping response_schema, retrying plain JSON")
                     drop_schema = True
                     # DO NOT SPEND AN ATTEMPT ON THE DIAGNOSIS.

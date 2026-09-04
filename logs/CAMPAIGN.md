@@ -283,3 +283,113 @@ Regression in `test_providers.py`, 6 checks: a Groq-shaped draft with no
 `scene` key is numbered, the fact-checker's own expression stops raising, a
 model that numbers its scenes 5 and 9 is corrected rather than believed, and
 it survives no `scenes` key, an empty list, and a scene that is not an object.
+
+---
+
+## Run 52 — "top 10 deadliest fighting styles explained" — A COMPLETE VIDEO
+
+**66/100. Upload: NO.** But this is the best output the project has produced,
+and two things happened here for the first time in its history.
+
+| | |
+|---|---|
+| video | 7.3 min, 11 scenes, 1013 words, 17.2 MB |
+| shots | 88 — 88 drawn, 0 blank, 41 withheld (47%) |
+| truth gate | **REJECT** — agreement 0.056, 0 verified members |
+| red team | 11 HARD → 8 HARD → **7 HARD** |
+| repair | **WORKED. Twice.** |
+
+### 1. THE RED-TEAM REPAIR SUCCEEDED — for the first time ever
+
+    [6/6] red team, attempt 1/3   11 HARD, 2 soft
+          repairing 8 scene(s) (1,2,4,5,7,8,10,11) instead of all 11
+          applied 7 scene fix(es)
+    [6/6] red team, attempt 2/3    8 HARD, 4 soft
+          repairing 7 scene(s) (1,2,3,4,6,7,10) instead of all 11
+          applied 7 scene fix(es)
+    [6/6] red team, attempt 3/3    7 HARD, 3 soft
+
+CLAUDE.md §4.25 said *"the single most important call in the pipeline was also
+the last and the largest, so it has never once succeeded, and every video this
+project has made shipped with hard findings the system had already
+identified."* It ran, twice, and took the script from 11 hard findings to 7.
+
+It also visibly did real work rather than paraphrasing. Attempt 1 flagged a
+Krav Maga lineage that was impossible on its own dates (*"Imi Lichtenfeld died
+in 1973, so he could not have taught anyone in 1988"*); by attempt 3 that
+sentence was gone.
+
+### 2. THE TRUTH GATE REFUSED THE TOPIC — and it was right
+
+    [REJECT] top 10 deadliest fighting styles explained
+             (agreement 0.056, 0 members, 8 sources)
+           - 16 of 16 candidate items appear in a minority of sources.
+             A confident list here would be partly invented - this is the
+             failure that put 'runway' in a list of expense types.
+
+Eight sources, sixteen candidate styles, **not one of them named by a majority**.
+"The 10 deadliest fighting styles" is not a real closed category — it is a
+listicle premise, and every publisher picks a different ten. The gate measured
+that at 0.056 against a 0.55 bar and said so. Per the owner-choice rule the run
+still built, loudly, so the video could be looked at.
+
+**This is the system working.** It is also why this topic cannot score well: the
+writer had no verified member list, so it reshaped the request into "Every
+Category of Deadly Fighting Style Explained" — three categories, not ten.
+
+### 3. What the frames actually show
+
+Twelve frames, and unlike run 48 there is a real designed video here: an opening
+title card, the three-row checklist with green ticks accumulating and the live
+row keylined red, section headers with definitions and bullets, and — on frame
+07 — **the comparison diagram (§4.20) doing exactly its job**, BJJ against HEMA
+in two columns with the script's own facts under each.
+
+Problems visible on the sheet, none of them fatal:
+
+- **Frames 08, 09 and 10 are nearly the same picture** — the same three-row
+  checklist with the same red live row, across 74 seconds. Gagged shots all
+  fall back to the checklist, and with only three members the checklist has
+  nothing left to change. §4.9's problem in a new form.
+- **Frame 11 carries the wrong section header**: "HISTORICAL EUROPEAN MARTIAL
+  ARTS" over a card reading "WOMEN'S JUDO — awarded official Olympic medals in
+  1992".
+- **Not one photograph in the whole video.** 88 of 88 shots drawn. The subject
+  anchor rejected every stock clip. Defensible in this niche (§1) but it means
+  the anchor has never been tested against a topic where the footage is good.
+
+### 4. Two bugs this run exposed
+
+**a. A SECOND wording for the Groq JSON refusal.** The commit that named
+`"failed to validate json"` shipped, and the very next run returned:
+
+    "Failed to GENERATE JSON. Please adjust your prompt."
+
+The new explicit string missed it; the incidental word "invalid" caught it
+again. Exactly the fragility flagged one commit earlier, confirmed in the wild
+within one run. Now matched on the machine-readable codes
+(`json_validate_failed` / `json_generate_failed`) as well as both prose
+wordings, with the regression's fixture deliberately using a `type` of
+`bad_request_error` so the accident cannot rescue it.
+
+**b. The repair breaks the word floor.** 12 structural problems introduced —
+scenes at 89–93 words against a 104 minimum, and two `key_fact`s over the
+60-char guide. The prompt does state the range; the model simply did not obey
+it. *Not fixed, deliberately:* rejecting a short fix means keeping the invented
+claim AND gagging the scene, which is worse, and the finished video came in at
+7.3 min against 8 asked — within tolerance. Recorded rather than papered over.
+
+### 5. Where score_run.py is wrong, again
+
+It gave 20/20 for watchability on a video that is 47% withheld cards with three
+near-identical frames, and 6/20 on topic because the title says "Every Category
+of Deadly Fighting Style" instead of "top 10 deadliest" — which is real drift,
+but caught by a crude word-overlap proxy rather than by understanding. Both the
+watchability ceiling and a better on-topic measure are still owed.
+
+### Verdict
+
+**NO — do not upload.** 7 unfixed hard findings, including a fabricated PRIDE
+attendance figure and a Krav Maga origin the sources contradict, on a topic the
+system's own gate refused. The right response to this topic is not a better
+video; it is telling the owner the topic does not have a true answer.

@@ -411,15 +411,23 @@ def test_schema_drop_gets_its_own_attempt():
     line("dropping the schema does not spend the last attempt (49/50)")
     bad = 0
     B._openai_compatible = REAL_OAI
-    err = urllib.error.HTTPError(
-        "https://x", 400, "Bad Request", {},
-        io.BytesIO(json.dumps({"error": {
-            "message": "Failed to validate JSON. Please adjust your prompt. "
+    def four_hundred(message, code):
+        return urllib.error.HTTPError(
+            "https://x", 400, "Bad Request", {},
+            io.BytesIO(json.dumps({"error": {
+                "message": message,
+                # NOTE: deliberately NOT "invalid_request_error". That type
+                # name is the only reason the old branch matched at all, and
+                # a test that leaves it in is testing the accident, not the
+                # fix.
+                "type": "bad_request_error",
+                "code": code,
+                "failed_generation": '{"scenes": [{"narration": "Green coffee'
+                }}).encode()))
+
+    err = four_hundred("Failed to validate JSON. Please adjust your prompt. "
                        "See 'failed_generation' for more details.",
-            "type": "invalid_request_error",
-            "code": "json_validate_failed",
-            "failed_generation": '{"scenes": [{"narration": "Green coffee'
-            }}).encode()))
+                       "json_validate_failed")
     # 400 -> schema dropped -> empty reply -> and there must STILL be a try
     # left, which succeeds.
     sent, restore = scripted_provider([
@@ -447,6 +455,34 @@ def test_schema_drop_gets_its_own_attempt():
         bad += 1
     finally:
         restore()
+
+    # RUN 52: A SECOND WORDING FOR THE SAME FAULT.
+    #
+    # The commit that named "failed to VALIDATE json" shipped, and the very
+    # next run came back with "Failed to GENERATE JSON" - which the new
+    # explicit string missed, and which the incidental "invalid" caught
+    # again. Both wordings, and the machine-readable codes under them, are
+    # now pinned here so the next wording is a test failure and not a
+    # silently dead safety branch.
+    for message, code in (
+            ("Failed to validate JSON. Please adjust your prompt.",
+             "json_validate_failed"),
+            ("Failed to generate JSON. Please adjust your prompt.",
+             "json_generate_failed")):
+        sent, restore = scripted_provider(
+            [four_hundred(message, code), {"content": '{"ok": true}'}])
+        try:
+            B.PROVIDER_COOLDOWN.clear()
+            out = B._call_sweep("Reply with json.", {"x": 1},
+                                provs=[("groq", ("https://x/v1", "k",
+                                                 "openai/gpt-oss-120b"))],
+                                retries=2)
+            ok = out == {"ok": True} and "response_format" not in sent[1]
+        except Exception:
+            ok = False
+        print(f"  {'ok  ' if ok else 'FAIL'}  {code} drops the schema "
+              f"(no help from the word 'invalid')")
+        bad += not ok
     return bad
 
 

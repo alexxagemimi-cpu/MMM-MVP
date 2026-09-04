@@ -1,0 +1,1683 @@
+﻿2026-09-04T07:17:39.0500378Z Current runner version: '2.337.0'
+##[group]Runner Image Provisioner
+Hosted Compute Agent
+Version: 20260828.587
+Commit: abac92662cab4cc7352de4f9f9d2e2419aad9c29
+Build Date: 2026-08-28T16:44:25Z
+Worker ID: {4149d773-3006-40a0-bdfc-4a54b106992c}
+Azure Region: westus
+##[endgroup]
+##[group]Operating System
+Ubuntu
+24.04.4
+LTS
+##[endgroup]
+##[group]Runner Image
+Image: ubuntu-24.04
+Version: 20260831.293.1
+Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260831.293/images/ubuntu/Ubuntu2404-Readme.md
+Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260831.293
+##[endgroup]
+##[group]GITHUB_TOKEN Permissions
+Contents: read
+Metadata: read
+##[endgroup]
+Secret source: Actions
+Prepare workflow directory
+Prepare all required actions
+Getting action download info
+Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+Complete job name: build-video
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+##[group]Run actions/checkout@v4
+with:
+  repository: alexxagemimi-cpu/MMM-MVP
+  token: ***
+  ssh-strict: true
+  ssh-user: git
+  persist-credentials: true
+  clean: true
+  sparse-checkout-cone-mode: true
+  fetch-depth: 1
+  fetch-tags: false
+  show-progress: true
+  lfs: false
+  submodules: false
+  set-safe-directory: true
+  allow-unsafe-pr-checkout: false
+env:
+  PYTHONUNBUFFERED: 1
+##[endgroup]
+Syncing repository: alexxagemimi-cpu/MMM-MVP
+##[group]Getting Git version info
+Working directory is '/home/runner/work/MMM-MVP/MMM-MVP'
+[command]/usr/bin/git version
+git version 2.55.0
+##[endgroup]
+Temporarily overriding HOME='/home/runner/work/_temp/31a7646f-5b73-46ff-8a2c-d3a212a7df11' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/MMM-MVP/MMM-MVP
+Deleting the contents of '/home/runner/work/MMM-MVP/MMM-MVP'
+##[group]Initializing the repository
+[command]/usr/bin/git init /home/runner/work/MMM-MVP/MMM-MVP
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: will change to "main" in Git 3.0. To configure the initial branch name
+hint: to use in all of your new repositories, which will suppress this warning,
+hint: call:
+hint:
+hint: 	git config --global init.defaultBranch <name>
+hint:
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint:
+hint: 	git branch -m <name>
+hint:
+hint: Disable this message with "git config set advice.defaultBranchName false"
+Initialized empty Git repository in /home/runner/work/MMM-MVP/MMM-MVP/.git/
+[command]/usr/bin/git remote add origin https://github.com/alexxagemimi-cpu/MMM-MVP
+##[endgroup]
+##[group]Disabling automatic garbage collection
+[command]/usr/bin/git config --local gc.auto 0
+##[endgroup]
+##[group]Setting up auth
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+[command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+##[endgroup]
+##[group]Fetching the repository
+[command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +ffaddf6260b38026f3db2975a9e5ee93d1ef170d:refs/remotes/origin/claude/project-setup-pvczp8
+From https://github.com/alexxagemimi-cpu/MMM-MVP
+ * [new ref]         ffaddf6260b38026f3db2975a9e5ee93d1ef170d -> origin/claude/project-setup-pvczp8
+##[endgroup]
+##[group]Determining the checkout info
+##[endgroup]
+[command]/usr/bin/git sparse-checkout disable
+[command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+##[group]Checking out the ref
+[command]/usr/bin/git checkout --progress --force -B claude/project-setup-pvczp8 refs/remotes/origin/claude/project-setup-pvczp8
+Switched to a new branch 'claude/project-setup-pvczp8'
+branch 'claude/project-setup-pvczp8' set up to track 'origin/claude/project-setup-pvczp8'.
+##[endgroup]
+[command]/usr/bin/git log -1 --format=%H
+ffaddf6260b38026f3db2975a9e5ee93d1ef170d
+##[group]Run NEED=""
+[36;1mNEED=""[0m
+[36;1mcommand -v ffmpeg >/dev/null || NEED="$NEED ffmpeg"[0m
+[36;1mfc-list 2>/dev/null | grep -qi dejavu || NEED="$NEED fonts-dejavu-core"[0m
+[36;1mif [ -n "$NEED" ]; then[0m
+[36;1m  echo "installing:$NEED"[0m
+[36;1m  sudo apt-get update -qq[0m
+[36;1m  sudo apt-get install -y -qq $NEED[0m
+[36;1melse[0m
+[36;1m  echo "ffmpeg and fonts already present on the runner"[0m
+[36;1mfi[0m
+[36;1mffmpeg -version | head -n1[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+##[endgroup]
+installing: ffmpeg
+Selecting previously unselected package libva2:amd64.
+(Reading database ... 
+(Reading database ... 5%
+(Reading database ... 10%
+(Reading database ... 15%
+(Reading database ... 20%
+(Reading database ... 25%
+(Reading database ... 30%
+(Reading database ... 35%
+(Reading database ... 40%
+(Reading database ... 45%
+(Reading database ... 50%
+(Reading database ... 55%
+(Reading database ... 60%
+(Reading database ... 65%
+(Reading database ... 70%
+(Reading database ... 75%
+(Reading database ... 80%
+(Reading database ... 85%
+(Reading database ... 90%
+(Reading database ... 95%
+(Reading database ... 100%
+(Reading database ... 201676 files and directories currently installed.)
+Preparing to unpack .../00-libva2_2.20.0-2ubuntu0.2_amd64.deb ...
+Unpacking libva2:amd64 (2.20.0-2ubuntu0.2) ...
+Selecting previously unselected package libva-drm2:amd64.
+Preparing to unpack .../01-libva-drm2_2.20.0-2ubuntu0.2_amd64.deb ...
+Unpacking libva-drm2:amd64 (2.20.0-2ubuntu0.2) ...
+Selecting previously unselected package libva-x11-2:amd64.
+Preparing to unpack .../02-libva-x11-2_2.20.0-2ubuntu0.2_amd64.deb ...
+Unpacking libva-x11-2:amd64 (2.20.0-2ubuntu0.2) ...
+Selecting previously unselected package libvdpau1:amd64.
+Preparing to unpack .../03-libvdpau1_1.5-2build1_amd64.deb ...
+Unpacking libvdpau1:amd64 (1.5-2build1) ...
+Selecting previously unselected package libvpl2.
+Preparing to unpack .../04-libvpl2_2023.3.0-1build1_amd64.deb ...
+Unpacking libvpl2 (2023.3.0-1build1) ...
+Selecting previously unselected package ocl-icd-libopencl1:amd64.
+Preparing to unpack .../05-ocl-icd-libopencl1_2.3.2-1build1_amd64.deb ...
+Unpacking ocl-icd-libopencl1:amd64 (2.3.2-1build1) ...
+Selecting previously unselected package libavutil58:amd64.
+Preparing to unpack .../06-libavutil58_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libavutil58:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libcodec2-1.2:amd64.
+Preparing to unpack .../07-libcodec2-1.2_1.2.0-2build1_amd64.deb ...
+Unpacking libcodec2-1.2:amd64 (1.2.0-2build1) ...
+Selecting previously unselected package libdav1d7:amd64.
+Preparing to unpack .../08-libdav1d7_1.4.1-1build1_amd64.deb ...
+Unpacking libdav1d7:amd64 (1.4.1-1build1) ...
+Selecting previously unselected package libgsm1:amd64.
+Preparing to unpack .../09-libgsm1_1.0.22-1build1_amd64.deb ...
+Unpacking libgsm1:amd64 (1.0.22-1build1) ...
+Selecting previously unselected package libhwy1t64:amd64.
+Preparing to unpack .../10-libhwy1t64_1.0.7-8.1build1_amd64.deb ...
+Unpacking libhwy1t64:amd64 (1.0.7-8.1build1) ...
+Selecting previously unselected package libjxl0.7:amd64.
+Preparing to unpack .../11-libjxl0.7_0.7.0-10.2ubuntu6.1_amd64.deb ...
+Unpacking libjxl0.7:amd64 (0.7.0-10.2ubuntu6.1) ...
+Selecting previously unselected package libmp3lame0:amd64.
+Preparing to unpack .../12-libmp3lame0_3.100-6build1_amd64.deb ...
+Unpacking libmp3lame0:amd64 (3.100-6build1) ...
+Selecting previously unselected package libopus0:amd64.
+Preparing to unpack .../13-libopus0_1.4-1build1_amd64.deb ...
+Unpacking libopus0:amd64 (1.4-1build1) ...
+Selecting previously unselected package librav1e0:amd64.
+Preparing to unpack .../14-librav1e0_0.7.1-2_amd64.deb ...
+Unpacking librav1e0:amd64 (0.7.1-2) ...
+Selecting previously unselected package librsvg2-2:amd64.
+Preparing to unpack .../15-librsvg2-2_2.58.0+dfsg-1build1_amd64.deb ...
+Unpacking librsvg2-2:amd64 (2.58.0+dfsg-1build1) ...
+Selecting previously unselected package libshine3:amd64.
+Preparing to unpack .../16-libshine3_3.1.1-2build1_amd64.deb ...
+Unpacking libshine3:amd64 (3.1.1-2build1) ...
+Selecting previously unselected package libspeex1:amd64.
+Preparing to unpack .../17-libspeex1_1.2.1-2ubuntu2.24.04.1_amd64.deb ...
+Unpacking libspeex1:amd64 (1.2.1-2ubuntu2.24.04.1) ...
+Selecting previously unselected package libsvtav1enc1d1:amd64.
+Preparing to unpack .../18-libsvtav1enc1d1_1.7.0+dfsg-2build1_amd64.deb ...
+Unpacking libsvtav1enc1d1:amd64 (1.7.0+dfsg-2build1) ...
+Selecting previously unselected package libsoxr0:amd64.
+Preparing to unpack .../19-libsoxr0_0.1.3-4build3_amd64.deb ...
+Unpacking libsoxr0:amd64 (0.1.3-4build3) ...
+Selecting previously unselected package libswresample4:amd64.
+Preparing to unpack .../20-libswresample4_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libswresample4:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libtheora0:amd64.
+Preparing to unpack .../21-libtheora0_1.1.1+dfsg.1-16.1build3_amd64.deb ...
+Unpacking libtheora0:amd64 (1.1.1+dfsg.1-16.1build3) ...
+Selecting previously unselected package libtwolame0:amd64.
+Preparing to unpack .../22-libtwolame0_0.4.0-2build3_amd64.deb ...
+Unpacking libtwolame0:amd64 (0.4.0-2build3) ...
+Selecting previously unselected package libvorbisenc2:amd64.
+Preparing to unpack .../23-libvorbisenc2_1.3.7-1build3_amd64.deb ...
+Unpacking libvorbisenc2:amd64 (1.3.7-1build3) ...
+Selecting previously unselected package libvpx9:amd64.
+Preparing to unpack .../24-libvpx9_1.14.0-1ubuntu2.3_amd64.deb ...
+Unpacking libvpx9:amd64 (1.14.0-1ubuntu2.3) ...
+Selecting previously unselected package libx264-164:amd64.
+Preparing to unpack .../25-libx264-164_2%3a0.164.3108+git31e19f9-1_amd64.deb ...
+Unpacking libx264-164:amd64 (2:0.164.3108+git31e19f9-1) ...
+Selecting previously unselected package libx265-199:amd64.
+Preparing to unpack .../26-libx265-199_3.5-2build1_amd64.deb ...
+Unpacking libx265-199:amd64 (3.5-2build1) ...
+Selecting previously unselected package libxvidcore4:amd64.
+Preparing to unpack .../27-libxvidcore4_2%3a1.3.7-1build1_amd64.deb ...
+Unpacking libxvidcore4:amd64 (2:1.3.7-1build1) ...
+Selecting previously unselected package libzvbi-common.
+Preparing to unpack .../28-libzvbi-common_0.2.42-2_all.deb ...
+Unpacking libzvbi-common (0.2.42-2) ...
+Selecting previously unselected package libzvbi0t64:amd64.
+Preparing to unpack .../29-libzvbi0t64_0.2.42-2_amd64.deb ...
+Unpacking libzvbi0t64:amd64 (0.2.42-2) ...
+Selecting previously unselected package libavcodec60:amd64.
+Preparing to unpack .../30-libavcodec60_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libavcodec60:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libraw1394-11:amd64.
+Preparing to unpack .../31-libraw1394-11_2.1.2-2build3_amd64.deb ...
+Unpacking libraw1394-11:amd64 (2.1.2-2build3) ...
+Selecting previously unselected package libavc1394-0:amd64.
+Preparing to unpack .../32-libavc1394-0_0.5.4-5build3_amd64.deb ...
+Unpacking libavc1394-0:amd64 (0.5.4-5build3) ...
+Selecting previously unselected package libunibreak5:amd64.
+Preparing to unpack .../33-libunibreak5_5.1-2build1_amd64.deb ...
+Unpacking libunibreak5:amd64 (5.1-2build1) ...
+Selecting previously unselected package libass9:amd64.
+Preparing to unpack .../34-libass9_1%3a0.17.1-2build1_amd64.deb ...
+Unpacking libass9:amd64 (1:0.17.1-2build1) ...
+Selecting previously unselected package libudfread0:amd64.
+Preparing to unpack .../35-libudfread0_1.1.2-1build1_amd64.deb ...
+Unpacking libudfread0:amd64 (1.1.2-1build1) ...
+Selecting previously unselected package libbluray2:amd64.
+Preparing to unpack .../36-libbluray2_1%3a1.3.4-1build1_amd64.deb ...
+Unpacking libbluray2:amd64 (1:1.3.4-1build1) ...
+Selecting previously unselected package libchromaprint1:amd64.
+Preparing to unpack .../37-libchromaprint1_1.5.1-5_amd64.deb ...
+Unpacking libchromaprint1:amd64 (1.5.1-5) ...
+Selecting previously unselected package libgme0:amd64.
+Preparing to unpack .../38-libgme0_0.6.3-7build1_amd64.deb ...
+Unpacking libgme0:amd64 (0.6.3-7build1) ...
+Selecting previously unselected package libmpg123-0t64:amd64.
+Preparing to unpack .../39-libmpg123-0t64_1.32.5-1ubuntu1.1_amd64.deb ...
+Unpacking libmpg123-0t64:amd64 (1.32.5-1ubuntu1.1) ...
+Selecting previously unselected package libopenmpt0t64:amd64.
+Preparing to unpack .../40-libopenmpt0t64_0.7.3-1.1build3_amd64.deb ...
+Unpacking libopenmpt0t64:amd64 (0.7.3-1.1build3) ...
+Selecting previously unselected package libcjson1:amd64.
+Preparing to unpack .../41-libcjson1_1.7.17-1_amd64.deb ...
+Unpacking libcjson1:amd64 (1.7.17-1) ...
+Selecting previously unselected package libmbedcrypto7t64:amd64.
+Preparing to unpack .../42-libmbedcrypto7t64_2.28.8-1_amd64.deb ...
+Unpacking libmbedcrypto7t64:amd64 (2.28.8-1) ...
+Selecting previously unselected package librist4:amd64.
+Preparing to unpack .../43-librist4_0.2.10+dfsg-2_amd64.deb ...
+Unpacking librist4:amd64 (0.2.10+dfsg-2) ...
+Selecting previously unselected package libsrt1.5-gnutls:amd64.
+Preparing to unpack .../44-libsrt1.5-gnutls_1.5.3-1build2_amd64.deb ...
+Unpacking libsrt1.5-gnutls:amd64 (1.5.3-1build2) ...
+Selecting previously unselected package libssh-gcrypt-4:amd64.
+Preparing to unpack .../45-libssh-gcrypt-4_0.10.6-2ubuntu0.5_amd64.deb ...
+Unpacking libssh-gcrypt-4:amd64 (0.10.6-2ubuntu0.5) ...
+Selecting previously unselected package libavformat60:amd64.
+Preparing to unpack .../46-libavformat60_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libavformat60:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libbs2b0:amd64.
+Preparing to unpack .../47-libbs2b0_3.1.0+dfsg-7build1_amd64.deb ...
+Unpacking libbs2b0:amd64 (3.1.0+dfsg-7build1) ...
+Selecting previously unselected package libflite1:amd64.
+Preparing to unpack .../48-libflite1_2.2-6build3_amd64.deb ...
+Unpacking libflite1:amd64 (2.2-6build3) ...
+Selecting previously unselected package libserd-0-0:amd64.
+Preparing to unpack .../49-libserd-0-0_0.32.2-1_amd64.deb ...
+Unpacking libserd-0-0:amd64 (0.32.2-1) ...
+Selecting previously unselected package libzix-0-0:amd64.
+Preparing to unpack .../50-libzix-0-0_0.4.2-2build1_amd64.deb ...
+Unpacking libzix-0-0:amd64 (0.4.2-2build1) ...
+Selecting previously unselected package libsord-0-0:amd64.
+Preparing to unpack .../51-libsord-0-0_0.16.16-2build1_amd64.deb ...
+Unpacking libsord-0-0:amd64 (0.16.16-2build1) ...
+Selecting previously unselected package libsratom-0-0:amd64.
+Preparing to unpack .../52-libsratom-0-0_0.6.16-1build1_amd64.deb ...
+Unpacking libsratom-0-0:amd64 (0.6.16-1build1) ...
+Selecting previously unselected package liblilv-0-0:amd64.
+Preparing to unpack .../53-liblilv-0-0_0.24.22-1build1_amd64.deb ...
+Unpacking liblilv-0-0:amd64 (0.24.22-1build1) ...
+Selecting previously unselected package libmysofa1:amd64.
+Preparing to unpack .../54-libmysofa1_1.3.2+dfsg-2ubuntu2_amd64.deb ...
+Unpacking libmysofa1:amd64 (1.3.2+dfsg-2ubuntu2) ...
+Selecting previously unselected package libplacebo338:amd64.
+Preparing to unpack .../55-libplacebo338_6.338.2-2build1_amd64.deb ...
+Unpacking libplacebo338:amd64 (6.338.2-2build1) ...
+Selecting previously unselected package libblas3:amd64.
+Preparing to unpack .../56-libblas3_3.12.0-3build1.1_amd64.deb ...
+Unpacking libblas3:amd64 (3.12.0-3build1.1) ...
+Selecting previously unselected package liblapack3:amd64.
+Preparing to unpack .../57-liblapack3_3.12.0-3build1.1_amd64.deb ...
+Unpacking liblapack3:amd64 (3.12.0-3build1.1) ...
+Selecting previously unselected package libasyncns0:amd64.
+Preparing to unpack .../58-libasyncns0_0.8-6build4_amd64.deb ...
+Unpacking libasyncns0:amd64 (0.8-6build4) ...
+Selecting previously unselected package libflac12t64:amd64.
+Preparing to unpack .../59-libflac12t64_1.4.3+ds-2.1ubuntu2_amd64.deb ...
+Unpacking libflac12t64:amd64 (1.4.3+ds-2.1ubuntu2) ...
+Selecting previously unselected package libsndfile1:amd64.
+Preparing to unpack .../60-libsndfile1_1.2.2-1ubuntu5.24.04.1_amd64.deb ...
+Unpacking libsndfile1:amd64 (1.2.2-1ubuntu5.24.04.1) ...
+Selecting previously unselected package libpulse0:amd64.
+Preparing to unpack .../61-libpulse0_1%3a16.1+dfsg1-2ubuntu10.1_amd64.deb ...
+Unpacking libpulse0:amd64 (1:16.1+dfsg1-2ubuntu10.1) ...
+Selecting previously unselected package libsphinxbase3t64:amd64.
+Preparing to unpack .../62-libsphinxbase3t64_0.8+5prealpha+1-17build2_amd64.deb ...
+Unpacking libsphinxbase3t64:amd64 (0.8+5prealpha+1-17build2) ...
+Selecting previously unselected package libpocketsphinx3:amd64.
+Preparing to unpack .../63-libpocketsphinx3_0.8.0+real5prealpha+1-15ubuntu5_amd64.deb ...
+Unpacking libpocketsphinx3:amd64 (0.8.0+real5prealpha+1-15ubuntu5) ...
+Selecting previously unselected package libpostproc57:amd64.
+Preparing to unpack .../64-libpostproc57_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libpostproc57:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libsamplerate0:amd64.
+Preparing to unpack .../65-libsamplerate0_0.2.2-4build1_amd64.deb ...
+Unpacking libsamplerate0:amd64 (0.2.2-4build1) ...
+Selecting previously unselected package librubberband2:amd64.
+Preparing to unpack .../66-librubberband2_3.3.0+dfsg-2build1_amd64.deb ...
+Unpacking librubberband2:amd64 (3.3.0+dfsg-2build1) ...
+Selecting previously unselected package libswscale7:amd64.
+Preparing to unpack .../67-libswscale7_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libswscale7:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libvidstab1.1:amd64.
+Preparing to unpack .../68-libvidstab1.1_1.1.0-2build1_amd64.deb ...
+Unpacking libvidstab1.1:amd64 (1.1.0-2build1) ...
+Selecting previously unselected package libzimg2:amd64.
+Preparing to unpack .../69-libzimg2_3.0.5+ds1-1build1_amd64.deb ...
+Unpacking libzimg2:amd64 (3.0.5+ds1-1build1) ...
+Selecting previously unselected package libavfilter9:amd64.
+Preparing to unpack .../70-libavfilter9_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libavfilter9:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libcaca0:amd64.
+Preparing to unpack .../71-libcaca0_0.99.beta20-4ubuntu0.2_amd64.deb ...
+Unpacking libcaca0:amd64 (0.99.beta20-4ubuntu0.2) ...
+Selecting previously unselected package libcdio19t64:amd64.
+Preparing to unpack .../72-libcdio19t64_2.1.0-4.1ubuntu1.2_amd64.deb ...
+Unpacking libcdio19t64:amd64 (2.1.0-4.1ubuntu1.2) ...
+Selecting previously unselected package libcdio-cdda2t64:amd64.
+Preparing to unpack .../73-libcdio-cdda2t64_10.2+2.0.1-1.1build2_amd64.deb ...
+Unpacking libcdio-cdda2t64:amd64 (10.2+2.0.1-1.1build2) ...
+Selecting previously unselected package libcdio-paranoia2t64:amd64.
+Preparing to unpack .../74-libcdio-paranoia2t64_10.2+2.0.1-1.1build2_amd64.deb ...
+Unpacking libcdio-paranoia2t64:amd64 (10.2+2.0.1-1.1build2) ...
+Selecting previously unselected package libdc1394-25:amd64.
+Preparing to unpack .../75-libdc1394-25_2.2.6-4build1_amd64.deb ...
+Unpacking libdc1394-25:amd64 (2.2.6-4build1) ...
+Selecting previously unselected package libiec61883-0:amd64.
+Preparing to unpack .../76-libiec61883-0_1.2.0-6build1_amd64.deb ...
+Unpacking libiec61883-0:amd64 (1.2.0-6build1) ...
+Selecting previously unselected package libjack-jackd2-0:amd64.
+Preparing to unpack .../77-libjack-jackd2-0_1.9.21~dfsg-3ubuntu3_amd64.deb ...
+Unpacking libjack-jackd2-0:amd64 (1.9.21~dfsg-3ubuntu3) ...
+Selecting previously unselected package libopenal-data.
+Preparing to unpack .../78-libopenal-data_1%3a1.23.1-4build1_all.deb ...
+Unpacking libopenal-data (1:1.23.1-4build1) ...
+Selecting previously unselected package libsndio7.0:amd64.
+Preparing to unpack .../79-libsndio7.0_1.9.0-0.3build3_amd64.deb ...
+Unpacking libsndio7.0:amd64 (1.9.0-0.3build3) ...
+Selecting previously unselected package libopenal1:amd64.
+Preparing to unpack .../80-libopenal1_1%3a1.23.1-4build1_amd64.deb ...
+Unpacking libopenal1:amd64 (1:1.23.1-4build1) ...
+Selecting previously unselected package libdecor-0-0:amd64.
+Preparing to unpack .../81-libdecor-0-0_0.2.2-1build2_amd64.deb ...
+Unpacking libdecor-0-0:amd64 (0.2.2-1build2) ...
+Selecting previously unselected package libsdl2-2.0-0:amd64.
+Preparing to unpack .../82-libsdl2-2.0-0_2.30.0+dfsg-1ubuntu3.1_amd64.deb ...
+Unpacking libsdl2-2.0-0:amd64 (2.30.0+dfsg-1ubuntu3.1) ...
+Selecting previously unselected package libxcb-shape0:amd64.
+Preparing to unpack .../83-libxcb-shape0_1.15-1ubuntu2_amd64.deb ...
+Unpacking libxcb-shape0:amd64 (1.15-1ubuntu2) ...
+Selecting previously unselected package libxv1:amd64.
+Preparing to unpack .../84-libxv1_2%3a1.0.11-1.1build1_amd64.deb ...
+Unpacking libxv1:amd64 (2:1.0.11-1.1build1) ...
+Selecting previously unselected package libavdevice60:amd64.
+Preparing to unpack .../85-libavdevice60_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking libavdevice60:amd64 (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package ffmpeg.
+Preparing to unpack .../86-ffmpeg_7%3a6.1.1-3ubuntu5_amd64.deb ...
+Unpacking ffmpeg (7:6.1.1-3ubuntu5) ...
+Selecting previously unselected package libigdgmm12:amd64.
+Preparing to unpack .../87-libigdgmm12_22.3.17+ds1-1ubuntu1_amd64.deb ...
+Unpacking libigdgmm12:amd64 (22.3.17+ds1-1ubuntu1) ...
+Selecting previously unselected package intel-media-va-driver:amd64.
+Preparing to unpack .../88-intel-media-va-driver_24.1.0+dfsg1-1ubuntu0.2_amd64.deb ...
+Unpacking intel-media-va-driver:amd64 (24.1.0+dfsg1-1ubuntu0.2) ...
+Selecting previously unselected package libaacs0:amd64.
+Preparing to unpack .../89-libaacs0_0.11.1-2build1_amd64.deb ...
+Unpacking libaacs0:amd64 (0.11.1-2build1) ...
+Selecting previously unselected package libbdplus0:amd64.
+Preparing to unpack .../90-libbdplus0_0.2.0-3build1_amd64.deb ...
+Unpacking libbdplus0:amd64 (0.2.0-3build1) ...
+Selecting previously unselected package libdecor-0-plugin-1-gtk:amd64.
+Preparing to unpack .../91-libdecor-0-plugin-1-gtk_0.2.2-1build2_amd64.deb ...
+Unpacking libdecor-0-plugin-1-gtk:amd64 (0.2.2-1build2) ...
+Selecting previously unselected package librsvg2-common:amd64.
+Preparing to unpack .../92-librsvg2-common_2.58.0+dfsg-1build1_amd64.deb ...
+Unpacking librsvg2-common:amd64 (2.58.0+dfsg-1build1) ...
+Selecting previously unselected package mesa-va-drivers:amd64.
+Preparing to unpack .../93-mesa-va-drivers_25.2.8-0ubuntu0.24.04.2_amd64.deb ...
+Unpacking mesa-va-drivers:amd64 (25.2.8-0ubuntu0.24.04.2) ...
+Selecting previously unselected package mesa-vdpau-drivers:amd64.
+Preparing to unpack .../94-mesa-vdpau-drivers_25.2.8-0ubuntu0.24.04.2_amd64.deb ...
+Unpacking mesa-vdpau-drivers:amd64 (25.2.8-0ubuntu0.24.04.2) ...
+Selecting previously unselected package i965-va-driver:amd64.
+Preparing to unpack .../95-i965-va-driver_2.4.1+dfsg1-1ubuntu0.2_amd64.deb ...
+Unpacking i965-va-driver:amd64 (2.4.1+dfsg1-1ubuntu0.2) ...
+Selecting previously unselected package va-driver-all:amd64.
+Preparing to unpack .../96-va-driver-all_2.20.0-2ubuntu0.2_amd64.deb ...
+Unpacking va-driver-all:amd64 (2.20.0-2ubuntu0.2) ...
+Selecting previously unselected package vdpau-driver-all:amd64.
+Preparing to unpack .../97-vdpau-driver-all_1.5-2build1_amd64.deb ...
+Unpacking vdpau-driver-all:amd64 (1.5-2build1) ...
+Selecting previously unselected package pocketsphinx-en-us.
+Preparing to unpack .../98-pocketsphinx-en-us_0.8.0+real5prealpha+1-15ubuntu5_all.deb ...
+Unpacking pocketsphinx-en-us (0.8.0+real5prealpha+1-15ubuntu5) ...
+Setting up libgme0:amd64 (0.6.3-7build1) ...
+Setting up libchromaprint1:amd64 (1.5.1-5) ...
+Setting up libssh-gcrypt-4:amd64 (0.10.6-2ubuntu0.5) ...
+Setting up libhwy1t64:amd64 (1.0.7-8.1build1) ...
+Setting up libudfread0:amd64 (1.1.2-1build1) ...
+Setting up libraw1394-11:amd64 (2.1.2-2build3) ...
+Setting up libspeex1:amd64 (1.2.1-2ubuntu2.24.04.1) ...
+Setting up libshine3:amd64 (3.1.1-2build1) ...
+Setting up libcaca0:amd64 (0.99.beta20-4ubuntu0.2) ...
+Setting up libvpl2 (2023.3.0-1build1) ...
+Setting up libx264-164:amd64 (2:0.164.3108+git31e19f9-1) ...
+Setting up libtwolame0:amd64 (0.4.0-2build3) ...
+Setting up libmbedcrypto7t64:amd64 (2.28.8-1) ...
+Setting up libgsm1:amd64 (1.0.22-1build1) ...
+Setting up libsoxr0:amd64 (0.1.3-4build3) ...
+Setting up libzix-0-0:amd64 (0.4.2-2build1) ...
+Setting up libcodec2-1.2:amd64 (1.2.0-2build1) ...
+Setting up libmysofa1:amd64 (1.3.2+dfsg-2ubuntu2) ...
+Setting up libxcb-shape0:amd64 (1.15-1ubuntu2) ...
+Setting up libcdio19t64:amd64 (2.1.0-4.1ubuntu1.2) ...
+Setting up libsvtav1enc1d1:amd64 (1.7.0+dfsg-2build1) ...
+Setting up libigdgmm12:amd64 (22.3.17+ds1-1ubuntu1) ...
+Setting up libmpg123-0t64:amd64 (1.32.5-1ubuntu1.1) ...
+Setting up libcjson1:amd64 (1.7.17-1) ...
+Setting up libxvidcore4:amd64 (2:1.3.7-1build1) ...
+Setting up librav1e0:amd64 (0.7.1-2) ...
+Setting up libcdio-cdda2t64:amd64 (10.2+2.0.1-1.1build2) ...
+Setting up librist4:amd64 (0.2.10+dfsg-2) ...
+Setting up librsvg2-2:amd64 (2.58.0+dfsg-1build1) ...
+Setting up libblas3:amd64 (3.12.0-3build1.1) ...
+update-alternatives: using /usr/lib/x86_64-linux-gnu/blas/libblas.so.3 to provide /usr/lib/x86_64-linux-gnu/libblas.so.3 (libblas.so.3-x86_64-linux-gnu) in auto mode
+Setting up libplacebo338:amd64 (6.338.2-2build1) ...
+Setting up libva2:amd64 (2.20.0-2ubuntu0.2) ...
+Setting up libopus0:amd64 (1.4-1build1) ...
+Setting up libcdio-paranoia2t64:amd64 (10.2+2.0.1-1.1build2) ...
+Setting up libdc1394-25:amd64 (2.2.6-4build1) ...
+Setting up intel-media-va-driver:amd64 (24.1.0+dfsg1-1ubuntu0.2) ...
+Setting up libxv1:amd64 (2:1.0.11-1.1build1) ...
+Setting up libunibreak5:amd64 (5.1-2build1) ...
+Setting up libaacs0:amd64 (0.11.1-2build1) ...
+Setting up libjxl0.7:amd64 (0.7.0-10.2ubuntu6.1) ...
+Setting up librsvg2-common:amd64 (2.58.0+dfsg-1build1) ...
+Setting up pocketsphinx-en-us (0.8.0+real5prealpha+1-15ubuntu5) ...
+Setting up libx265-199:amd64 (3.5-2build1) ...
+Setting up libsndio7.0:amd64 (1.9.0-0.3build3) ...
+Setting up libbdplus0:amd64 (0.2.0-3build1) ...
+Setting up libvidstab1.1:amd64 (1.1.0-2build1) ...
+Setting up libvpx9:amd64 (1.14.0-1ubuntu2.3) ...
+Setting up libsrt1.5-gnutls:amd64 (1.5.3-1build2) ...
+Setting up libflite1:amd64 (2.2-6build3) ...
+Setting up libdav1d7:amd64 (1.4.1-1build1) ...
+Setting up libva-drm2:amd64 (2.20.0-2ubuntu0.2) ...
+Setting up ocl-icd-libopencl1:amd64 (2.3.2-1build1) ...
+Setting up libasyncns0:amd64 (0.8-6build4) ...
+Setting up libvdpau1:amd64 (1.5-2build1) ...
+Setting up libbs2b0:amd64 (3.1.0+dfsg-7build1) ...
+Setting up libtheora0:amd64 (1.1.1+dfsg.1-16.1build3) ...
+Setting up libdecor-0-0:amd64 (0.2.2-1build2) ...
+Setting up libzimg2:amd64 (3.0.5+ds1-1build1) ...
+Setting up libopenal-data (1:1.23.1-4build1) ...
+Setting up libflac12t64:amd64 (1.4.3+ds-2.1ubuntu2) ...
+Setting up mesa-va-drivers:amd64 (25.2.8-0ubuntu0.24.04.2) ...
+Setting up libbluray2:amd64 (1:1.3.4-1build1) ...
+Setting up libsamplerate0:amd64 (0.2.2-4build1) ...
+Setting up libva-x11-2:amd64 (2.20.0-2ubuntu0.2) ...
+Setting up libdecor-0-plugin-1-gtk:amd64 (0.2.2-1build2) ...
+Setting up libopenmpt0t64:amd64 (0.7.3-1.1build3) ...
+Setting up libzvbi-common (0.2.42-2) ...
+Setting up libmp3lame0:amd64 (3.100-6build1) ...
+Setting up i965-va-driver:amd64 (2.4.1+dfsg1-1ubuntu0.2) ...
+Setting up libvorbisenc2:amd64 (1.3.7-1build3) ...
+Setting up libiec61883-0:amd64 (1.2.0-6build1) ...
+Setting up libserd-0-0:amd64 (0.32.2-1) ...
+Setting up libavc1394-0:amd64 (0.5.4-5build3) ...
+Setting up mesa-vdpau-drivers:amd64 (25.2.8-0ubuntu0.24.04.2) ...
+Setting up liblapack3:amd64 (3.12.0-3build1.1) ...
+update-alternatives: using /usr/lib/x86_64-linux-gnu/lapack/liblapack.so.3 to provide /usr/lib/x86_64-linux-gnu/liblapack.so.3 (liblapack.so.3-x86_64-linux-gnu) in auto mode
+Setting up libzvbi0t64:amd64 (0.2.42-2) ...
+Setting up libavutil58:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up libopenal1:amd64 (1:1.23.1-4build1) ...
+Setting up libass9:amd64 (1:0.17.1-2build1) ...
+Setting up libswresample4:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up va-driver-all:amd64 (2.20.0-2ubuntu0.2) ...
+Setting up libavcodec60:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up librubberband2:amd64 (3.3.0+dfsg-2build1) ...
+Setting up libjack-jackd2-0:amd64 (1.9.21~dfsg-3ubuntu3) ...
+Setting up vdpau-driver-all:amd64 (1.5-2build1) ...
+Setting up libsord-0-0:amd64 (0.16.16-2build1) ...
+Setting up libpostproc57:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up libsratom-0-0:amd64 (0.6.16-1build1) ...
+Setting up libsndfile1:amd64 (1.2.2-1ubuntu5.24.04.1) ...
+Setting up liblilv-0-0:amd64 (0.24.22-1build1) ...
+Setting up libswscale7:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up libpulse0:amd64 (1:16.1+dfsg1-2ubuntu10.1) ...
+Setting up libavformat60:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up libsphinxbase3t64:amd64 (0.8+5prealpha+1-17build2) ...
+Setting up libsdl2-2.0-0:amd64 (2.30.0+dfsg-1ubuntu3.1) ...
+Setting up libpocketsphinx3:amd64 (0.8.0+real5prealpha+1-15ubuntu5) ...
+Setting up libavfilter9:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up libavdevice60:amd64 (7:6.1.1-3ubuntu5) ...
+Setting up ffmpeg (7:6.1.1-3ubuntu5) ...
+Processing triggers for man-db (2.12.0-4build2) ...
+Not building database; man-db/auto-update is not 'true'.
+Processing triggers for libgdk-pixbuf-2.0-0:amd64 (2.42.10+dfsg-3ubuntu3.3) ...
+Processing triggers for libc-bin (2.39-0ubuntu8.8) ...
+
+Running kernel seems to be up-to-date.
+
+No services need to be restarted.
+
+No containers need to be restarted.
+
+No user sessions are running outdated binaries.
+
+No VM guests are running outdated hypervisor (qemu) binaries on this host.
+ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+##[group]Run actions/setup-python@v5
+with:
+  python-version: 3.11
+  cache: pip
+  check-latest: false
+  token: ***
+  update-environment: true
+  allow-prereleases: false
+  freethreaded: false
+env:
+  PYTHONUNBUFFERED: 1
+##[endgroup]
+##[group]Installed versions
+(node:3624) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Successfully set up CPython (3.11.16)
+##[endgroup]
+[command]/opt/hostedtoolcache/Python/3.11.16/x64/bin/pip cache dir
+/home/runner/.cache/pip
+Cache hit for: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.16-pip-e5ba78aa43bbbbdf9b6ef16636129448b8ac2abc09ada2a164475212ef6ee421
+(node:3624) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+Received 0 of 46524346 (0.0%), 0.0 MBs/sec
+Received 46524346 of 46524346 (100.0%), 31.2 MBs/sec
+Cache Size: ~44 MB (46524346 B)
+[command]/usr/bin/tar -xf /home/runner/work/_temp/d3acfb3d-c2d1-4583-ab31-115d94c27ff4/cache.tzst -P -C /home/runner/work/MMM-MVP/MMM-MVP --use-compress-program unzstd
+Cache restored successfully
+Cache restored from key: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.16-pip-e5ba78aa43bbbbdf9b6ef16636129448b8ac2abc09ada2a164475212ef6ee421
+##[group]Run python -m pip install --upgrade pip
+[36;1mpython -m pip install --upgrade pip[0m
+[36;1mpip install -r requirements.txt[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+##[endgroup]
+Requirement already satisfied: pip in /opt/hostedtoolcache/Python/3.11.16/x64/lib/python3.11/site-packages (26.2.1)
+Collecting google-genai>=1.0.0 (from -r requirements.txt (line 1))
+  Downloading google_genai-2.22.0-py3-none-any.whl.metadata (56 kB)
+Collecting edge-tts>=6.1.0 (from -r requirements.txt (line 2))
+  Using cached edge_tts-7.2.8-py3-none-any.whl.metadata (5.5 kB)
+Collecting Pillow>=10.0.0 (from -r requirements.txt (line 3))
+  Using cached pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.1 kB)
+Collecting requests>=2.31.0 (from -r requirements.txt (line 4))
+  Using cached requests-2.34.2-py3-none-any.whl.metadata (4.8 kB)
+Collecting ddgs>=9.0.0 (from -r requirements.txt (line 5))
+  Using cached ddgs-9.16.0-py3-none-any.whl.metadata (16 kB)
+Collecting anyio<5.0.0,>=4.8.0 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Downloading anyio-4.15.0-py3-none-any.whl.metadata (4.7 kB)
+Collecting google-auth<3.0.0,>=2.56.0 (from google-auth[requests]<3.0.0,>=2.56.0->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Downloading google_auth-2.57.1-py3-none-any.whl.metadata (6.0 kB)
+Collecting httpx<1.0.0,>=0.28.1 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+Collecting pydantic<3.0.0,>=2.12.5 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached pydantic-2.13.5-py3-none-any.whl.metadata (110 kB)
+Collecting tenacity<9.2.0,>=8.2.3 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached tenacity-9.1.4-py3-none-any.whl.metadata (1.2 kB)
+Collecting websockets<17.0,>=13.0.0 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached websockets-16.1.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.8 kB)
+Collecting typing-extensions<5.0.0,>=4.14.0 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+Collecting distro<2,>=1.7.0 (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached distro-1.9.0-py3-none-any.whl.metadata (6.8 kB)
+Collecting sniffio (from google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached sniffio-1.3.1-py3-none-any.whl.metadata (3.9 kB)
+Collecting charset_normalizer<4,>=2 (from requests>=2.31.0->-r requirements.txt (line 4))
+  Using cached charset_normalizer-3.5.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (45 kB)
+Collecting idna<4,>=2.5 (from requests>=2.31.0->-r requirements.txt (line 4))
+  Using cached idna-3.19-py3-none-any.whl.metadata (9.2 kB)
+Collecting urllib3<3,>=1.26 (from requests>=2.31.0->-r requirements.txt (line 4))
+  Using cached urllib3-2.7.0-py3-none-any.whl.metadata (6.9 kB)
+Collecting certifi>=2023.5.7 (from requests>=2.31.0->-r requirements.txt (line 4))
+  Using cached certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+Collecting pyasn1-modules>=0.2.1 (from google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached pyasn1_modules-0.4.2-py3-none-any.whl.metadata (3.5 kB)
+Collecting cryptography>=38.0.3 (from google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached cryptography-50.0.1-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.3 kB)
+Collecting httpcore==1.* (from httpx<1.0.0,>=0.28.1->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+Collecting h11>=0.16 (from httpcore==1.*->httpx<1.0.0,>=0.28.1->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+Collecting annotated-types>=0.6.0 (from pydantic<3.0.0,>=2.12.5->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+Collecting pydantic-core==2.46.5 (from pydantic<3.0.0,>=2.12.5->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached pydantic_core-2.46.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.6 kB)
+Collecting typing-inspection>=0.4.2 (from pydantic<3.0.0,>=2.12.5->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+Collecting aiohttp<4.0.0,>=3.8.0 (from edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached aiohttp-3.14.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (8.3 kB)
+Collecting tabulate<1.0.0,>=0.4.4 (from edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached tabulate-0.10.0-py3-none-any.whl.metadata (40 kB)
+Collecting aiohappyeyeballs>=2.5.0 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached aiohappyeyeballs-2.7.1-py3-none-any.whl.metadata (5.9 kB)
+Collecting aiosignal>=1.4.0 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached aiosignal-1.4.0-py3-none-any.whl.metadata (3.7 kB)
+Collecting attrs>=17.3.0 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached attrs-26.1.0-py3-none-any.whl.metadata (8.8 kB)
+Collecting frozenlist>=1.1.1 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached frozenlist-1.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (20 kB)
+Collecting multidict<7.0,>=4.5 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached multidict-6.7.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.3 kB)
+Collecting propcache>=0.2.0 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached propcache-0.5.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (16 kB)
+Collecting yarl<2.0,>=1.17.0 (from aiohttp<4.0.0,>=3.8.0->edge-tts>=6.1.0->-r requirements.txt (line 2))
+  Using cached yarl-1.24.5-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (103 kB)
+Collecting click>=8.1.8 (from ddgs>=9.0.0->-r requirements.txt (line 5))
+  Using cached click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+Collecting primp>=1.3.1 (from ddgs>=9.0.0->-r requirements.txt (line 5))
+  Using cached primp-2.0.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (3.9 kB)
+Collecting lxml>=4.9.4 (from ddgs>=9.0.0->-r requirements.txt (line 5))
+  Downloading lxml-6.1.3-cp311-cp311-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl.metadata (3.3 kB)
+Collecting cffi>=2.0.0 (from cryptography>=38.0.3->google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+Collecting pycparser (from cffi>=2.0.0->cryptography>=38.0.3->google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+Collecting pyasn1<0.7.0,>=0.6.1 (from pyasn1-modules>=0.2.1->google-auth<3.0.0,>=2.56.0->google-auth[requests]<3.0.0,>=2.56.0->google-genai>=1.0.0->-r requirements.txt (line 1))
+  Using cached pyasn1-0.6.4-py3-none-any.whl.metadata (8.4 kB)
+Downloading google_genai-2.22.0-py3-none-any.whl (1.1 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 1.1/1.1 MB 81.3 MB/s  0:00:00
+Using cached requests-2.34.2-py3-none-any.whl (73 kB)
+Downloading anyio-4.15.0-py3-none-any.whl (131 kB)
+Using cached charset_normalizer-3.5.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (262 kB)
+Using cached distro-1.9.0-py3-none-any.whl (20 kB)
+Downloading google_auth-2.57.1-py3-none-any.whl (259 kB)
+Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+Using cached idna-3.19-py3-none-any.whl (68 kB)
+Using cached pydantic-2.13.5-py3-none-any.whl (472 kB)
+Using cached pydantic_core-2.46.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+Using cached tenacity-9.1.4-py3-none-any.whl (28 kB)
+Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+Using cached urllib3-2.7.0-py3-none-any.whl (131 kB)
+Using cached websockets-16.1.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (186 kB)
+Using cached edge_tts-7.2.8-py3-none-any.whl (31 kB)
+Using cached aiohttp-3.14.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (1.8 MB)
+Using cached multidict-6.7.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (246 kB)
+Using cached tabulate-0.10.0-py3-none-any.whl (39 kB)
+Using cached yarl-1.24.5-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (111 kB)
+Using cached pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (6.9 MB)
+Using cached ddgs-9.16.0-py3-none-any.whl (47 kB)
+Using cached aiohappyeyeballs-2.7.1-py3-none-any.whl (15 kB)
+Using cached aiosignal-1.4.0-py3-none-any.whl (7.5 kB)
+Using cached annotated_types-0.8.0-py3-none-any.whl (13 kB)
+Using cached attrs-26.1.0-py3-none-any.whl (67 kB)
+Using cached certifi-2026.7.22-py3-none-any.whl (136 kB)
+Using cached click-8.5.0-py3-none-any.whl (125 kB)
+Using cached cryptography-50.0.1-cp311-abi3-manylinux_2_34_x86_64.whl (4.7 MB)
+Using cached cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (217 kB)
+Using cached frozenlist-1.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (231 kB)
+Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+Downloading lxml-6.1.3-cp311-cp311-manylinux_2_26_x86_64.manylinux_2_28_x86_64.whl (5.2 MB)
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ 5.2/5.2 MB 212.4 MB/s  0:00:00
+Using cached primp-2.0.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (5.9 MB)
+Using cached propcache-0.5.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (58 kB)
+Using cached pyasn1_modules-0.4.2-py3-none-any.whl (181 kB)
+Using cached pyasn1-0.6.4-py3-none-any.whl (84 kB)
+Using cached typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+Using cached pycparser-3.0-py3-none-any.whl (48 kB)
+Using cached sniffio-1.3.1-py3-none-any.whl (10 kB)
+Installing collected packages: websockets, urllib3, typing-extensions, tenacity, tabulate, sniffio, pycparser, pyasn1, propcache, primp, Pillow, multidict, lxml, idna, h11, frozenlist, distro, click, charset_normalizer, certifi, attrs, annotated-types, aiohappyeyeballs, yarl, typing-inspection, requests, pydantic-core, pyasn1-modules, httpcore, ddgs, cffi, anyio, aiosignal, pydantic, httpx, cryptography, aiohttp, google-auth, edge-tts, google-genai
+
+Successfully installed Pillow-12.3.0 aiohappyeyeballs-2.7.1 aiohttp-3.14.3 aiosignal-1.4.0 annotated-types-0.8.0 anyio-4.15.0 attrs-26.1.0 certifi-2026.7.22 cffi-2.1.1 charset_normalizer-3.5.1 click-8.5.0 cryptography-50.0.1 ddgs-9.16.0 distro-1.9.0 edge-tts-7.2.8 frozenlist-1.8.0 google-auth-2.57.1 google-genai-2.22.0 h11-0.16.0 httpcore-1.0.9 httpx-0.28.1 idna-3.19 lxml-6.1.3 multidict-6.7.1 primp-2.0.0 propcache-0.5.2 pyasn1-0.6.4 pyasn1-modules-0.4.2 pycparser-3.0 pydantic-2.13.5 pydantic-core-2.46.5 requests-2.34.2 sniffio-1.3.1 tabulate-0.10.0 tenacity-9.1.4 typing-extensions-4.16.0 typing-inspection-0.4.4 urllib3-2.7.0 websockets-16.1.1 yarl-1.24.5
+##[group]Run if git fetch --depth=1 origin factory-state 2>/dev/null; then
+[36;1mif git fetch --depth=1 origin factory-state 2>/dev/null; then[0m
+[36;1m  git show FETCH_HEAD:made.json > made.json 2>/dev/null \[0m
+[36;1m    && echo "restored scout memory:" \[0m
+[36;1m    || echo "factory-state exists but carries no made.json yet"[0m
+[36;1m  python -c "[0m
+[36;1mimport json[0m
+[36;1mtry:[0m
+[36;1m    s = json.load(open('made.json'))[0m
+[36;1m    print(f\"  made {len(s.get('made', []))}, \"[0m
+[36;1m          f\"shortlisted {len(s.get('backlog', []))}, \"[0m
+[36;1m          f\"rejected {len(s.get('rejected', []))}\")[0m
+[36;1mexcept Exception as e:[0m
+[36;1m    print('  (unreadable, starting fresh:', e, ')')[0m
+[36;1m" || rm -f made.json[0m
+[36;1melse[0m
+[36;1m  echo "no factory-state branch yet - first run, starting fresh"[0m
+[36;1mfi[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+##[endgroup]
+no factory-state branch yet - first run, starting fresh
+##[group]Run python brain.py
+[36;1mpython brain.py[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+  GEMINI_API_KEY: ***
+  GEMINI_MODEL: gemini-3.6-flash
+  TOPIC: top 10 deadliest fighting styles explained
+  TARGET_MINUTES: 8
+  STRICT_FACTS: 1
+  MAX_PASSES: 3
+  TAVILY_API_KEY: 
+  YOUTUBE_API_KEY: ***
+  CEREBRAS_API_KEY: 
+  GROQ_API_KEY: ***
+  OPENROUTER_API_KEY: 
+  CEREBRAS_MODEL: 
+  GROQ_MODEL: 
+  OPENROUTER_MODEL: 
+##[endgroup]
+[0/6] topic given: top 10 deadliest fighting styles explained
+      pages opened: 5/8 (18,529 chars)
+      membership: 8 source(s), 19,645 chars gathered, 10,207 shown (~1,275 per source)
+Direct use of automatic function calling (AFC) in Models.generate_content is not recommended. Instead, we recommend to use AFC in Chat.send_message. Similarly, direct use of AFC in Models.generate_content_stream is not recommended. Instead, we recommend to use AFC in Chat.send_message_stream.
+      extraction: showed 8 source(s), model returned 8 entr(ies), 7 named any member
+         source 1: Krav Maga, Brazilian Jiu-Jitsu, Muay Thai, Boxing, Jeet Kune Do
+         source 2: Krav Maga, boxing, wrestling, judo, street fighting
+         source 3: Brazilian Jiu-Jitsu, Muay Thai
+  [REJECT] top 10 deadliest fighting styles explained  (agreement 0.056, 0 members, 8 sources)
+        - sources do not agree on the answer (agreement 0.056, need 0.55). 16 of 16 candidate items appear in a minority of sources. A confident list here would be partly invented - this is the failure that put 'runway' in a list of expense types.
+        - only 0 agreed members - there is nothing here to explain one by one
+      !! sources do NOT agree this topic has one settled answer:
+         - sources do not agree on the answer (agreement 0.056, need 0.55). 16 of 16 candidate items appear in a minority of sources. A confident list here would be partly invented - this is the failure that put 'runway' in a list of expense types.
+         - only 0 agreed members - there is nothing here to explain one by one
+      building it anyway because it was asked for - but the script is more likely to invent a list.
+================================================================
+  MMM BRAIN | gemini-3.6-flash | 8min | 11 scenes
+  topic      : top 10 deadliest fighting styles explained
+  mode       : explainer   max passes: 3   strict_facts=True
+================================================================
+[1/5] web research | mode=explainer
+        ? deadliest martial arts comparison krav maga silat systema muay thai
+        ? military hand to hand combat systems vs sport martial arts differences
+        ? lethal fighting styles anatomical targets strike impact analysis
+        ? armed vs unarmed martial arts eskrima silat lethality comparison
+        ? real world combat efficacy self defense martial arts style evaluation
+      14 sources, 51,105 chars of source text
+        - Top 20 Deadliest Martial Arts (Researched and Ranked)
+        - What Is the Deadliest Martial Art? | Seven Star Martial Arts
+        - Krav Maga vs Muay Thai vs Systema | 3 fighting styles explained
+        - 21 Deadliest Martial Arts in the World (Ranked by Brutality)
+        - What Is the Deadliest Martial Art in the World? - Floyd Cooper
+        - Hand-to-hand combat - Wikipedia
+      brief: 623 words
+[2/5] drafting 11 scenes (~119 words each)
+      1232 words / 11 scenes
+      answering: How do different categories of deadly fighting styles differ from one another in
+      .. saved a usable script.json (first draft)
+
+--- pass 1/3 ---
+      facts   : 0 unresolved
+      craft   : 4 below bar
+      metrics : density=8.69 sd=6.32 short=0.029 tells=0 hedge=0.08 causal=0.41
+        - sent_len_sd=6.32 (need >= 7.0) - sentence-length variation - flat rhythm kills retention
+        - short_ratio=0.029 (need >= 0.1) - share of punchy sentences (<=7 words)
+        - define_rate=0.0 (need >= 1.2) - definitional phrasing per 100 words - a taxonomy must define
+        - example_rate=0.08 (need >= 0.5) - concrete examples per 100 words
+      verifying against the web...
+      [research] duckduckgo failed: ConnectError: ConnectError('error sending request for url (https://www.google.com/wml/search?q=banteay+srei+967+ad+marti
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: ConnectError: ConnectError('error sending request for url (https://www.google.com/wml/search?q=etymology+martial+arts+16
+      [research] duckduckgo failed: ConnectError: ConnectError('error sending request for url (https://www.google.com/wml/search?q=shaolin+kung+fu+buddhism+
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      30 sources, 37 problem claim(s)
+        ! SCENE 1 | Every deadly fighting system falls into four distinct structural categories | UNSUPPORTED |
+        ! SCENE 1 | Striking arts rely on stand-up kinetic impact from limbs | UNSUPPORTED |
+        ! SCENE 1 | Grappling arts leverage mechanical force against joints and vital arteries on the ground | UNSUPPORT
+        ! SCENE 1 | Hybrid systems combine both approaches with unrestricted self-defense tactics | UNSUPPORTED |
+        ! SCENE 1 | Armed disciplines prioritize sharp weapons to end violent threats immediately | UNSUPPORTED |
+        ! SCENE 1 | One specific category operates entirely without rules | UNSUPPORTED |
+        ! SCENE 2 | Human physical conflict is fundamentally dictated by distance, leverage, and target selection | UNSU
+        ! SCENE 2 | Fundamental fighting mechanics remain constant over time | UNSUPPORTED |
+      .. saved a usable script.json (after pass 1)
+      revising...
+
+--- pass 2/3 ---
+      facts   : 37 unresolved
+      craft   : 2 below bar
+      metrics : density=7.17 sd=10.63 short=0.429 tells=0 hedge=0.09 causal=0.6
+        - define_rate=0.26 (need >= 1.2) - definitional phrasing per 100 words - a taxonomy must define
+        - answers_early=False - scene 1 must DELIVER the answer (name the categories/steps), not tease it
+      verifying against the web...
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+   ! gemini attempt 1/2: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+     -> gemini is busy, not broken; waiting 30s and trying again
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: ConnectError: ConnectError('error sending request for url (https://grokipedia.com/api/typeahead?query=shaolin+kung+fu+or
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+   ! gemini attempt 1/2: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+     -> gemini is busy, not broken; waiting 30s and trying again
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      30 sources, 36 problem claim(s)
+        ! SCENE 1 | European manuscripts in the 1550s first recorded a Latin phrase meaning arts of Mars | UNSUPPORTED |
+        ! SCENE 1 | Scholars and military theorists still use arts of Mars as a formal classification today | UNSUPPORTE
+        ! SCENE 1 | Combat styles are defined by four distinct categories | UNSUPPORTED |
+        ! SCENE 1 | Striking arts transfer kinetic energy through punches and kicks | UNSUPPORTED |
+        ! SCENE 1 | Grappling systems rely on mechanical leverage to subdue an attacker | UNSUPPORTED |
+        ! SCENE 2 | Banteay Srei temple reliefs capture striking mechanics | UNSUPPORTED |
+        ! SCENE 2 | Combat range dictates whether a fighter utilizes striking or grappling | UNSUPPORTED |
+        ! SCENE 2 | Long-range striking transfers limb velocity into target impact | UNSUPPORTED |
+      .. saved a usable script.json (after pass 2)
+      revising...
+
+--- pass 3/3 ---
+      facts   : 36 unresolved
+      craft   : 2 below bar
+      metrics : density=8.77 sd=6.1 short=0.247 tells=0 hedge=0.17 causal=1.24
+        - sent_len_sd=6.1 (need >= 7.0) - sentence-length variation - flat rhythm kills retention
+        - example_rate=0.41 (need >= 0.5) - concrete examples per 100 words
+      verifying against the web...
+   ! gemini attempt 1/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is busy, not broken; waiting 20s and trying again
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: ConnectError: ConnectError('error sending request for url (https://grokipedia.com/api/typeahead?query=brazilian+jiu+jits
+      [research] duckduckgo failed: No results found.
+   ! gemini attempt 1/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is busy, not broken; waiting 20s and trying again
+   ! gemini attempt 2/2: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}
+   .. gemini exhausted, trying next provider
+   .. groq caps requests at ~16,000 chars; trimmed the prompt from 39,986 to 15,777
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+   ! gemini attempt 1/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is busy, not broken; waiting 20s and trying again
+   ! gemini attempt 2/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is rate/quota limited, switching provider and resting it for 420s
+   .. gemini exhausted, trying next provider
+      [research] duckduckgo failed: No results found.
+      [research] duckduckgo failed: No results found.
+   .. skipping gemini - out of quota earlier, cooling off
+   .. groq caps requests at ~16,000 chars; trimmed the prompt from 37,944 to 15,641
+      30 sources, 54 problem claim(s)
+        ! SCENE 1 | European manuscripts in 1550 recorded the Latin phrase “arts of Mars” to describe local combat tradi
+        ! SCENE 1 | The phrase refers to European combat systems named after Mars, the Roman god of war | UNSUPPORTED | 
+        ! SCENE 1 | Four distinct categories of deadly fighting styles are defined by combat mechanics, engagement dista
+        ! SCENE 1 | Striking arts are stand‑up systems that rely on kinetic impacts from limbs | UNSUPPORTED | not corro
+        ! SCENE 1 | Grappling arts are ground‑focused disciplines centered on leverage and joint locks | UNSUPPORTED | n
+        ! SCENE 1 | Hybrid systems are “reality‑based survival frameworks using non‑sport tactics” | UNSUPPORTED | not c
+        ! SCENE 1 | Armed systems are styles where weapons are the primary focus | UNSUPPORTED | not corroborated by sou
+        ! SCENE 2 | In 967 A.D., stone carvers crafted detailed temple reliefs at Banteay Srei in Cambodia | UNSUPPORTED
+      budget exhausted with 2 craft and 54 fact issues left
+
+7 structural problem(s)
+   - scene 1: key_fact is 78 chars (max ~60)
+   - scene 2: key_fact is 71 chars (max ~60)
+   - scene 5: key_fact is 79 chars (max ~60)
+   - scene 6: key_fact is 81 chars (max ~60)
+   - scene 7: key_fact is 82 chars (max ~60)
+   - scene 8: key_fact is 72 chars (max ~60)
+   - scene 11: key_fact is 75 chars (max ~60)
+[5/5] repairing structure
+   .. skipping gemini - out of quota earlier, cooling off
+   .. groq caps requests at ~16,000 chars; trimmed the prompt from 25,066 to 15,020
+   ! groq attempt 1/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq is busy, not broken; waiting 20s and trying again
+   .. skipping gemini - out of quota earlier, cooling off
+   ! groq attempt 1/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq is busy, not broken; waiting 20s and trying again
+   ! groq attempt 2/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq is rate/quota limited, switching provider and resting it for 75s
+   .. groq exhausted, trying next provider
+   .. every provider failed this minute - waiting 45s and trying the whole chain once more
+   .. every provider is cooling off - waiting 30s for the soonest one rather than failing now
+   ! gemini attempt 1/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is busy, not broken; waiting 20s and trying again
+   ! gemini attempt 2/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is rate/quota limited, switching provider and resting it for 420s
+   .. gemini exhausted, trying next provider
+
+[6/6] red team, attempt 1/3
+      11 HARD, 2 soft
+        [hard] too-complex: reading grade 13.6 (target <= 9.5). The narration is harder to follow than it needs to be - shorter sentences and plainer words.
+        [hard] unsupported scene 1: "Latin phrase arts of Mars" No source mentions a Latin phrase 'arts of Mars' describing European combat traditions; remove or replace with a verifiable term.
+        [hard] unsupported scene 2: "stone carvers crafted detailed temple reliefs at Banteay Sre" Sources do not document Banteay Srei reliefs depicting striking techniques; claim is unsubstantiated and should be omitted.
+        [hard] unsupported scene 2: "proving empty-hand combat dates back over a millennium" No source provides evidence that the reliefs prove empty‑hand combat existed a millennium ago; remove this inference.
+        [hard] wrong scene 8: "Instructor Tsahi Shemesh began learning Krav Maga in 1988 un" Imi Lichtenfeld died in 1973, so he could not have taught anyone in 1988. Correct the lineage information.
+        [hard] unsupported scene 5: "Examples include Combat Sambo, MCMAP, LINE, and Systema" The acronym LINE is not a recognized martial system in the provided sources; the example list is inaccurate.
+        [hard] vague scene 4: "sport grappling rules disappear when lethal street encounter" The statement is vague and offers no concrete information; clarify or remove.
+        [hard] unsupported scene 7: "Asian martial arts were commonly referred to in mainstream c" No source supports this terminology; the claim is unverified.
+        [hard] unsupported scene 10: "A 2009 study revealed that only 2% of media attention relate" The cited statistic is not found in any provided source; remove or cite a proper study.
+        [hard] empty scene 11: "Physics governs combat reality." The sentence adds no substantive content and can be deleted.
+        [hard] hard-to-follow scene 1: "Distance dictates choices. Consequently, physical range gove" Redundant and unnecessarily complex; simplify to improve readability.
+        [soft] jargon: 'utilize' -> say 'use'
+        [soft] jargon: 'leverage' -> say 'use'
+      repairing 8 scene(s) (1, 2, 4, 5, 7, 8, 10, 11) instead of all 11
+   .. skipping gemini - out of quota earlier, cooling off
+      applied 7 scene fix(es)
+   .. skipping gemini - out of quota earlier, cooling off
+   ! groq attempt 1/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq is busy, not broken; waiting 20s and trying again
+   ! groq attempt 2/2: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq is rate/quota limited, switching provider and resting it for 75s
+   .. groq exhausted, trying next provider
+   .. every provider failed this minute - waiting 45s and trying the whole chain once more
+   .. every provider is cooling off - waiting 30s for the soonest one rather than failing now
+   ! gemini attempt 1/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is busy, not broken; waiting 20s and trying again
+   ! gemini attempt 2/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is rate/quota limited, switching provider and resting it for 420s
+   .. gemini exhausted, trying next provider
+
+[6/6] red team, attempt 2/3
+      8 HARD, 4 soft
+        [hard] too-complex: reading grade 10.2 (target <= 9.5). The narration is harder to follow than it needs to be - shorter sentences and plainer words.
+        [hard] unsupported scene 1: "In the 1550s European writers used the Latin phrase arts of " No source provided mentions this phrase or its 1550s usage; remove or cite a reliable historical reference.
+        [hard] unsupported scene 2: "Around 967 A.D. stone carvers added reliefs to the temple of" Banteay Srei was constructed in the early 11th century; the 967 A.D. date is inaccurate and not supported by any listed source.
+        [hard] unsupported scene 3: "Taekwondo refers to a specialized Korean striking discipline" Most histories place Taekwondo’s modern formation in the 1950s; the 1940s claim is not backed by the provided sources.
+        [hard] unsupported scene 4: "Brazilian Jiu-Jitsu is a ground‑based system that began in 1" BJJ’s origins trace to the Gracie family’s practice from the early 1910s; the 1925 date is not supported by the source list.
+        [hard] not-a-member scene 6: "Historical European Martial Arts refer to armed systems deve" HEMA is a modern reconstruction movement, not an original historical combat system; presenting it as a historical armed art is incorrect.
+        [hard] vague scene 7: "Shaolin Kung Fu, for example, grew out of Buddhist spread fr" The statement is overly broad and lacks specifics; it should clarify the historical link between Indian Buddhism and Shaolin, or be removed.
+        [hard] unsupported scene 10: "A 2009 study revealed that only 2% of media attention relate" No cited source backs this statistic; either provide the study or delete the claim.
+        [soft] jargon: 'leverage' -> say 'use'
+        [soft] empty scene 11: "All of them study human anatomy to find weak points." This generic statement adds no substantive information and can be removed.
+        [soft] hard-to-follow scene 5: "Gross motor skills are basic muscle actions that work even w" Simplify to "Gross motor skills are large‑muscle movements that remain effective under stress."
+        [soft] vague scene 11: "The most effective style is the one that matches the situati" The claim is a generic platitude; it adds little value and could be tightened or omitted.
+      repairing 7 scene(s) (1, 2, 3, 4, 6, 7, 10) instead of all 11
+   .. skipping gemini - out of quota earlier, cooling off
+   ! groq attempt 1/2: HTTP 400 from groq (openai/gpt-oss-120b): {"error":{"message":"Failed to generate JSON. Please adjust your prompt. See 'failed_generation' for more details.","type":"invalid_request_error","code":"jso
+     -> dropping response_schema, retrying plain JSON
+   ! groq attempt 2/3: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq is busy, not broken; waiting 20s and trying again
+   ! groq attempt 3/3: HTTP 429 from groq (openai/gpt-oss-120b): {"error":{"message":"Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01m162q93me97shz6yk1gbvqaa` service tier `on_demand` on tokens pe
+     -> groq is rate/quota limited, switching provider and resting it for 75s
+   .. groq exhausted, trying next provider
+   .. every provider failed this minute - waiting 45s and trying the whole chain once more
+   .. every provider is cooling off - waiting 30s for the soonest one rather than failing now
+   ! gemini attempt 1/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is busy, not broken; waiting 20s and trying again
+   ! gemini attempt 2/2: 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+     -> gemini is rate/quota limited, switching provider and resting it for 420s
+   .. gemini exhausted, trying next provider
+      applied 7 scene fix(es)
+   .. skipping gemini - out of quota earlier, cooling off
+
+[6/6] red team, attempt 3/3
+      7 HARD, 3 soft
+        [hard] too-complex: reading grade 9.6 (target <= 9.5). The narration is harder to follow than it needs to be - shorter sentences and plainer words.
+        [hard] unsupported scene 2: "Stone carvers added reliefs to the temple of Banteay Srei in" No source in the provided list confirms the construction date of Banteay Srei or that stone carvers added reliefs then. Remove or qualify with "approx
+        [hard] unsupported scene 2: "The carvings show people punching and kicking, proving that " None of the cited sources describe Banteay Srei reliefs depicting unarmed combat. This claim is unverified; either provide a source or delete the sent
+        [hard] not-a-member scene 5: "Examples include Combat Sambo, MCMAP and Systema." Systema is primarily a Russian military/strategic system, not generally classified as a hybrid striking‑grappling art. It should be removed from the l
+        [hard] unsupported scene 7: "Western writers once called Chinese martial arts "Chinese bo" The sources do not document this specific terminology timeline. Either cite a source that confirms the usage or rephrase to a verifiable statement.
+        [hard] wrong scene 8: "Krav Maga is a practical combat system that grew from street" All sources state Krav Maga originated in Czechoslovakia (Bratislava) in the 1930s, but it was developed by Imi Lichtenfeld as a self‑defense system f
+        [hard] unsupported scene 9: "The PRIDE combat sports event in Tokyo, Japan, drew a live a" No source listed provides that attendance figure. Remove or replace with a sourced statistic.
+        [soft] jargon: 'leverage' -> say 'use'
+        [soft] empty scene 11: "Physics explains why a punch lands or a lock works." The sentence adds no concrete information and can be omitted without loss.
+        [soft] vague scene 11: "The most effective style is the one that matches the situati" The statement is a generic platitude with no supporting evidence; consider tightening or removing.
+      !! shipping with 7 hard finding(s) unresolved
+
+   !! the red-team repair introduced 12 structural problem(s):
+      - scene 1: 89 words (need >= 104)
+      - scene 1: key_fact is 74 chars (max ~60)
+      - scene 2: 92 words (need >= 104)
+      - scene 3: 90 words (need >= 104)
+      - scene 4: 93 words (need >= 104)
+      - scene 4: key_fact is 92 chars (max ~60)
+      (the engine degrades safely on these - a term with no match simply gets no card - but the repair caused them)
+
+================================================================
+script.json written
+   title    : Every Category of Deadly Fighting Style Explained
+   answers  : How do different categories of deadly fighting styles differ from one 
+   scenes   : 11  words: 1013 (~6.2 min)
+   sources  : 14
+   density  : 7.11 anchors/100w | rhythm sd 4.33 | tells 0
+   unresolved: 3 craft, 0 CONTRADICTED, 54 unconfirmed
+
+  CAVEATS (not blockers - you decide):
+    - 3 of 30 model calls had their prompt trimmed to fit a provider's limit - that much of the research never reached the writer
+    - written partly by the fallback writer (groq: 9 call(s)) - less grounded than a full Gemini run
+================================================================
+!! NOT READY TO PUBLISH
+   - 54 claim(s) not found in any source we fetched - not proof they are wrong, but too much of the script is unverified to publish
+   - 7 unfixed HARD red-team finding(s): not-a-member, too-complex, unsupported, wrong
+   - no verified member list - nothing checked that the categories explained are really members of the topic
+   The video will still build so it can be looked at.
+================================================================
+    1. [ANSWER    ]   89w  11 shots
+    2. [FRAME     ]   92w  11 shots
+    3. [CATEGORY  ]   90w  11 shots
+    4. [CATEGORY  ]   93w  11 shots
+    5. [CATEGORY  ]   91w  11 shots
+    6. [CATEGORY  ]   95w  11 shots
+    7. [EDGE      ]   86w  11 shots
+    8. [APPLY     ]   87w  11 shots
+    9. [APPLY     ]  109w  11 shots
+   10. [APPLY     ]   94w  11 shots
+   11. [CLOSE     ]   87w  11 shots
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+##[group]Run actions/upload-artifact@v4
+with:
+  name: script-json
+  path: script.json
+made.json
+
+  if-no-files-found: warn
+  retention-days: 30
+  compression-level: 6
+  overwrite: false
+  include-hidden-files: false
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+##[endgroup]
+(node:4225) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Multiple search paths detected. Calculating the least common ancestor of all paths
+The least common ancestor is /home/runner/work/MMM-MVP/MMM-MVP. This will be the root directory of the artifact
+With the provided path, there will be 1 file uploaded
+Artifact name is valid!
+Root directory input is valid!
+Beginning upload of artifact content to blob storage
+(node:4225) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+Uploaded bytes 10638
+Finished uploading artifact content to blob storage!
+SHA256 digest of uploaded artifact zip is 438ad891e2b0a58878ace0c4b219838e93d5dd4f29b5c58780949d9108456dbf
+Finalizing artifact upload
+Artifact script-json.zip successfully finalized. Artifact ID 9927957112
+Artifact script-json has been successfully uploaded! Final size is 10638 bytes. Artifact ID is 9927957112
+Artifact download URL: https://github.com/alexxagemimi-cpu/MMM-MVP/actions/runs/33848057024/artifacts/9927957112
+##[group]Run python -c "import thumbnail; thumbnail.from_script('script.json', 'thumbnail.png')"
+[36;1mpython -c "import thumbnail; thumbnail.from_script('script.json', 'thumbnail.png')"[0m
+[36;1mpython -c "[0m
+[36;1mfrom PIL import Image[0m
+[36;1mim = Image.open('thumbnail.png')[0m
+[36;1mprint(f'thumbnail.png {im.size[0]}x{im.size[1]}')[0m
+[36;1massert im.size == (1280, 720), im.size[0m
+[36;1m"[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+  PIXABAY_API_KEY: ***
+##[endgroup]
+   thumbnail: 11 tiles, 11 with a picture
+thumbnail.png 1280x720
+##[group]Run python engine.py
+[36;1mpython engine.py[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+  VOICE: en-US-GuyNeural
+  RESOLUTION: 540
+  PIXABAY_API_KEY: ***
+  STYLE: explainer
+##[endgroup]
+   !! 5 scene(s) carry an unfixed HARD red-team finding - their terms get no card, no checklist row and no diagram column: 2, 5, 7, 8, 9
+==============================================================
+  MMM ENGINE | 11 scenes | 960x540 @ 25fps | voice=en-US-GuyNeural
+==============================================================
+
+[1/3] voice x11 ...
+      voice 2/11 ok
+      voice 3/11 ok
+      voice 1/11 ok
+      voice 6/11 ok
+      voice 4/11 ok
+      voice 5/11 ok
+      voice 8/11 ok
+      voice 7/11 ok
+      voice 9/11 ok
+      voice 11/11 ok
+      voice 10/11 ok
+      audio 7.3 min | boundaries from service: 11/11
+
+[2/3] visuals x88 (11 scenes) | source: Pixabay (real footage) + AI fallback ...
+      subject anchor: category, deadly - a clip has to be about this, not just match the query
+      shot scene 1 #2 [LIST] | Kicks, Elbows, Knees
+      !! 20 clips for '16th century European fencing manu', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'boxer striking leather heavy bag i', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'wrestler executing double leg take', none relevant - skipping rather than showing the wrong thing
+      shot scene 1 #1 [CARD] | 16th century European fencing manual Latin m
+      !! 20 clips for 'tactical instructor practicing sel', none relevant - skipping rather than showing the wrong thing
+      shot scene 1 #4 [CARD] | wrestler executing double leg takedown on bl
+      shot scene 1 #3 [CARD] | boxer striking leather heavy bag in gym
+      shot scene 1 #5 [CARD] | tactical instructor practicing self defense 
+      !! 20 clips for 'close up of traditional martial ar', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'close up of carved stone relief in', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'fencer holding steel rapier weapon', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'taekwondo practitioner landing rou', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'ancient stone carving of fighters ', none relevant - skipping rather than showing the wrong thing
+      shot scene 1 #8 [CARD] | close up of traditional martial arts black b
+      shot scene 1 #6 [CARD] | fencer holding steel rapier weapon in fencin
+      shot scene 2 #2 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 2 #2 [CARD] | close up of carved stone relief in Banteay S
+      shot scene 1 #7 [CARD] | taekwondo practitioner landing roundhouse ki
+      shot scene 2 #1 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 2 #1 [CARD] | ancient stone carving of fighters at Banteay
+      !! 20 clips for 'shadow boxer practicing footwork i', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'measuring tape on martial arts can', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'high speed photography of fist str', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'aerial view of two wrestlers grapp', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'human skeletal model showing shoul', none relevant - skipping rather than showing the wrong thing
+      shot scene 2 #4 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 2 #4 [CARD] | shadow boxer practicing footwork in training
+      shot scene 2 #7 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 2 #7 [CARD] | aerial view of two wrestlers grappling on ma
+      shot scene 2 #3 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 2 #3 [CARD] | measuring tape on martial arts canvas mat
+      shot scene 2 #5 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 2 #5 [CARD] | high speed photography of fist striking boxi
+      shot scene 2 #6 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 2 #6 [CARD] | human skeletal model showing shoulder joint 
+      shot scene 3 #2 [LIST] | Kicks, Elbows, Knees
+      !! 20 clips for 'side view of kickboxer dodging str', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'Taekwondo athlete executing high s', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'boxer landing straight jab punch o', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'bare feet pivoting on canvas boxin', none relevant - skipping rather than showing the wrong thing
+      shot scene 3 #1 [CARD] | Taekwondo athlete executing high spinning ki
+      shot scene 2 #8 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 2 #8 [CARD] | side view of kickboxer dodging strike in slo
+      shot scene 3 #3 [CARD] | boxer landing straight jab punch on opponent
+      shot scene 3 #4 [CARD] | bare feet pivoting on canvas boxing ring flo
+      !! 20 clips for 'archival photograph of Korean mart', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'Brazilian Jiu Jitsu fighters grapp', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'kickboxer throwing left hook in tr', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'graphic illustration of biomechani', none relevant - skipping rather than showing the wrong thing
+      shot scene 4 #2 [LIST] | Leverage, Takedowns, Joint locks, Chokes
+      shot scene 3 #7 [CARD] | archival photograph of Korean martial artist
+      shot scene 3 #6 [CARD] | kickboxer throwing left hook in training fac
+      shot scene 3 #5 [CARD] | graphic illustration of biomechanical force 
+      shot scene 4 #1 [CARD] | Brazilian Jiu Jitsu fighters grappling on ta
+      !! 20 clips for 'diagram showing carotid artery loc', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'Judo athlete executing hip throw t', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'wrestler securing rear waist lock ', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'bjj practitioner applying rear nak', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'archival photo of early Judo train', none relevant - skipping rather than showing the wrong thing
+      shot scene 4 #4 [CARD] | wrestler securing rear waist lock position o
+      shot scene 4 #6 [CARD] | bjj practitioner applying rear naked choke h
+      shot scene 4 #5 [CARD] | diagram showing carotid artery location on h
+      shot scene 4 #3 [CARD] | Judo athlete executing hip throw technique o
+      shot scene 4 #7 [CARD] | archival photo of early Judo training on tra
+      !! 20 clips for 'close up of practical hand disarm ', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'tactical self defense instructor d', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'instructor monitoring student spar', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'close up of tactical military boot', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'military personnel in tactical uni', none relevant - skipping rather than showing the wrong thing
+      shot scene 5 #5 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 5 #5 [CARD] | close up of practical hand disarm maneuver
+      shot scene 5 #2 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 5 #2 [CARD] | tactical self defense instructor demonstrati
+      shot scene 5 #4 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 5 #4 [CARD] | instructor monitoring student sparring in co
+      shot scene 5 #3 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 5 #3 [CARD] | close up of tactical military boots on dirt 
+      shot scene 5 #1 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 5 #1 [CARD] | military personnel in tactical uniform condu
+      !! 20 clips for 'tactical officer practicing ground', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'Historical European Martial Arts f', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'diagram showing gross motor skill ', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'instructor demonstrating strike to', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'Filipino martial arts practitioner', none relevant - skipping rather than showing the wrong thing
+      shot scene 5 #6 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 5 #6 [CARD] | diagram showing gross motor skill body mecha
+      shot scene 5 #8 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 5 #8 [CARD] | tactical officer practicing ground defense t
+      shot scene 6 #2 [CARD] | Filipino martial arts practitioner holding r
+      shot scene 6 #1 [CARD] | Historical European Martial Arts fighters sp
+      shot scene 5 #7 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 5 #7 [CARD] | instructor demonstrating strike to vulnerabl
+      !! 20 clips for 'Kenjutsu practitioner drawing Japa', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'sword practitioner executing parry', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'fencers wearing steel mesh protect', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'antique historical manuscript illu', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'close up of polished steel longswo', none relevant - skipping rather than showing the wrong thing
+      shot scene 6 #3 [CARD] | Kenjutsu practitioner drawing Japanese katan
+      shot scene 6 #7 [CARD] | sword practitioner executing parry and count
+      shot scene 6 #5 [CARD] | fencers wearing steel mesh protective masks 
+      shot scene 6 #6 [CARD] | antique historical manuscript illustration o
+      shot scene 6 #4 [CARD] | close up of polished steel longsword blade
+      shot scene 7 #2 [DIAGRAM] | Brazilian Jiu-Jitsu vs Historical European M
+      !! 20 clips for 'leather gloved hands gripping long', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for '16th century European woodcut illu', none relevant - skipping rather than showing the wrong thing
+      !! 20 clips for 'Shaolin monk standing in tradition', none relevant - skipping rather than showing the wrong thing
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 6 #8 [CARD] | leather gloved hands gripping longsword cros
+      shot scene 7 #3 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 7 #3 [CARD] | Shaolin monk standing in traditional martial
+      pixabay video error - HTTP Error 429: Too Many Requests
+      shot scene 7 #1 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 7 #1 [CARD] | 16th century European woodcut illustration o
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 7 #4 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 7 #4 [CARD] | incense burning near statue of Buddha in anc
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 7 #6 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 7 #6 [CARD] | vintage film camera on martial arts movie pr
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 8 #2 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 8 #2 [CARD] | archival photograph of Bratislava street sce
+      shot scene 7 #5 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 7 #5 [CARD] | antique Latin manuscript page detailing comb
+      shot scene 7 #7 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 7 #7 [CARD] | monks training in courtyard of Shaolin Monas
+      shot scene 8 #1 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 8 #1 [CARD] | Krav Maga instructor demonstrating defensive
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 8 #6 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 8 #6 [CARD] | close up of defensive groin strike counter m
+      shot scene 8 #7 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 8 #7 [CARD] | heart rate monitor screen showing heart rate
+      shot scene 8 #4 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 8 #4 [CARD] | Krav Maga Experts entrance sign in New York 
+      shot scene 8 #5 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 8 #5 [CARD] | instructor demonstrating defensive kick coun
+      shot scene 8 #3 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 8 #3 [CARD] | Israel Defense Forces soldiers conducting fi
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 8 #8 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 8 #8 [CARD] | civilian practicing self defense drill in st
+      shot scene 9 #3 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 9 #3 [CARD] | spectators filling massive PRIDE event stadi
+      shot scene 9 #1 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 9 #1 [CARD] | octagon cage fence in lit modern sports aren
+      shot scene 9 #4 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 9 #4 [CARD] | packed crowd inside stadium during UFC 243 M
+      shot scene 9 #2 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 9 #2 [CARD] | archival broadcast screenshot of UFC 1 octag
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 9 #9 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 9 #9 [CARD] | overhead lights shining down on fight canvas
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 9 #7 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 9 #7 [CARD] | two mixed martial arts fighters sparring ins
+      shot scene 9 #5 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 9 #5 [CARD] | pay per view broadcast screen showing UFC ev
+      shot scene 9 #6 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 9 #6 [CARD] | smartphone screen displaying social media vi
+      shot scene 9 #8 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 9 #8 [CARD] | referee raising hand of victorious athlete i
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 10 #3 [CARD] | female boxer throwing punch in Olympic boxin
+      shot scene 10 #1 [CARD] | female judo athletes competing on Olympic ma
+      shot scene 10 #2 [CARD] | female freestyle wrestler executing takedown
+      shot scene 9 #11 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 9 #11 [CARD] | sports bar screen showing live championship 
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 9 #10 [HEADER] | claim withheld - unfixed HARD red-team finding on this scene
+      shot scene 9 #10 [CARD] | television camera operator filming live figh
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 10 #4 [CARD] | close up of Olympic gold medal resting on wh
+      shot scene 10 #7 [CARD] | female mixed martial artist striking heavy b
+      shot scene 10 #8 [CARD] | female fighter wrapping knuckles with black 
+      shot scene 10 #6 [CARD] | sports newspaper articles laid out on wooden
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 10 #5 [CARD] | pie chart graphic displaying two percent med
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 11 #3 [CARD] | boxer throwing punch directly toward camera 
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 11 #4 [CARD] | bjj athlete locking in chokehold on opponent
+      shot scene 11 #2 [CARD] | 3D skeletal model showing human anatomical s
+      shot scene 11 #1 [CARD] | split screen showing striking grappling arme
+      shot scene 10 #9 [CARD] | close up of female athlete focused eyes befo
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay video error - HTTP Error 429: Too Many Requests
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 11 #6 [CARD] | HEMA sword fighter practicing blade movement
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 11 #7 [CARD] | high angle shot of empty martial arts gym fl
+      pixabay photo error - HTTP Error 429: Too Many Requests
+      shot scene 11 #5 [CARD] | tactical fighter demonstrating weapon disarm
+      drawing 4 cards + headers, list of 3: Taekwondo, Brazilian Jiu-Jitsu, Historical European Martial Arts
+
+[3/3] render x11 scenes (88 shots) ...
+        shot 0: 3.60s 157912B
+        shot 1: 4.88s 66524B
+        shot 2: 4.88s 66524B
+        shot 3: 4.88s 66524B
+        shot 4: 4.88s 66524B
+        shot 5: 4.88s 66524B
+        shot 6: 4.88s 66524B
+        shot 7: 4.92s 66328B
+        audio : 37.68s 226080B | target 37.80s
+        (term card for 'arts of Mars' skipped - the drawn card already says it)
+      scene 1/11 [ANSWER] 8 shot(s)  37.8s  (+62s elapsed)
+        shot 0: 4.88s 79841B
+        shot 1: 4.88s 79841B
+        shot 2: 4.88s 79841B
+        shot 3: 4.88s 79841B
+        shot 4: 4.88s 79841B
+        shot 5: 4.88s 79841B
+        shot 6: 4.88s 79841B
+        shot 7: 5.04s 80123B
+        audio : 39.05s 234288B | target 39.20s
+        (term card for 'Banteay Srei' withheld - an unfixed HARD red-team finding on this scene)
+      scene 2/11 [FRAME] 8 shot(s)  39.2s  (+66s elapsed)
+        shot 0: 2.40s 55892B
+        shot 1: 5.72s 90387B
+        shot 2: 5.72s 90387B
+        shot 3: 5.72s 90387B
+        shot 4: 5.72s 90387B
+        shot 5: 5.72s 90387B
+        shot 6: 5.84s 91083B
+        audio : 36.72s 220320B | target 36.84s
+        (term card for 'Taekwondo' skipped - the drawn card already says it)
+      scene 3/11 [CATEGORY] 7 shot(s)  36.8s  (+98s elapsed)
+        shot 0: 2.40s 83378B
+        shot 1: 5.64s 111421B
+        shot 2: 5.64s 111421B
+        shot 3: 5.64s 111421B
+        shot 4: 5.64s 111421B
+        shot 5: 5.64s 111421B
+        shot 6: 5.84s 113577B
+        audio : 36.31s 217872B | target 36.44s
+        (term card for 'Brazilian Jiu-Jitsu' skipped - the drawn card already says it)
+      scene 4/11 [CATEGORY] 7 shot(s)  36.4s  (+132s elapsed)
+        shot 0: 4.80s 82985B
+        shot 1: 4.80s 82985B
+        shot 2: 4.80s 82985B
+        shot 3: 4.80s 82985B
+        shot 4: 4.80s 82985B
+        shot 5: 4.80s 82985B
+        shot 6: 4.80s 82985B
+        shot 7: 4.88s 83112B
+        audio : 38.33s 229968B | target 38.48s
+        (term card for 'gross motor skills' withheld - an unfixed HARD red-team finding on this scene)
+      scene 5/11 [CATEGORY] 8 shot(s)  38.5s  (+136s elapsed)
+        shot 0: 2.40s 98001B
+        shot 1: 5.36s 92435B
+        shot 2: 5.36s 92435B
+        shot 3: 5.36s 92435B
+        shot 4: 5.36s 92435B
+        shot 5: 5.36s 92435B
+        shot 6: 5.36s 92435B
+        shot 7: 5.52s 92688B
+        audio : 39.96s 239760B | target 40.08s
+        (term card for 'Historical European Martial Arts' skipped - the drawn card already says it)
+      scene 6/11 [CATEGORY] 8 shot(s)  40.1s  (+143s elapsed)
+        shot 0: 5.24s 86966B
+        shot 1: 5.24s 197178B
+        shot 2: 5.24s 86966B
+        shot 3: 5.24s 86966B
+        shot 4: 5.24s 86966B
+        shot 5: 5.24s 86966B
+        shot 6: 5.24s 86966B
+        audio : 36.55s 219312B | target 36.68s
+        (term card for 'Chinese boxing' withheld - an unfixed HARD red-team finding on this scene)
+      scene 7/11 [EDGE] 7 shot(s)  36.7s  (+152s elapsed)
+        shot 0: 4.72s 86255B
+        shot 1: 4.72s 86255B
+        shot 2: 4.72s 86255B
+        shot 3: 4.72s 86255B
+        shot 4: 4.72s 86255B
+        shot 5: 4.72s 86255B
+        shot 6: 4.72s 86255B
+        shot 7: 5.00s 86614B
+        audio : 37.92s 227520B | target 38.04s
+        (term card for 'Krav Maga' withheld - an unfixed HARD red-team finding on this scene)
+      scene 8/11 [APPLY] 8 shot(s)  38.0s  (+156s elapsed)
+        shot 0: 4.76s 86308B
+        shot 1: 4.76s 86308B
+        shot 2: 4.76s 86308B
+        shot 3: 4.76s 86308B
+        shot 4: 4.76s 86308B
+        shot 5: 4.76s 86308B
+        shot 6: 4.76s 86308B
+        shot 7: 4.76s 86308B
+        shot 8: 4.76s 86308B
+        shot 9: 4.76s 86308B
+        shot 10: 5.16s 86834B
+        audio : 52.63s 315792B | target 52.76s
+        (term card for 'mixed martial arts' withheld - an unfixed HARD red-team finding on this scene)
+      scene 9/11 [APPLY] 11 shot(s)  52.8s  (+162s elapsed)
+        shot 0: 5.04s 65179B
+        shot 1: 5.04s 65179B
+        shot 2: 5.04s 65179B
+        shot 3: 5.04s 65179B
+        shot 4: 5.04s 65179B
+        shot 5: 5.04s 65179B
+        shot 6: 5.04s 65179B
+        shot 7: 5.04s 65179B
+        shot 8: 5.36s 65621B
+        audio : 45.55s 273312B | target 45.68s
+        (term card for "Women's Judo" skipped - the drawn card already says it)
+      scene 10/11 [APPLY] 9 shot(s)  45.7s  (+168s elapsed)
+        shot 0: 5.16s 45078B
+        shot 1: 5.16s 45078B
+        shot 2: 5.16s 45078B
+        shot 3: 5.16s 45078B
+        shot 4: 5.16s 45078B
+        shot 5: 5.16s 45078B
+        shot 6: 5.28s 65565B
+        audio : 36.12s 216720B | target 36.24s
+        (term card for 'human anatomy' skipped - the drawn card already says it)
+      scene 11/11 [CLOSE] 7 shot(s)  36.2s  (+172s elapsed)
+
+> assembling 11 scenes (7.3 min)...
+   ✓ 203 subtitle cues -> subtitles.srt
+   ✓ 203 karaoke caption cues, 0 term card(s) -> captions.ass
+> music: synthesising ambient bed
+> sound: 13 effects across 7.3 min
+> final composite...
+
+==============================================================
+DONE  final_video.mp4
+   duration : 7.3 min
+   size     : 17.2 MB  (2.3 MB/min -> a 16 min cut would be ~38 MB)
+   subtitles: 203 cues
+   visuals  : 0/88 real Pixabay footage
+   drawn    : 88/88 shots drawn from the script (no relevant footage existed)
+   build    : 4.2 min
+==============================================================
+##[group]Run python contact.py final_video.mp4 contact_sheet.jpg \
+[36;1mpython contact.py final_video.mp4 contact_sheet.jpg \[0m
+[36;1m  --b64[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+##[endgroup]
+
+contact sheet | final_video.mp4 | 438.3s | 70 KB
+ #      at  bright header   ink   note
+----------------------------------------------------------
+ 1   18.3s   240.9  242.7  0.02   
+ 2   54.8s   232.1  243.1  0.04   
+ 3   91.3s   235.7  231.4  0.04   
+ 4  127.8s   238.2  224.9  0.03   
+ 5  164.4s   234.5  243.1  0.02   
+ 6  200.9s   220.8  206.8  0.10   
+ 7  237.4s   229.3  245.8  0.04   
+ 8  273.9s   231.4  243.1  0.04   
+ 9  310.4s   232.3  243.1  0.03   
+10  347.0s   229.6  243.1  0.04   
+11  383.5s   234.5  206.7  0.04   
+12  420.0s   240.4  241.5  0.02   
+
+no motionless stretch of 3.5s or more.
+
+[sheet removed]
+##[group]Run python verify.py final_video.mp4 script.json
+[36;1mpython verify.py final_video.mp4 script.json[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+  GEMINI_API_KEY: ***
+  VERIFY_MODEL: gemini-3.6-flash
+##[endgroup]
+Direct use of automatic function calling (AFC) in Models.generate_content is not recommended. Instead, we recommend to use AFC in Chat.send_message. Similarly, direct use of AFC in Models.generate_content_stream is not recommended. Instead, we recommend to use AFC in Chat.send_message_stream.
+COULD NOT WATCH (not a verdict on the video): 429 RESOURCE_EXHAUSTED. {'error': {'code': 429, 'message': 'You exceeded your current quota, please check your plan and billing details. For more information on this error, head to: https://ai.google.
+##[group]Run df -h / | tail -1
+[36;1mdf -h / | tail -1[0m
+shell: /usr/bin/bash -e {0}
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+##[endgroup]
+/dev/root       145G   59G   86G  41% /
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+##[group]Run actions/upload-artifact@v4
+with:
+  name: finished-720p-video
+  path: final_video.mp4
+thumbnail.png
+contact_sheet.jpg
+verify.json
+subtitles.srt
+captions.ass
+
+  if-no-files-found: warn
+  retention-days: 3
+  compression-level: 6
+  overwrite: false
+  include-hidden-files: false
+env:
+  PYTHONUNBUFFERED: 1
+  pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+  PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+  Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+  LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+##[endgroup]
+(node:8739) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Multiple search paths detected. Calculating the least common ancestor of all paths
+The least common ancestor is /home/runner/work/MMM-MVP/MMM-MVP. This will be the root directory of the artifact
+With the provided path, there will be 5 files uploaded
+Artifact name is valid!
+Root directory input is valid!
+Beginning upload of artifact content to blob storage
+(node:8739) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+Uploaded bytes 8388608
+Uploaded bytes 16777216
+Uploaded bytes 17670285
+Finished uploading artifact content to blob storage!
+SHA256 digest of uploaded artifact zip is 168acb4682809b036c5c558f2e78984910ef0a32f66f9b9394386a929dc4c0a4
+Finalizing artifact upload
+Artifact finished-720p-video.zip successfully finalized. Artifact ID 9928080288
+Artifact finished-720p-video has been successfully uploaded! Final size is 17670285 bytes. Artifact ID is 9928080288
+Artifact download URL: https://github.com/alexxagemimi-cpu/MMM-MVP/actions/runs/33848057024/artifacts/9928080288
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+Post job cleanup.
+Cache hit occurred on the primary key setup-python-Linux-x64-24.04-Ubuntu-python-3.11.16-pip-e5ba78aa43bbbbdf9b6ef16636129448b8ac2abc09ada2a164475212ef6ee421, not saving cache.
+(node:8751) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Node 20 is being deprecated. This workflow is running with Node 24 by default. If you need to temporarily use Node 20, you can set the ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true environment variable. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
+Post job cleanup.
+[command]/usr/bin/git version
+git version 2.55.0
+Temporarily overriding HOME='/home/runner/work/_temp/a1f87200-b80d-41de-8e6b-a8f688d3fe0e' before making global git config changes
+Adding repository directory to the temporary git global config as a safe directory
+[command]/usr/bin/git config --global --add safe.directory /home/runner/work/MMM-MVP/MMM-MVP
+[command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+[command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+http.https://github.com/.extraheader
+[command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+[command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+[command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+[command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Cleaning up orphan processes
+##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
