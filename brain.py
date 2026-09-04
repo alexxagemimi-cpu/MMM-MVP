@@ -1118,6 +1118,49 @@ Accuracy outranks interest. Plain text."""
 
 
 # ---------------------------------------------------------------- stage 2 ---
+def number_scenes(data, where=""):
+    """
+    THE SCHEMA IS A GEMINI CONTRACT. GROQ NEVER AGREED TO IT.
+
+    SCRIPT_SCHEMA marks "scene" required, and Gemini honours that because it
+    is passed as a real response schema. Groq is sent
+    `response_format: {"type": "json_object"}`, which promises only that the
+    reply PARSES - any shape at all satisfies it. So every script the
+    fallback writer produces is unchecked in shape, and run 51 died on
+
+        FATAL: 'scene'
+
+    - a bare KeyError from `f'SCENE {s["scene"]}'` in the fact-checker,
+    because that draft's scene objects simply had no "scene" key. Run 48's
+    happened to have one. Nothing anywhere had ever noticed the difference.
+
+    Numbering them here, at the door, costs nothing and is not even a
+    compromise: the model's numbers were NEVER trusted. The last thing the
+    pipeline does before writing script.json is renumber every scene
+    positionally, so the only question was whether the intervening stages
+    crashed first.
+
+    Missing fields are reported rather than silently filled. A quiet default
+    is how a fallback-written script becomes invisibly worse than a
+    Gemini-written one, and this project already has §9 open on exactly that.
+    """
+    scenes = (data or {}).get("scenes") or []
+    missing = {}
+    for i, s in enumerate(scenes, 1):
+        if not isinstance(s, dict):
+            continue
+        for k in ("beat", "narration", "key_term", "key_fact",
+                  "image_keywords"):
+            if k not in s:
+                missing[k] = missing.get(k, 0) + 1
+        s["scene"] = i
+    if missing:
+        print(f"      !! the {where} reply left out required field(s): "
+              + ", ".join(f"{k} on {n} scene(s)"
+                          for k, n in sorted(missing.items())), flush=True)
+    return data
+
+
 def draft(brief):
     topic_rule = ""
     if TOPIC:
@@ -1213,7 +1256,7 @@ FIELDS:
   For "Types of Business Expenses" -> "Business Expenses" (not "Types")."""
 
     print(f"[2/5] drafting {SCENE_COUNT} scenes (~{WORDS_PER_SCENE} words each)")
-    data = call(prompt, schema=SCRIPT_SCHEMA)
+    data = number_scenes(call(prompt, schema=SCRIPT_SCHEMA), "draft")
     print(f"      {wordcount(data)} words / {len(data['scenes'])} scenes")
     print(f"      answering: {data.get('question','(none)')[:80]}")
     return data
@@ -1432,7 +1475,7 @@ SCRIPT:
 ---
 Return the corrected script in the required JSON format."""
 
-    out = call(prompt, schema=SCRIPT_SCHEMA)
+    out = number_scenes(call(prompt, schema=SCRIPT_SCHEMA), "revision")
     return out
 
 
@@ -1525,7 +1568,7 @@ SCRIPT:
 ---
 Return the corrected script in the required JSON format."""
     print("[5/5] repairing structure")
-    out = call(prompt, schema=SCRIPT_SCHEMA)
+    out = number_scenes(call(prompt, schema=SCRIPT_SCHEMA), "structure repair")
     return out
 
 
@@ -1904,6 +1947,7 @@ SCRIPT:
 ---
 Return the corrected script in the required JSON format.""",
                             schema=SCRIPT_SCHEMA)
+                number_scenes(cand, "whole-script red-team repair")
                 if cand.get("scenes") and keeps_scenes(data, cand,
                                                        "red-team repair"):
                     data = cand
@@ -2172,6 +2216,15 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
-        print(f"\nFATAL: {e}", file=sys.stderr)
+        # "FATAL: 'scene'" was the whole of run 51's death notice. A bare
+        # KeyError stringifies to just the key, so the log named neither the
+        # kind of error, nor the file, nor the line, nor the stage - and
+        # finding it meant reading the source for every place that string
+        # could be indexed. Print the type and the traceback: the run has
+        # already failed, there is nothing left to protect, and this is the
+        # last thing the owner sees.
+        import traceback
+        print(f"\nFATAL: {type(e).__name__}: {e}", file=sys.stderr)
+        traceback.print_exc()
         sys.exit(1)
   

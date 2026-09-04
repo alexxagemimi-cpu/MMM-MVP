@@ -450,6 +450,69 @@ def test_schema_drop_gets_its_own_attempt():
     return bad
 
 
+def test_unschemad_draft_survives():
+    """
+    RUN 51 - the fix above worked, and the run died one stage later.
+
+        [2/5] drafting ... ok
+        [3/5] ... verifying against the web...
+        FATAL: 'scene'
+
+    SCRIPT_SCHEMA marks "scene" required and Gemini honours it, because it is
+    sent as a real response schema. Groq is sent
+    `response_format: {"type": "json_object"}`, which promises only that the
+    reply PARSES - any shape satisfies it. So a fallback-written script is
+    unchecked in shape, and the fact-checker's f'SCENE {s["scene"]}' raised a
+    bare KeyError on a draft whose scenes had no such key. Run 48's happened
+    to have one; nothing had ever noticed the difference.
+    """
+    line("a fallback draft with no 'scene' key does not kill the run (51)")
+    bad = 0
+    groqish = {"title": "T", "scenes": [
+        {"beat": "ANSWER", "narration": "One.", "key_term": "One",
+         "key_fact": "f", "image_keywords": ["a"]},
+        {"beat": "CATEGORY", "narration": "Two.", "key_term": "Two",
+         "key_fact": "f", "image_keywords": ["b"]},
+    ]}
+    out = B.number_scenes(groqish, "draft")
+    checks = [
+        ("every scene is numbered",
+         [s.get("scene") for s in out["scenes"]] == [1, 2]),
+        ("the fact-checker's own expression no longer raises",
+         "\n".join(f'SCENE {s["scene"]}' for s in out["scenes"])
+         == "SCENE 1\nSCENE 2"),
+    ]
+
+    # Numbering is POSITIONAL, not the model's opinion - brain.py already
+    # renumbers this way before writing script.json, so a model that numbers
+    # its scenes 5, 9 was never being believed anyway.
+    lied = {"scenes": [{"scene": 5, "narration": "a", "beat": "b",
+                        "key_term": "k", "key_fact": "f",
+                        "image_keywords": []},
+                       {"scene": 9, "narration": "b", "beat": "b",
+                        "key_term": "k", "key_fact": "f",
+                        "image_keywords": []}]}
+    checks.append(("bad numbering from the model is corrected, not trusted",
+                   [s["scene"] for s in
+                    B.number_scenes(lied, "draft")["scenes"]] == [1, 2]))
+    # Must not explode on the shapes a loose json_object reply can really be.
+    for name, arg in (("no scenes key", {}),
+                      ("scenes is empty", {"scenes": []}),
+                      ("a scene is not an object", {"scenes": ["oops"]})):
+        try:
+            B.number_scenes(arg, "draft")
+            ok = True
+        except Exception as e:
+            ok = False
+            print(f"        raised {type(e).__name__}: {e}")
+        checks.append((f"survives {name}", ok))
+
+    for what, ok in checks:
+        print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+        bad += not ok
+    return bad
+
+
 def test_precap_avoids_the_round_trip():
     line("Groq is pre-trimmed, so the 413 does not happen at all")
     bad = 0
@@ -804,6 +867,7 @@ def main():
     bad += test_json_mode_400()
     bad += test_reasoning_model_answers()
     bad += test_schema_drop_gets_its_own_attempt()
+    bad += test_unschemad_draft_survives()
     bad += test_precap_avoids_the_round_trip()
     bad += test_cooldown()
     bad += test_no_scene_loss()

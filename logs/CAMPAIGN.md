@@ -237,3 +237,49 @@ regression fail**, per the working agreement. `test_providers.py` fakes
 *Still NOT TESTED against real Groq:* there is no key in this sandbox. Whether
 "low" effort leaves enough budget for a full 11-scene draft is a question only
 a live run answers.
+
+---
+
+## Run 51 — "top 10 deadliest fighting styles explained", against the fix
+
+**The Groq fix worked. The run died one stage later, on the next bug.**
+
+It got past `[2/5] drafting` — the wall that killed 49 and 50 — wrote a real
+`script.json` (5,404 bytes, uploaded as an artifact), ran the quality metrics,
+and reached `[3/5] verifying against the web...`. Then:
+
+    FATAL: 'scene'
+
+### The schema is a Gemini contract. Groq never agreed to it.
+
+`SCRIPT_SCHEMA` marks `scene` **required**, and Gemini honours that because it
+is passed as a real response schema. Groq is sent
+`response_format: {"type": "json_object"}`, which promises only that the reply
+**parses** — any shape at all satisfies it. So every script the fallback writer
+has ever produced was unchecked in shape, and the fact-checker's own
+expression, `f'SCENE {s["scene"]}'`, raised a bare `KeyError` on a draft whose
+scene objects had no such key.
+
+Run 48's draft happened to include it. Run 51's did not. **Nothing anywhere had
+ever noticed the difference** — the same shape as §5.6/5.8/5.11: a safeguard
+that reads correct and does not apply on the path actually being taken.
+
+### Fixed
+
+`number_scenes()` stamps positional numbers the moment a script comes back,
+at all four `SCRIPT_SCHEMA` call sites. This is not a compromise: the pipeline
+*already* renumbered every scene positionally just before writing
+`script.json`, so the model's numbers were never trusted — the only open
+question was whether an intervening stage crashed first. Missing fields are
+**reported, not silently filled**, because a quiet default is exactly how a
+fallback-written script becomes invisibly worse than a Gemini-written one.
+
+And the death notice itself: `FATAL: 'scene'` was the entire message. A bare
+`KeyError` stringifies to just the key — no error type, no file, no line, no
+stage — so finding it meant reading the source for every place that string
+could be indexed. It now prints the exception type and a traceback.
+
+Regression in `test_providers.py`, 6 checks: a Groq-shaped draft with no
+`scene` key is numbered, the fact-checker's own expression stops raising, a
+model that numbers its scenes 5 and 9 is corrected rather than believed, and
+it survives no `scenes` key, an empty list, and a scene that is not an object.
