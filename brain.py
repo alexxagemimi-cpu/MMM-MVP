@@ -449,11 +449,38 @@ def _openai_compatible(prompt, schema, base_url, key, model, label,
             out = reasoning
     fin = data["choices"][0].get("finish_reason")
     if fin and fin != "stop":
-        # "length" here means the reply was CUT OFF, which is exactly how
-        # valid JSON becomes invalid JSON. Without this the log showed a
-        # refusal and never said the generation had been truncated.
+        # "length" means the reply was CUT OFF, which is exactly how valid
+        # JSON becomes invalid JSON. Run 53 proved it: this line printed
+        # `finish_reason=length`, and the very next line was
+        # `Expecting ',' delimiter: line 78 column 6 (char 10242)` - the
+        # object stopped mid-structure at ten thousand characters.
+        #
+        # The token counts say WHICH budget ran out, and for a gpt-oss model
+        # they are the only way to see how much went on thinking rather than
+        # on the answer. Guessing at that is how this file got its §5.13.
+        u = data.get("usage") or {}
+        det = u.get("completion_tokens_details") or {}
+        if u:
+            print(f"     -> {label} tokens: {u.get('prompt_tokens','?')} in, "
+                  f"{u.get('completion_tokens','?')} out"
+                  + (f" ({det['reasoning_tokens']} of them reasoning)"
+                     if det.get("reasoning_tokens") is not None else ""),
+                  flush=True)
         print(f"     -> {label} stopped early: finish_reason={fin}",
               flush=True)
+        if schema and fin == "length":
+            # A TRUNCATED REPLY IS NOT AN ANSWER - SAY SO HERE.
+            #
+            # Returning it hands strip_fences a half-written object; the
+            # JSONDecodeError that follows says "Expecting ',' delimiter",
+            # which names a symptom of OUR parser and not the provider's
+            # budget, and the retry then re-sends the same oversized request
+            # and is cut off in the same place. Raising with the word
+            # "truncated" lets _call_sweep do the one thing that can help:
+            # send less, exactly as it already does for a 413.
+            raise RuntimeError(
+                f"truncated reply from {label} ({model}): finish_reason="
+                f"length after {len(out):,} chars - the answer did not fit")
     return out
 
 
@@ -853,10 +880,37 @@ def _call_sweep(prompt, schema, retries, provs):
                                               model, name, drop_schema)
                 if not text:
                     raise RuntimeError("empty response")
+                parsed = json.loads(strip_fences(text)) if schema else text
+
+                # A REPLY OF THE WRONG SHAPE IS NOT AN ANSWER.
+                #
+                # The schema is only a real contract for Gemini. Groq is sent
+                # response_format json_object, which promises that the reply
+                # PARSES and nothing about what is in it - so "success" here
+                # could be any object at all, and the caller found out by
+                # subscripting it. Run 53 died on `KeyError: 'scenes'` inside
+                # draft() for exactly that reason, and the JSON it choked on
+                # had most likely been dug out of the model's own THINKING by
+                # the reasoning fallback added the same day: a real object,
+                # correctly parsed, that was never the answer.
+                #
+                # Checking the schema's own `required` list turns that into an
+                # ordinary failed attempt - so the retry, the next provider
+                # and finally the clean "all providers failed" error all run,
+                # instead of a KeyError surfacing four stack frames away with
+                # no mention of a provider.
+                if schema:
+                    need = [k for k in (schema.get("required") or [])
+                            if not isinstance(parsed, dict) or k not in parsed]
+                    if need:
+                        raise RuntimeError(
+                            f"reply parsed but is missing required key(s): "
+                            f"{', '.join(need)}")
+
                 PROVIDER_USE[name] = PROVIDER_USE.get(name, 0) + 1
                 TRIMMED_CALLS[1] += 1
                 TRIMMED_CALLS[0] += len(body) < len(prompt)
-                return json.loads(strip_fences(text)) if schema else text
+                return parsed
 
             except Exception as e:
                 last = e
@@ -918,7 +972,18 @@ def _call_sweep(prompt, schema, retries, provs):
                 rate_limited = ("429" in msg or "RESOURCE_EXHAUSTED" in msg
                                 or "rate limit" in msg.lower()
                                 or "quota" in msg.lower())
-                too_large = "413" in msg or "too large" in msg.lower()
+                # A TRUNCATED REPLY IS A SIZE PROBLEM WEARING A DIFFERENT HAT.
+                #
+                # Groq's per-minute budget covers the request AND the reply,
+                # so an 11-scene script can be cut off mid-object even though
+                # the request was accepted. Waiting does not help and neither
+                # does asking again; the only lever is to send less, which is
+                # precisely what the 413 branch below already does well. Run
+                # 53's draft stopped at 10,242 characters with
+                # finish_reason=length, and the retry re-sent the same
+                # oversized prompt and stopped in the same place.
+                too_large = ("413" in msg or "too large" in msg.lower()
+                             or "truncated reply" in msg.lower())
 
                 # A REFUSED SIZE MUST CHANGE THE SIZE.
                 #

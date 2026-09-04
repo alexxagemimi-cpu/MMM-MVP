@@ -278,9 +278,11 @@ def scripted_provider(replies):
 
     class Reply:
         def __init__(self, message, finish="stop"):
-            self._t = json.dumps({"choices": [{"message": message,
-                                               "finish_reason": finish}]}
-                                 ).encode()
+            self._t = json.dumps(
+                {"choices": [{"message": message, "finish_reason": finish}],
+                 "usage": {"prompt_tokens": 3775, "completion_tokens": 2458,
+                           "completion_tokens_details":
+                               {"reasoning_tokens": 900}}}).encode()
 
         def read(self):
             return self._t
@@ -296,8 +298,13 @@ def scripted_provider(replies):
         nxt = seq.pop(0) if seq else {"content": '{"ok": true}'}
         if isinstance(nxt, Exception):
             raise nxt
-        return Reply(nxt if isinstance(nxt, dict) else {"content": nxt},
-                     "length" if nxt == {} else "stop")
+        msg = dict(nxt) if isinstance(nxt, dict) else {"content": nxt}
+        # "_finish" lets a case say the reply was CUT OFF, which is a
+        # different thing from a reply that is merely malformed - and the
+        # difference is the whole point of the run-53 fix. The first version
+        # of that test forgot to set it, so the truncation branch never ran
+        # and the check that the retry shrinks correctly failed.
+        return Reply(msg, msg.pop("_finish", "stop"))
 
     U.urlopen = fake
     return sent, (lambda: setattr(U, "urlopen", real))
@@ -483,6 +490,113 @@ def test_schema_drop_gets_its_own_attempt():
         print(f"  {'ok  ' if ok else 'FAIL'}  {code} drops the schema "
               f"(no help from the word 'invalid')")
         bad += not ok
+    return bad
+
+
+def test_truncated_and_wrong_shape():
+    """
+    RUN 53 - two faults, one run, and the traceback added that morning found
+    both in a single log.
+
+        ! groq HTTP 400 "Failed to generate JSON"
+          -> dropping response_schema, retrying plain JSON
+        ! groq attempt 2/3: HTTP 429 -> waiting 20s
+          -> groq stopped early: finish_reason=length
+        ! groq attempt 3/3: Expecting ',' delimiter: line 78 column 6 (char 10242)
+        FATAL: KeyError: 'scenes'
+          File "brain.py", line 1275, in draft
+            print(f"... {len(data['scenes'])} scenes")
+
+    ONE: the reply was CUT OFF. finish_reason=length, an object that stopped
+    mid-structure at ten thousand characters. Groq's per-minute budget covers
+    the request and the reply together, so an 11-scene script does not fit
+    behind a 16,000-character prompt. Waiting cannot help; only sending less
+    can, which is exactly what the 413 path already does.
+
+    TWO: something eventually came back that PARSED and had no "scenes" - most
+    likely a real object dug out of the model's own thinking by the reasoning
+    fallback added that same morning. json_object mode promises the reply
+    parses and nothing about what is in it, so `call()` returned it and the
+    caller found out by subscripting it, four stack frames from any mention of
+    a provider.
+    """
+    line("a cut-off or wrong-shaped reply is not an answer (run 53)")
+    bad = 0
+    B._openai_compatible = REAL_OAI
+    B.PROVIDER_CHAR_CAP = {}
+    schema = {"type": "object", "properties": {}, "required": ["scenes"]}
+
+    # ONE. finish_reason=length must not be handed on as a half-object, and
+    # the request that follows must be SMALLER.
+    sent, restore = scripted_provider([
+        {"content": '{"scenes": [{"narration": "cut off here',
+         "_finish": "length"},
+        {"content": '{"scenes": [1]}'},
+    ])
+    try:
+        B.PROVIDER_COOLDOWN.clear()
+        out = B._call_sweep("SOURCE. " * 4000 + "\nReply with json.", schema,
+                            provs=[("groq", ("https://x/v1", "k",
+                                             "openai/gpt-oss-120b"))],
+                            retries=3)
+        sizes = [len(b["messages"][0]["content"]) for b in sent]
+        checks = [
+            ("it recovered instead of dying", out == {"scenes": [1]}),
+            ("the truncated object was NOT parsed and returned", len(sent) > 1),
+            (f"the retry was smaller ({sizes})",
+             len(sizes) > 1 and sizes[1] < sizes[0]),
+        ]
+    except Exception as e:
+        checks = [(f"it recovered instead of dying (raised {e})", False)]
+    finally:
+        restore()
+    for what, ok in checks:
+        print(f"  {'ok  ' if ok else 'FAIL'}  {what}")
+        bad += not ok
+
+    # TWO. A reply that parses but has no "scenes" is a failed attempt, not a
+    # result - so the NEXT attempt runs and the caller never sees the wrong
+    # object.
+    sent, restore = scripted_provider([
+        {"content": '{"title": "Blood Types", "question": "what?"}'},
+        {"content": '{"scenes": [1, 2]}'},
+    ])
+    try:
+        B.PROVIDER_COOLDOWN.clear()
+        out = B._call_sweep("Reply with json.", schema,
+                            provs=[("groq", ("https://x/v1", "k",
+                                             "openai/gpt-oss-120b"))],
+                            retries=2)
+        ok_shape = out == {"scenes": [1, 2]}
+    except Exception:
+        ok_shape = False
+    finally:
+        restore()
+    print(f"  {'ok  ' if ok_shape else 'FAIL'}  a parsed object with no "
+          f"'scenes' is retried, not returned")
+    bad += not ok_shape
+
+    # And when it never arrives, the error must name the provider - not
+    # surface as a KeyError inside draft().
+    sent, restore = scripted_provider([
+        {"content": '{"title": "x"}'}, {"content": '{"title": "x"}'},
+        {"content": '{"title": "x"}'}, {"content": '{"title": "x"}'}])
+    try:
+        B.PROVIDER_COOLDOWN.clear()
+        B._call_sweep("Reply with json.", schema,
+                      provs=[("groq", ("https://x/v1", "k",
+                                       "openai/gpt-oss-120b"))], retries=2)
+        why = "returned a bad object instead of raising"
+        ok = False
+    except KeyError as e:
+        why, ok = f"raised KeyError({e}) - the run-53 death", False
+    except Exception as e:
+        why, ok = f"raised {type(e).__name__}: {str(e)[:60]}", "missing required" in str(e)
+    finally:
+        restore()
+    print(f"  {'ok  ' if ok else 'FAIL'}  a shape that never arrives says so "
+          f"-- {why}")
+    bad += not ok
     return bad
 
 
@@ -904,6 +1018,7 @@ def main():
     bad += test_reasoning_model_answers()
     bad += test_schema_drop_gets_its_own_attempt()
     bad += test_unschemad_draft_survives()
+    bad += test_truncated_and_wrong_shape()
     bad += test_precap_avoids_the_round_trip()
     bad += test_cooldown()
     bad += test_no_scene_loss()

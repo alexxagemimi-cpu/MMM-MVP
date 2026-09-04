@@ -393,3 +393,77 @@ watchability ceiling and a better on-topic measure are still owed.
 attendance figure and a Krav Maga origin the sources contradict, on a topic the
 system's own gate refused. The right response to this topic is not a better
 video; it is telling the owner the topic does not have a true answer.
+
+---
+
+## Run 53 — "the eight blood types explained"
+
+**0/100. FATAL at stage [2/5].** No script, no video.
+
+The traceback added that morning paid for itself on its first outing — it
+named both faults in one log, where run 51's `FATAL: 'scene'` had named
+nothing.
+
+    ! groq HTTP 400 "Failed to generate JSON"
+      -> dropping response_schema, retrying plain JSON
+    ! groq attempt 2/3: HTTP 429 -> waiting 20s
+      -> groq stopped early: finish_reason=length
+    ! groq attempt 3/3: Expecting ',' delimiter: line 78 column 6 (char 10242)
+    FATAL: KeyError: 'scenes'
+      File "brain.py", line 1275, in draft
+        print(f"... {len(data['scenes'])} scenes")
+
+### 1. The reply was CUT OFF — measured, not inferred
+
+`finish_reason=length`, then an object that stopped mid-structure at 10,242
+characters. §5.13 reasoned that the reply budget was being spent on thinking;
+this is the first *measurement* of it. `reasoning_effort="low"` helped enough
+to get a draft started, and it is still not enough room for an 11-scene script
+behind a 16,000-character prompt, because Groq's per-minute budget covers the
+request and the reply **together**.
+
+Waiting cannot help and neither can asking again — the retry re-sent the same
+oversized prompt and stopped in the same place. The only lever is to send less,
+which the 413 path already does well, so a truncated reply now raises and takes
+that path. The next request is half the size.
+
+The token counts are now logged whenever a reply stops early, including how
+many went on reasoning. §5.13 was written from the error text; the next one
+will be written from numbers.
+
+### 2. `KeyError: 'scenes'` — and this one was mine, from that morning
+
+Something eventually came back that **parsed** and had no `scenes`. The most
+likely source is the reasoning fallback added hours earlier: with the schema
+dropped and `content` empty, it reads `message.reasoning` and lets
+`strip_fences()` dig an object out — and what it dug out was a real, correctly
+parsed object from the model's *thinking*, which was never the answer.
+
+`json_object` mode promises the reply parses and nothing about what is in it,
+so `call()` returned it and `draft()` found out by subscripting it, four stack
+frames from any mention of a provider.
+
+`_call_sweep` now checks the schema's own `required` list before returning.
+A wrong-shaped reply becomes an ordinary failed attempt, so the retry, the next
+provider, and finally a clean "all providers failed" error all run. This is the
+general form of run 51's fix: that one stopped `scene` from being missing, this
+one stops *any* required key from being missing without anyone noticing.
+
+### The pattern across 49–53
+
+Every fix has bought exactly one more stage, and the next stage has then failed
+on the same underlying thing: **Groq is being asked for more than fits.**
+
+| run | died at | cause |
+|---|---|---|
+| 49, 50 | stage 2 | reasoning ate the reply; empty `content` read as no answer |
+| 51 | stage 3 | draft had no `scene` key; nothing validated shape |
+| 53 | stage 2 | reply truncated at 10,242 chars; wrong-shaped object returned |
+
+Run 52 is the exception that proves it: it had a real Gemini budget for its
+first 21 calls and produced a complete video.
+
+**The honest statement of where this stands:** the pipeline works when Gemini
+answers. On Groq alone it is at the edge of what fits in 8,000 tokens per
+minute, and every run that leans on it is one bad split away from dying. That
+is a budget problem, not a bug list.
